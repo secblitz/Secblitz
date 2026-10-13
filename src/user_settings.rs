@@ -357,6 +357,17 @@ fn managed_by_organisation(reg: &dyn Registry) -> bool {
         })
 }
 
+fn storage_sense_controlled(reg: &dyn Registry) -> bool {
+    !matches!(
+        reg.get(
+            Hive::Machine,
+            STORAGE_SENSE_GROUP_POLICY,
+            "AllowStorageSenseGlobal"
+        ),
+        Ok(Value::Absent)
+    )
+}
+
 pub fn status(reg: &dyn Registry, setting: Setting) -> Status {
     if setting == Setting::OfficeMacros && !office_installed(reg) {
         return Status::NotApplicable;
@@ -403,9 +414,14 @@ pub enum Report {
     Unsafe,
     NotApplicable,
     Unknown,
+    /// An organisation's policy decides this setting, so it is shown but not offered.
+    Controlled,
 }
 
 pub fn report(reg: &dyn Registry, journal: &Path, setting: Setting) -> Report {
+    if setting == Setting::StorageSense && storage_sense_controlled(reg) {
+        return Report::Controlled;
+    }
     match status(reg, setting) {
         Status::Safe => {
             if load_journal(journal).settings.contains_key(setting.id()) {
@@ -562,16 +578,7 @@ pub fn apply(reg: &mut dyn Registry, journal: &Path, setting: Setting) -> Outcom
     {
         return Outcome::Blocked;
     }
-    if setting == Setting::StorageSense
-        && !matches!(
-            reg.get(
-                Hive::Machine,
-                STORAGE_SENSE_GROUP_POLICY,
-                "AllowStorageSenseGlobal"
-            ),
-            Ok(Value::Absent)
-        )
-    {
+    if setting == Setting::StorageSense && storage_sense_controlled(reg) {
         return Outcome::Blocked;
     }
     match status(reg, setting) {
@@ -1799,5 +1806,9 @@ mod tests {
         );
         assert_eq!(reg.read(Setting::StorageSense, 0), Value::Absent);
         assert!(!path.exists());
+        assert_eq!(
+            report(&reg, &path, Setting::StorageSense),
+            Report::Controlled
+        );
     }
 }

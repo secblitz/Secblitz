@@ -91,6 +91,7 @@ impl Reply {
             HandleResult::Report(Report::Unsafe) => Reply::NeedsAttention,
             HandleResult::Report(Report::NotApplicable) => Reply::NotApplicable,
             HandleResult::Report(Report::Unknown) => Reply::Unknown,
+            HandleResult::Report(Report::Controlled) => Reply::Unavailable,
             HandleResult::Outcome(Outcome::Done) => Reply::Done,
             HandleResult::Outcome(Outcome::Failed) => Reply::Failed,
             HandleResult::Outcome(Outcome::Blocked) => Reply::Unavailable,
