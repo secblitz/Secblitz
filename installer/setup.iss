@@ -271,6 +271,24 @@ fr.FinishedLabelNoIcons=Ouvrez-le et lancez votre première vérification. Rien 
 de.FinishedLabelNoIcons=Öffne es und starte Deine erste Prüfung. Nichts ändert sich, bevor Du Ja sagst.
 pt.FinishedLabelNoIcons=Abra-o e faça sua primeira verificação. Nada muda até você dizer sim.
 it.FinishedLabelNoIcons=Aprilo e fai il primo controllo. Non cambia nulla finché non dici di sì.
+en.InstallingLabel=Secblitz is installing. This takes about a minute.
+es.InstallingLabel=Secblitz se está instalando. Tarda alrededor de un minuto.
+fr.InstallingLabel=Secblitz est en cours d'installation. Cela prend environ une minute.
+de.InstallingLabel=Secblitz wird installiert. Das dauert etwa eine Minute.
+pt.InstallingLabel=O Secblitz está sendo instalado. Isso leva cerca de um minuto.
+it.InstallingLabel=Secblitz è in fase di installazione. Ci vuole circa un minuto.
+en.ClickFinish=Click Finish to close Setup.
+es.ClickFinish=Haz clic en Finalizar para cerrar el instalador.
+fr.ClickFinish=Cliquez sur Terminer pour fermer l'installation.
+de.ClickFinish=Klicke auf "Fertigstellen", um das Setup zu schließen.
+pt.ClickFinish=Clique em Concluir para fechar o instalador.
+it.ClickFinish=Fai clic su Fine per chiudere l'installazione.
+en.ConfirmUninstall=Do you want to remove %1 from this PC?
+es.ConfirmUninstall=¿Quieres quitar %1 de este PC?
+fr.ConfirmUninstall=Voulez-vous supprimer %1 de ce PC ?
+de.ConfirmUninstall=Möchtest Du %1 von diesem PC entfernen?
+pt.ConfirmUninstall=Deseja remover o %1 deste PC?
+it.ConfirmUninstall=Vuoi rimuovere %1 da questo PC?
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:DesktopIcon}"; Check: DesktopDefault

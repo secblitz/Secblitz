@@ -6,7 +6,7 @@ import re
 INSTALL_KEYS = ("Monitor", "Failed", "FixedFolder", "DesktopIcon", "LaunchSecblitz", "AutoUpdates", "TrayIcon",
                 "PrivacyTitle", "PrivacySubtitle", "PrivacyText")
 MESSAGE_KEYS = ("WelcomeLabel1", "WelcomeLabel2", "WizardSelectTasks", "SelectTasksDesc", "SelectTasksLabel2",
-                "FinishedHeadingLabel", "FinishedLabel", "FinishedLabelNoIcons")
+                "FinishedHeadingLabel", "FinishedLabel", "FinishedLabelNoIcons", "InstallingLabel", "ClickFinish", "ConfirmUninstall")
 REMOVE_KEYS = ("RemoveTitle", "RemoveQuestion", "KeepChoice", "KeepDetail", "PutBackChoice",
                "PutBackDetail", "RemoveNote", "WebStops", "PuttingBack", "LeftIntro", "PersonalLeft", "SettingsLeft", "RemoveFailed")
 
