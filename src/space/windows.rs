@@ -1,6 +1,6 @@
 use super::{
-    clean, measure, single_file, Entry, Fs, Item, Rule, Tally, UserArea, DUMP_RULE, TEMP_RULE,
-    THUMB_RULE,
+    clean, component_cleanup_outcome, measure, single_file, Entry, Fs, Item, Rule, Tally, UserArea,
+    CLEAN_BUDGET, DUMP_RULE, MEASURE_BUDGET, TEMP_RULE, THUMB_RULE,
 };
 use anyhow::{Context, Result};
 use serde_json::Value;
@@ -11,21 +11,19 @@ use std::{
     os::windows::ffi::{OsStrExt, OsStringExt},
     path::{Component, Path, PathBuf, Prefix},
     ptr::{null, null_mut},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use windows_sys::Win32::{
     Foundation::{
-        CloseHandle, GetLastError, ERROR_FILE_NOT_FOUND, ERROR_INVALID_PARAMETER,
-        ERROR_NO_MORE_FILES, ERROR_PATH_NOT_FOUND, FILETIME, HANDLE, INVALID_HANDLE_VALUE,
+        CloseHandle, GetLastError, ERROR_FILE_NOT_FOUND, ERROR_NO_MORE_FILES, ERROR_PATH_NOT_FOUND,
+        FILETIME, HANDLE, INVALID_HANDLE_VALUE,
     },
     Storage::FileSystem::{
-        CreateFileW, FileBasicInfo, FileDispositionInfo, FileDispositionInfoEx, FileStandardInfo,
-        FindClose, FindExInfoBasic, FindExSearchNameMatch, FindFirstFileExW, FindNextFileW,
+        CreateFileW, FileBasicInfo, FileDispositionInfo, FileStandardInfo, FindClose,
+        FindExInfoBasic, FindExSearchNameMatch, FindFirstFileExW, FindNextFileW,
         GetDiskFreeSpaceExW, GetFileInformationByHandleEx, GetFinalPathNameByHandleW,
         SetFileInformationByHandle, DELETE, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT,
-        FILE_BASIC_INFO, FILE_DISPOSITION_FLAG_DELETE,
-        FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE, FILE_DISPOSITION_FLAG_POSIX_SEMANTICS,
-        FILE_DISPOSITION_INFO, FILE_DISPOSITION_INFO_EX, FILE_FLAG_BACKUP_SEMANTICS,
+        FILE_BASIC_INFO, FILE_DISPOSITION_INFO, FILE_FLAG_BACKUP_SEMANTICS,
         FILE_FLAG_OPEN_REPARSE_POINT, FILE_NAME_NORMALIZED, FILE_READ_ATTRIBUTES,
         FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_STANDARD_INFO,
         FIND_FIRST_EX_LARGE_FETCH, OPEN_EXISTING, VOLUME_NAME_DOS, WIN32_FIND_DATAW,
@@ -98,14 +96,19 @@ fn last_error() -> Error {
     Error::last_os_error()
 }
 
-fn open(path: &Path, access: u32) -> std::io::Result<Handle> {
+fn open(path: &Path, access: u32, shared: bool) -> std::io::Result<Handle> {
     let wide = api_path(path)?;
+    let sharing = if shared {
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE
+    } else {
+        FILE_SHARE_READ
+    };
     // SAFETY: `wide` is NUL-terminated and outlives the call.
     let h = unsafe {
         CreateFileW(
             wide.as_ptr(),
             access,
-            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            sharing,
             null(),
             OPEN_EXISTING,
             FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
@@ -183,35 +186,16 @@ fn entry_from_handle(handle: &Handle) -> std::io::Result<Entry> {
     })
 }
 
+/// Plain delete-on-close: a file that is read-only, or that a program still holds, is not
+/// removed.
 fn mark_for_deletion(handle: &Handle) -> std::io::Result<()> {
-    let ex = FILE_DISPOSITION_INFO_EX {
-        Flags: FILE_DISPOSITION_FLAG_DELETE
-            | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS
-            | FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE,
-    };
+    let info = FILE_DISPOSITION_INFO { DeleteFile: true };
     // SAFETY: a valid handle and a struct of the size the class expects.
     let ok = unsafe {
         SetFileInformationByHandle(
             handle.0,
-            FileDispositionInfoEx,
-            (&ex as *const FILE_DISPOSITION_INFO_EX).cast(),
-            size_of::<FILE_DISPOSITION_INFO_EX>() as u32,
-        )
-    };
-    if ok != 0 {
-        return Ok(());
-    }
-    let error = last_error();
-    if error.raw_os_error() != Some(ERROR_INVALID_PARAMETER as i32) {
-        return Err(error);
-    }
-    let classic = FILE_DISPOSITION_INFO { DeleteFile: true };
-    // SAFETY: as above, with the older struct for file systems that lack the extended call.
-    let ok = unsafe {
-        SetFileInformationByHandle(
-            handle.0,
             FileDispositionInfo,
-            (&classic as *const FILE_DISPOSITION_INFO).cast(),
+            (&info as *const FILE_DISPOSITION_INFO).cast(),
             size_of::<FILE_DISPOSITION_INFO>() as u32,
         )
     };
@@ -232,7 +216,7 @@ fn gone(error: &Error) -> bool {
 struct WinFs;
 
 impl Fs for WinFs {
-    fn list(&self, dir: &Path) -> std::io::Result<Vec<Entry>> {
+    fn list(&self, dir: &Path, max: usize) -> std::io::Result<Vec<Entry>> {
         let mut pattern = api_path(dir)?;
         pattern.pop();
         pattern.extend(r"\*".encode_utf16());
@@ -272,6 +256,9 @@ impl Fs for WinFs {
                     written: unix_seconds(filetime(&data.ftLastWriteTime)),
                 });
             }
+            if out.len() >= max {
+                return Ok(out);
+            }
             // SAFETY: a live find handle and the same data buffer.
             if unsafe { FindNextFileW(find.0, &mut data) } == 0 {
                 if unsafe { GetLastError() } == ERROR_NO_MORE_FILES {
@@ -282,10 +269,15 @@ impl Fs for WinFs {
         }
     }
 
-    fn delete_checked(&self, path: &Path, check: &dyn Fn(&Entry) -> bool) -> std::io::Result<bool> {
+    fn delete_checked(
+        &self,
+        path: &Path,
+        shared: bool,
+        check: &dyn Fn(&Entry) -> bool,
+    ) -> std::io::Result<bool> {
         // The handle is opened, checked and marked for deletion, so a swap after the walk cannot
         // send the delete somewhere else.
-        let handle = match open(path, DELETE | FILE_READ_ATTRIBUTES) {
+        let handle = match open(path, DELETE | FILE_READ_ATTRIBUTES, shared) {
             Ok(h) => h,
             Err(e) if gone(&e) => return Ok(false),
             Err(e) => return Err(e),
@@ -301,9 +293,10 @@ impl Fs for WinFs {
     fn remove_empty_dir(
         &self,
         path: &Path,
+        shared: bool,
         check: &dyn Fn(&Entry) -> bool,
     ) -> std::io::Result<bool> {
-        let handle = match open(path, DELETE | FILE_READ_ATTRIBUTES) {
+        let handle = match open(path, DELETE | FILE_READ_ATTRIBUTES, shared) {
             Ok(h) => h,
             Err(e) if gone(&e) => return Ok(false),
             Err(e) => return Err(e),
@@ -324,7 +317,7 @@ fn filetime(ft: &FILETIME) -> u64 {
 /// The folder as Windows spells it, with short names and links resolved, so the containment
 /// check compares like with like. A folder that is itself a link is refused.
 fn canonical_root(path: &Path) -> Option<PathBuf> {
-    let handle = open(path, FILE_READ_ATTRIBUTES).ok()?;
+    let handle = open(path, FILE_READ_ATTRIBUTES, true).ok()?;
     let entry = entry_from_handle(&handle).ok()?;
     (entry.is_dir && !entry.reparse).then_some(entry.path)
 }
@@ -415,24 +408,26 @@ pub fn clean_user(area: UserArea) -> Tally {
 
 fn run_user(area: UserArea, delete: bool) -> Tally {
     let rule = user_rule(area);
+    let deadline = Instant::now() + if delete { CLEAN_BUDGET } else { MEASURE_BUDGET };
     let mut total = Tally::default();
     for root in user_roots(area) {
         total.add(if delete {
-            clean(&WinFs, &root, rule, now())
+            clean(&WinFs, &root, rule, now(), deadline)
         } else {
-            measure(&WinFs, &root, rule, now())
+            measure(&WinFs, &root, rule, now(), deadline)
         });
     }
     total
 }
 
 fn run_machine(item: Item, delete: bool) -> Tally {
+    let deadline = Instant::now() + if delete { CLEAN_BUDGET } else { MEASURE_BUDGET };
     let mut total = Tally::default();
     for (root, rule) in machine_roots(item) {
         total.add(if delete {
-            clean(&WinFs, &root, rule, now())
+            clean(&WinFs, &root, rule, now(), deadline)
         } else {
-            measure(&WinFs, &root, rule, now())
+            measure(&WinFs, &root, rule, now(), deadline)
         });
     }
     if item == Item::CrashDumps {
@@ -498,14 +493,17 @@ Start-ScheduledTask -TaskPath $path -TaskName $name
 Start-Sleep -Seconds 5
 $deadline = (Get-Date).AddMinutes(60)
 while ((Get-ScheduledTask -TaskPath $path -TaskName $name).State -eq 'Running' -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 15 }
+$running = (Get-ScheduledTask -TaskPath $path -TaskName $name).State -eq 'Running'
 $info = Get-ScheduledTaskInfo -TaskPath $path -TaskName $name
-[pscustomobject]@{ result = [int64]$info.LastTaskResult } | ConvertTo-Json -Compress
+[pscustomobject]@{ result = [int64]$info.LastTaskResult; running = [bool]$running } | ConvertTo-Json -Compress
 ";
 
 fn clean_update_leftovers() -> Result<Tally> {
     let before = free_bytes();
-    run_json(COMPONENT_CLEANUP, Duration::from_secs(65 * 60))
+    let reply = run_json(COMPONENT_CLEANUP, Duration::from_secs(65 * 60))
         .context("Windows could not tidy the leftovers from updates")?;
+    component_cleanup_outcome(&reply)
+        .context("Windows did not finish tidying the leftovers from updates")?;
     let _ = run_json(
         "Delete-DeliveryOptimizationCache -Force; [pscustomobject]@{ ok = $true } | ConvertTo-Json -Compress",
         Duration::from_secs(5 * 60),

@@ -4,6 +4,7 @@
 //! still pass the filters when they are opened for deletion, and stays inside the folder it was
 //! given. The file system sits behind [`Fs`] so the rules are tested without Windows.
 use std::path::{Component, Path, PathBuf};
+use std::time::{Duration, Instant};
 
 #[cfg(windows)]
 mod windows;
@@ -87,6 +88,9 @@ pub const TEMP_DAYS: u64 = 7;
 pub const DUMP_DAYS: u64 = 14;
 pub const MAX_DEPTH: usize = 32;
 pub const MAX_ENTRIES: usize = 200_000;
+/// How long cleaning may run before it stops and reports what it has done so far.
+pub const CLEAN_BUDGET: Duration = Duration::from_secs(8 * 60);
+pub const MEASURE_BUDGET: Duration = Duration::from_secs(90);
 
 /// One directory entry. Times are Unix seconds.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,14 +105,23 @@ pub struct Entry {
 
 /// What the engine needs from a file system.
 pub trait Fs {
-    fn list(&self, dir: &Path) -> std::io::Result<Vec<Entry>>;
+    /// At most `max` entries of `dir`, so a folder with millions of files is never read whole.
+    fn list(&self, dir: &Path, max: usize) -> std::io::Result<Vec<Entry>>;
     /// Opens `path` for deletion without following reparse points, reads its facts again from
     /// the handle and deletes it only if `check` still passes. Ok(false) means it was skipped.
-    fn delete_checked(&self, path: &Path, check: &dyn Fn(&Entry) -> bool) -> std::io::Result<bool>;
+    /// Unless `shared`, a file that another program has open for writing or deleting fails to
+    /// open.
+    fn delete_checked(
+        &self,
+        path: &Path,
+        shared: bool,
+        check: &dyn Fn(&Entry) -> bool,
+    ) -> std::io::Result<bool>;
     /// The same for a folder, which only goes away when it is empty.
     fn remove_empty_dir(
         &self,
         path: &Path,
+        shared: bool,
         check: &dyn Fn(&Entry) -> bool,
     ) -> std::io::Result<bool>;
 }
@@ -118,6 +131,9 @@ pub struct Rule {
     pub extensions: &'static [&'static str],
     pub name_prefix: Option<&'static str>,
     pub remove_old_dirs: bool,
+    /// Whether another program may hold the file open with delete sharing and still have it
+    /// removed. Explorer does this with the picture previews on purpose.
+    pub allow_shared: bool,
 }
 
 pub const TEMP_RULE: Rule = Rule {
@@ -125,18 +141,21 @@ pub const TEMP_RULE: Rule = Rule {
     extensions: &[],
     name_prefix: None,
     remove_old_dirs: true,
+    allow_shared: false,
 };
 pub const DUMP_RULE: Rule = Rule {
     min_age_days: DUMP_DAYS,
     extensions: &["dmp", "mdmp", "hdmp"],
     name_prefix: None,
     remove_old_dirs: false,
+    allow_shared: false,
 };
 pub const THUMB_RULE: Rule = Rule {
     min_age_days: 0,
     extensions: &["db"],
     name_prefix: Some("thumbcache_"),
     remove_old_dirs: false,
+    allow_shared: true,
 };
 
 fn is_old(rule: &Rule, e: &Entry, now: u64) -> bool {
@@ -163,8 +182,10 @@ fn passes(rule: &Rule, e: &Entry, now: u64) -> bool {
     is_old(rule, e, now) && ext_ok && prefix_ok
 }
 
-fn dir_passes(rule: &Rule, e: &Entry, now: u64) -> bool {
-    e.is_dir && !e.reparse && is_old(rule, e, now)
+/// A folder's age comes from when it was made. Its own write time changes when the clean
+/// empties it, so it says nothing about how long the folder has been there.
+fn dir_is_old(rule: &Rule, e: &Entry, now: u64) -> bool {
+    e.is_dir && !e.reparse && now.saturating_sub(e.created) >= rule.min_age_days * 86_400
 }
 
 /// True when `path` is strictly inside `root`, comparing names without regard to ASCII case.
@@ -199,7 +220,7 @@ fn file_pass(
         tally.files += 1;
         return;
     }
-    match fs.delete_checked(&e.path, &|fresh| {
+    match fs.delete_checked(&e.path, rule.allow_shared, &|fresh| {
         passes(rule, fresh, now) && within(root, &fresh.path)
     }) {
         Ok(true) => {
@@ -211,16 +232,21 @@ fn file_pass(
     }
 }
 
-fn walk(fs: &dyn Fs, root: &Path, rule: &Rule, now: u64, delete: bool) -> Tally {
+fn walk(fs: &dyn Fs, root: &Path, rule: &Rule, now: u64, delete: bool, deadline: Instant) -> Tally {
     let mut tally = Tally::default();
     let mut seen = 0usize;
     let mut stack = vec![(root.to_path_buf(), 0usize)];
     let mut dirs = Vec::new();
     'walk: while let Some((dir, depth)) = stack.pop() {
-        let Ok(entries) = fs.list(&dir) else { continue };
+        if seen >= MAX_ENTRIES || Instant::now() >= deadline {
+            break;
+        }
+        let Ok(entries) = fs.list(&dir, MAX_ENTRIES - seen) else {
+            continue;
+        };
         for e in entries {
             seen += 1;
-            if seen > MAX_ENTRIES {
+            if seen > MAX_ENTRIES || Instant::now() >= deadline {
                 break 'walk;
             }
             if e.reparse || !within(root, &e.path) {
@@ -239,9 +265,12 @@ fn walk(fs: &dyn Fs, root: &Path, rule: &Rule, now: u64, delete: bool) -> Tally 
     if delete && rule.remove_old_dirs {
         dirs.sort_by_key(|d| std::cmp::Reverse(d.path.components().count()));
         for d in dirs {
-            if dir_passes(rule, &d, now) {
-                let _ = fs.remove_empty_dir(&d.path, &|fresh| {
-                    dir_passes(rule, fresh, now) && within(root, &fresh.path)
+            if Instant::now() >= deadline {
+                break;
+            }
+            if dir_is_old(rule, &d, now) {
+                let _ = fs.remove_empty_dir(&d.path, rule.allow_shared, &|fresh| {
+                    fresh.is_dir && !fresh.reparse && within(root, &fresh.path)
                 });
             }
         }
@@ -249,12 +278,12 @@ fn walk(fs: &dyn Fs, root: &Path, rule: &Rule, now: u64, delete: bool) -> Tally 
     tally
 }
 
-pub fn measure(fs: &dyn Fs, root: &Path, rule: &Rule, now: u64) -> Tally {
-    walk(fs, root, rule, now, false)
+pub fn measure(fs: &dyn Fs, root: &Path, rule: &Rule, now: u64, deadline: Instant) -> Tally {
+    walk(fs, root, rule, now, false, deadline)
 }
 
-pub fn clean(fs: &dyn Fs, root: &Path, rule: &Rule, now: u64) -> Tally {
-    walk(fs, root, rule, now, true)
+pub fn clean(fs: &dyn Fs, root: &Path, rule: &Rule, now: u64, deadline: Instant) -> Tally {
+    walk(fs, root, rule, now, true, deadline)
 }
 
 /// One known file inside `root`, such as `MEMORY.DMP` in the Windows folder. Only that
@@ -268,7 +297,7 @@ pub fn single_file(
     delete: bool,
 ) -> Tally {
     let mut tally = Tally::default();
-    let Ok(entries) = fs.list(root) else {
+    let Ok(entries) = fs.list(root, MAX_ENTRIES) else {
         return tally;
     };
     let found = entries.into_iter().find(|e| {
@@ -283,6 +312,17 @@ pub fn single_file(
         file_pass(fs, root, rule, now, delete, &e, &mut tally);
     }
     tally
+}
+
+/// Reads the answer of the Windows component cleanup. Anything but a finished task that
+/// reports success counts as not done.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn component_cleanup_outcome(reply: &serde_json::Value) -> anyhow::Result<()> {
+    let running = reply.get("running").and_then(|v| v.as_bool()) != Some(false);
+    let result = reply.get("result").and_then(|v| v.as_i64());
+    anyhow::ensure!(!running, "the cleanup was still running");
+    anyhow::ensure!(result == Some(0), "the cleanup reported {result:?}");
+    Ok(())
 }
 
 pub fn size_phrase(bytes: u64) -> String {
