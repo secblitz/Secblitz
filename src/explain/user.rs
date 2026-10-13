@@ -53,6 +53,11 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             risk: "After you remove Game Bar, you may see a message asking you to get a new app.",
             change: "The controller button stops opening Game Bar and game clip recording stops. The Game Bar app is not removed.",
         },
+        "space.storage_sense" => Explainer {
+            what: "Storage Sense is a Windows feature that removes temporary files when your drive gets full.",
+            risk: "Temporary files keep building up until you remove them yourself.",
+            change: "Windows removes temporary files and old Recycle Bin items on its own. It never touches your Downloads or documents unless you choose that in Settings.",
+        },
         _ => return None,
     })
 }
@@ -61,7 +66,7 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
 mod tests {
     use super::*;
 
-    const IDS: [&str; 10] = [
+    const IDS: [&str; 11] = [
         "smartscreen.store_apps",
         "files.show_extensions",
         "net.nearby_sharing",
@@ -72,6 +77,7 @@ mod tests {
         "debloat.explorer_ads",
         "debloat.search_web",
         "debloat.gamebar_popups",
+        "space.storage_sense",
     ];
 
     #[test]

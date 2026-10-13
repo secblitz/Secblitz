@@ -60,16 +60,7 @@ pub fn summarize_catalog(catalog: &patch::Catalog) -> Found {
     Found { updates, technical }
 }
 
-pub fn size_phrase(bytes: u64) -> String {
-    const MB: u64 = 1024 * 1024;
-    if bytes == 0 {
-        String::new()
-    } else if bytes < 1024 * MB {
-        format!("{} MB", bytes.div_ceil(MB).max(1))
-    } else {
-        format!("{:.1} GB", bytes as f64 / (1024.0 * MB as f64))
-    }
-}
+pub use secblitz::space::size_phrase;
 
 const SERVICING_WAIT: Duration = Duration::from_secs(90);
 

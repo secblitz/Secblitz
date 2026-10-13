@@ -13,7 +13,7 @@ type El<'a> = Element<'a, Message>;
 const COUNT: usize = Setting::ADS_AND_TIPS.len();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Cell {
+pub(super) enum Cell {
     Idle,
     Loading,
     Known(Reply),
@@ -153,6 +153,10 @@ pub(crate) fn label(ctx: &Ctx, setting: Setting) -> (Icon, String) {
         Setting::GameBarPopups => (
             Icon::Gamepad,
             ctx.t("Stop Game Bar pop-ups and its controller button"),
+        ),
+        Setting::StorageSense => (
+            Icon::Trash,
+            ctx.t("Let Windows remove temporary files on its own"),
         ),
         _ => (Icon::Settings, ctx.t("Windows settings")),
     }

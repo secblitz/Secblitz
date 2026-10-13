@@ -19,10 +19,11 @@ pub enum Setting {
     ExplorerAds,
     SearchWebResults,
     GameBarPopups,
+    StorageSense,
 }
 
 impl Setting {
-    pub const ALL: [Setting; 11] = [
+    pub const ALL: [Setting; 12] = [
         Setting::StoreAppsWebCheck,
         Setting::ShowExtensions,
         Setting::NearbySharing,
@@ -34,6 +35,7 @@ impl Setting {
         Setting::ExplorerAds,
         Setting::SearchWebResults,
         Setting::GameBarPopups,
+        Setting::StorageSense,
     ];
 
     pub const PERSONAL: [Setting; 5] = [
@@ -53,6 +55,9 @@ impl Setting {
         Setting::GameBarPopups,
     ];
 
+    /// The switch on the Free up space tab of Clean up apps.
+    pub const SPACE: [Setting; 1] = [Setting::StorageSense];
+
     pub fn id(self) -> &'static str {
         match self {
             Setting::StoreAppsWebCheck => "smartscreen.store_apps",
@@ -66,6 +71,7 @@ impl Setting {
             Setting::ExplorerAds => "debloat.explorer_ads",
             Setting::SearchWebResults => "debloat.search_web",
             Setting::GameBarPopups => "debloat.gamebar_popups",
+            Setting::StorageSense => "space.storage_sense",
         }
     }
 
@@ -158,6 +164,9 @@ const SUGGESTION_VALUES: [&str; 7] = [
     "SubscribedContent-353696Enabled",
 ];
 const EXPLORER_ADVANCED: &str = r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
+const STORAGE_POLICY: &str =
+    r"Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy";
+const STORAGE_SENSE_GROUP_POLICY: &str = r"SOFTWARE\Policies\Microsoft\Windows\StorageSense";
 const GAME_CONFIG_STORE: &str = r"System\GameConfigStore";
 const LOCK_SCREEN_VALUES: [&str; 2] = [
     "SubscribedContent-338387Enabled",
@@ -288,6 +297,7 @@ fn targets(setting: Setting) -> Vec<Target> {
                 false,
             ),
         ],
+        Setting::StorageSense => vec![target(STORAGE_POLICY, "01", 1, false)],
         Setting::GameBarPopups => vec![
             target(
                 r"Software\Microsoft\GameBar",
@@ -347,6 +357,17 @@ fn managed_by_organisation(reg: &dyn Registry) -> bool {
         })
 }
 
+fn storage_sense_controlled(reg: &dyn Registry) -> bool {
+    !matches!(
+        reg.get(
+            Hive::Machine,
+            STORAGE_SENSE_GROUP_POLICY,
+            "AllowStorageSenseGlobal"
+        ),
+        Ok(Value::Absent)
+    )
+}
+
 pub fn status(reg: &dyn Registry, setting: Setting) -> Status {
     if setting == Setting::OfficeMacros && !office_installed(reg) {
         return Status::NotApplicable;
@@ -393,9 +414,14 @@ pub enum Report {
     Unsafe,
     NotApplicable,
     Unknown,
+    /// An organisation's policy decides this setting, so it is shown but not offered.
+    Controlled,
 }
 
 pub fn report(reg: &dyn Registry, journal: &Path, setting: Setting) -> Report {
+    if setting == Setting::StorageSense && storage_sense_controlled(reg) {
+        return Report::Controlled;
+    }
     match status(reg, setting) {
         Status::Safe => {
             if load_journal(journal).settings.contains_key(setting.id()) {
@@ -550,6 +576,9 @@ pub fn apply(reg: &mut dyn Registry, journal: &Path, setting: Setting) -> Outcom
     if matches!(setting, Setting::OfficeMacros | Setting::SearchWebResults)
         && managed_by_organisation(reg)
     {
+        return Outcome::Blocked;
+    }
+    if setting == Setting::StorageSense && storage_sense_controlled(reg) {
         return Outcome::Blocked;
     }
     match status(reg, setting) {
@@ -961,7 +990,7 @@ mod tests {
             assert_eq!(s.to_byte() as usize, i);
             assert_eq!(Setting::from_byte(i as u8), Some(*s));
         }
-        assert_eq!(Setting::from_byte(11), None);
+        assert_eq!(Setting::from_byte(12), None);
         assert_eq!(Setting::from_byte(255), None);
         for op in [Op::Query, Op::Apply, Op::Undo] {
             assert_eq!(Op::from_byte(op.to_byte()), Some(op));
@@ -981,7 +1010,8 @@ mod tests {
                 "debloat.start_settings_tips",
                 "debloat.explorer_ads",
                 "debloat.search_web",
-                "debloat.gamebar_popups"
+                "debloat.gamebar_popups",
+                "space.storage_sense"
             ]
         );
     }
@@ -1496,12 +1526,14 @@ mod tests {
 
     #[test]
     fn ads_and_tips_switches_are_appended_after_the_older_settings() {
-        assert_eq!(Setting::ALL[6..], Setting::ADS_AND_TIPS);
+        assert_eq!(Setting::ALL[6..11], Setting::ADS_AND_TIPS);
         for (offset, setting) in Setting::ADS_AND_TIPS.iter().enumerate() {
             assert_eq!(usize::from(setting.to_byte()), 6 + offset);
             assert!(!Setting::PERSONAL.contains(setting));
         }
         assert_eq!(Setting::from_byte(10), Some(Setting::GameBarPopups));
+        assert_eq!(Setting::from_byte(11), Some(Setting::StorageSense));
+        assert_eq!(Setting::ALL[11..], Setting::SPACE);
     }
 
     #[test]
@@ -1736,5 +1768,47 @@ mod tests {
                 assert_eq!(reg.read(setting, i), expected);
             }
         }
+    }
+
+    #[test]
+    fn storage_sense_turns_on_and_undoes_exactly() {
+        let (_d, path) = journal();
+        let mut reg = Fake::default();
+        assert_eq!(report(&reg, &path, Setting::StorageSense), Report::Unsafe);
+        assert_eq!(apply(&mut reg, &path, Setting::StorageSense), Outcome::Done);
+        assert_eq!(reg.read(Setting::StorageSense, 0), Value::Dword(1));
+        assert_eq!(report(&reg, &path, Setting::StorageSense), Report::SafeByUs);
+        assert_eq!(undo(&mut reg, &path, Setting::StorageSense), Outcome::Done);
+        assert_eq!(reg.read(Setting::StorageSense, 0), Value::Absent);
+    }
+
+    #[test]
+    fn storage_sense_undo_puts_back_a_value_that_was_off() {
+        let (_d, path) = journal();
+        let mut reg = Fake::default();
+        reg.put(Setting::StorageSense, 0, Some(0));
+        assert_eq!(apply(&mut reg, &path, Setting::StorageSense), Outcome::Done);
+        assert_eq!(undo(&mut reg, &path, Setting::StorageSense), Outcome::Done);
+        assert_eq!(reg.read(Setting::StorageSense, 0), Value::Dword(0));
+    }
+
+    #[test]
+    fn storage_sense_is_left_to_the_organisation_when_a_policy_sets_it() {
+        let (_d, path) = journal();
+        let mut reg = Fake::default();
+        reg.lm.insert(
+            k(STORAGE_SENSE_GROUP_POLICY, "AllowStorageSenseGlobal"),
+            Value::Dword(0),
+        );
+        assert_eq!(
+            apply(&mut reg, &path, Setting::StorageSense),
+            Outcome::Blocked
+        );
+        assert_eq!(reg.read(Setting::StorageSense, 0), Value::Absent);
+        assert!(!path.exists());
+        assert_eq!(
+            report(&reg, &path, Setting::StorageSense),
+            Report::Controlled
+        );
     }
 }

@@ -81,6 +81,7 @@ pub(crate) fn personal_title(id: &str) -> &'static str {
         "debloat.explorer_ads" => "Ads in File Explorer",
         "debloat.search_web" => "Web results in Start search",
         "debloat.gamebar_popups" => "Game Bar pop-ups",
+        "space.storage_sense" => "Storage Sense",
         _ => WINDOWS_SETTINGS,
     }
 }

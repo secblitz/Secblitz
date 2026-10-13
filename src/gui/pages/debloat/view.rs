@@ -33,6 +33,7 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
             (Tab::Apps, ctx.t("Apps to remove")),
             (Tab::Removed, removed_label),
             (Tab::Ads, ctx.t("Ads and tips")),
+            (Tab::Space, ctx.t("Free up space")),
         ],
         state.tab,
         |t| wrap(Msg::SetTab(t)),
@@ -41,6 +42,7 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
         Tab::Apps => apps_tab(state, ctx),
         Tab::Removed => removed_tab(state, ctx),
         Tab::Ads => ads::view(&state.ads, ctx),
+        Tab::Space => super::space::view(&state.space, ctx),
     };
     let mut page = column![header, column![tabs, body].spacing(theme::S4)]
         .spacing(theme::S6)
@@ -61,7 +63,7 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
 
 pub fn modal<'a>(state: &'a State, ctx: &'a Ctx) -> Option<Element<'a, Message>> {
     match &state.sheet {
-        Sheet::None => None,
+        Sheet::None => super::space::modal(&state.space, ctx),
         Sheet::Review => Some(review_sheet(state, ctx)),
         Sheet::Working(items) => Some(working_sheet(state, items, ctx)),
         Sheet::Done(done) => Some(widgets::appear::settle(

@@ -28,6 +28,11 @@ mod journal;
 mod vbs_native;
 pub use journal::{create_private_dir, state_dir};
 
+/// Runs a fixed script through the hidden PowerShell runner and returns its JSON reply.
+pub(crate) fn run_json(script: &str, timeout: Duration) -> Result<Value> {
+    run_script(script.to_owned(), timeout)
+}
+
 struct Handle(HANDLE);
 impl Drop for Handle {
     fn drop(&mut self) {
