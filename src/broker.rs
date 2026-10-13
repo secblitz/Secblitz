@@ -810,7 +810,7 @@ mod tests {
             (Setting::SearchWebResults, 9),
             (Setting::GameBarPopups, 10),
         ];
-        for (setting, byte) in expected {
+        for (setting, byte) in expected.into_iter().chain([(Setting::StorageSense, 11)]) {
             for (op, op_byte) in [(Op::Query, 0), (Op::Apply, 1), (Op::Undo, 2)] {
                 let request = Request::UserSetting(setting, op);
                 assert_eq!(request.encode(), [13, byte, op_byte]);
@@ -903,8 +903,12 @@ mod tests {
             Request::decode_with([13, 10, 1], 100),
             Some(Request::UserSetting(Setting::GameBarPopups, Op::Apply))
         );
-        assert_eq!(Request::decode_with([13, 11, 0], 100), None);
-        assert_eq!(Request::decode_with([13, 11, 2], 100), None);
+        assert_eq!(
+            Request::decode_with([13, 11, 2], 100),
+            Some(Request::UserSetting(Setting::StorageSense, Op::Undo))
+        );
+        assert_eq!(Request::decode_with([13, 12, 0], 100), None);
+        assert_eq!(Request::decode_with([13, 12, 2], 100), None);
         assert_eq!(Request::decode_with([13, 255, 255], 100), None);
         assert!(Request::decode_with([13, 0, 0], 0).is_some());
         assert_eq!(Request::decode_with([14, 1, 0], 100), None);

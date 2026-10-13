@@ -172,7 +172,8 @@ fn label(ctx: &Ctx, setting: Setting) -> (Icon, String) {
         | Setting::StartSettingsTips
         | Setting::ExplorerAds
         | Setting::SearchWebResults
-        | Setting::GameBarPopups => super::debloat::ads::label(ctx, setting),
+        | Setting::GameBarPopups
+        | Setting::StorageSense => super::debloat::ads::label(ctx, setting),
     }
 }
 
