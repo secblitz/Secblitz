@@ -38,7 +38,7 @@ Secblitz is not an antivirus. It turns on and configures the protection built in
 
 ## Install
 
-Download the [installer](https://secblitz.lol/downloads/secblitz-1.1.0-windows-x64-setup.exe) (about 10 MB) and run it. For a PC with an ARM processor, like a Snapdragon laptop, use the [ARM installer](https://secblitz.lol/downloads/secblitz-1.1.0-windows-arm64-setup.exe) instead. Secblitz asks for administrator permission because it reads and changes system settings.
+Download the [installer](https://secblitz.lol/downloads/secblitz-1.1.0-windows-x64-setup.exe) (about 11 MB) and run it. For a PC with an ARM processor, like a Snapdragon laptop, use the [ARM installer](https://secblitz.lol/downloads/secblitz-1.1.0-windows-arm64-setup.exe) instead. Secblitz asks for administrator permission because it reads and changes system settings.
 
 The installer is not code-signed yet, so Windows may show an unknown publisher warning. Choose **More info**, then **Run anyway**. To check the file, compare its SHA-256 with the one on the [download page](https://secblitz.lol/#download):
 
