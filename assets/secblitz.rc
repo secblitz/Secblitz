@@ -4,8 +4,8 @@
 // Plain file details that Windows shows in Properties, Task Manager and
 // security prompts. A test keeps these numbers equal to Cargo.toml.
 1 VERSIONINFO
-FILEVERSION 1,0,0,0
-PRODUCTVERSION 1,0,0,0
+FILEVERSION 1,1,0,0
+PRODUCTVERSION 1,1,0,0
 FILEFLAGSMASK 0x3F
 FILEFLAGS 0x0
 FILEOS 0x40004
@@ -18,12 +18,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Secblitz"
             VALUE "FileDescription", "Secblitz"
-            VALUE "FileVersion", "1.0.0"
+            VALUE "FileVersion", "1.1.0"
             VALUE "InternalName", "secblitz"
             VALUE "LegalCopyright", "Copyright 2026 Secblitz contributors. MIT License."
             VALUE "OriginalFilename", "secblitz.exe"
             VALUE "ProductName", "Secblitz"
-            VALUE "ProductVersion", "1.0.0"
+            VALUE "ProductVersion", "1.1.0"
             VALUE "Comments", "Checks and improves Windows security settings. https://secblitz.lol"
         END
     END
