@@ -39,6 +39,7 @@ enum Sheet {
         freed: u64,
         left_alone: u64,
         failed: bool,
+        approx: bool,
     },
 }
 
@@ -48,6 +49,7 @@ struct Run {
     total: Tally,
     item_failed: bool,
     failed: bool,
+    approx: bool,
 }
 
 #[derive(Debug)]
@@ -177,6 +179,14 @@ impl State {
 
     fn measuring(&self) -> bool {
         self.pending.iter().any(|n| *n > 0)
+    }
+}
+
+fn count_result(run: &mut Run, item: Item, result: Result<Tally, String>) {
+    match result {
+        Ok(tally) => run.total.add(tally),
+        Err(e) if e == "unavailable" && user_area(item).is_none() => {}
+        Err(_) => run.item_failed = true,
     }
 }
 
@@ -322,6 +332,7 @@ fn finish(state: &mut State, ctx: &mut Ctx) -> Task<Message> {
         freed: total.bytes,
         left_alone: total.left_alone,
         failed: state.run.failed,
+        approx: state.run.approx,
     };
     state.ticked = [false; COUNT];
     if total.bytes > 0 {
@@ -390,7 +401,10 @@ pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
                 return Task::none();
             }
             ctx.busy = true;
-            state.run = Run::default();
+            state.run = Run {
+                approx: items.contains(&Item::UpdateLeftovers),
+                ..Run::default()
+            };
             state.now = Instant::now();
             state.spin = anim::Clock::at(state.now);
             state.sheet = Sheet::Working(items.into_iter().map(|i| (i, Step::Waiting)).collect());
@@ -407,11 +421,7 @@ pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
                 return Task::none();
             }
             state.run.pending -= 1;
-            match result {
-                Ok(tally) => state.run.total.add(tally),
-                Err(e) if e == "unavailable" => {}
-                Err(_) => state.run.item_failed = true,
-            }
+            count_result(&mut state.run, item, result);
             if state.run.pending > 0 {
                 return Task::none();
             }
@@ -430,7 +440,8 @@ pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
                     r @ (Reply::Safe
                     | Reply::SafeByUs
                     | Reply::NeedsAttention
-                    | Reply::NotApplicable),
+                    | Reply::NotApplicable
+                    | Reply::Unavailable),
                 ) => r,
                 _ => Reply::Unknown,
             });
@@ -520,12 +531,7 @@ fn size_text(state: &State, ctx: &Ctx, item: Item) -> String {
 fn item_row<'a>(state: &State, ctx: &Ctx, item: Item) -> El<'a> {
     let p = ctx.palette;
     let name = title(ctx, item);
-    let mut sub = describe(ctx, item);
-    if state.needs_helper(item) && ctx.helper != Helper::Ready {
-        if let Some(blocker) = ctx.helper.blocker() {
-            sub = ctx.t(blocker);
-        }
-    }
+    let sub = describe(ctx, item);
     let tick = widgets::checkbox(
         p,
         state.ticked[slot(item)].into(),
@@ -562,6 +568,10 @@ fn storage_row<'a>(state: &State, ctx: &Ctx) -> Option<El<'a>> {
     let (icon, name) = super::ads::label(ctx, STORAGE);
     let toggle = |on: bool| wrap(Msg::StorageToggle(on));
     let (sub, control): (String, El<'a>) = match state.storage {
+        _ if ctx.helper.blocker().is_some() => (
+            ctx.t(ctx.helper.blocker().unwrap_or_default()),
+            widgets::switch(p, false, None::<fn(bool) -> Message>),
+        ),
         Cell::Idle => return None,
         Cell::Loading => (ctx.t("Checking…"), space::horizontal().width(0).into()),
         Cell::Working => (
@@ -569,6 +579,10 @@ fn storage_row<'a>(state: &State, ctx: &Ctx) -> Option<El<'a>> {
             widgets::switch(p, false, None::<fn(bool) -> Message>),
         ),
         Cell::Known(Reply::NotApplicable) => return None,
+        Cell::Known(Reply::Unavailable) => (
+            ctx.t("Your organisation controls this setting."),
+            widgets::switch(p, false, None::<fn(bool) -> Message>),
+        ),
         Cell::Known(Reply::Unknown) => (
             ctx.t("We couldn't check this. Leave this page and open it again to try once more."),
             space::horizontal().width(0).into(),
@@ -603,10 +617,18 @@ fn storage_row<'a>(state: &State, ctx: &Ctx) -> Option<El<'a>> {
 
 pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> El<'a> {
     let p = ctx.palette;
-    let rows: Vec<El<'a>> = Item::ALL
-        .into_iter()
-        .map(|item| item_row(state, ctx, item))
-        .collect();
+    let mut rows: Vec<El<'a>> = Vec::new();
+    if let Some(blocker) = ctx.helper.blocker() {
+        rows.push(widgets::row_item(
+            p,
+            Some(Icon::Info),
+            ctx.t(blocker),
+            None,
+            space::horizontal().width(0),
+            None,
+        ));
+    }
+    rows.extend(Item::ALL.into_iter().map(|item| item_row(state, ctx, item)));
     let can = !state.selected().is_empty() && !ctx.busy && matches!(state.sheet, Sheet::None);
     let button = row![
         space::horizontal(),
@@ -650,8 +672,9 @@ pub fn modal<'a>(state: &'a State, ctx: &'a Ctx) -> Option<El<'a>> {
             freed,
             left_alone,
             failed,
+            approx,
         } => Some(widgets::appear::settle(
-            result_sheet(ctx, *freed, *left_alone, *failed),
+            result_sheet(ctx, *freed, *left_alone, *failed, *approx),
             ctx.palette.surface,
         )),
     }
@@ -746,11 +769,15 @@ fn working_sheet<'a>(state: &State, items: &[(Item, Step)], ctx: &Ctx) -> El<'a>
     col.into()
 }
 
-fn result_sheet<'a>(ctx: &Ctx, freed: u64, left_alone: u64, failed: bool) -> El<'a> {
+fn result_sheet<'a>(ctx: &Ctx, freed: u64, left_alone: u64, failed: bool, approx: bool) -> El<'a> {
     let p = ctx.palette;
     let headline = if freed > 0 {
-        ctx.t("Freed {size}.")
-            .replace("{size}", &secblitz::space::size_phrase(freed))
+        ctx.t(if approx {
+            "Freed about {size}."
+        } else {
+            "Freed {size}."
+        })
+        .replace("{size}", &secblitz::space::size_phrase(freed))
     } else {
         ctx.t("There was nothing to remove.")
     };
@@ -830,6 +857,72 @@ mod tests {
         assert_eq!(parts(Item::Temp, false), 1);
         assert_eq!(parts(Item::Temp, true), 2);
         assert_eq!(parts(Item::UpdateLeftovers, true), 1);
+    }
+
+    fn test_ctx() -> Ctx {
+        let (app, _) = crate::gui::App::new(crate::gui::Options {
+            lang: crate::i18n::Lang::En,
+            broker: None,
+            start: None,
+        });
+        app.ctx
+    }
+
+    #[test]
+    fn a_failed_helper_part_marks_the_item_failed() {
+        let mut run = Run::default();
+        count_result(&mut run, Item::Temp, Err("unavailable".into()));
+        assert!(run.item_failed);
+        let mut run = Run::default();
+        count_result(&mut run, Item::Thumbnails, Err("failed".into()));
+        assert!(run.item_failed);
+        let mut run = Run::default();
+        count_result(&mut run, Item::UpdateLeftovers, Err("unavailable".into()));
+        assert!(!run.item_failed);
+        count_result(
+            &mut run,
+            Item::UpdateLeftovers,
+            Err("Windows stopped".into()),
+        );
+        assert!(run.item_failed);
+        let mut run = Run::default();
+        let t = Tally {
+            bytes: 5,
+            files: 1,
+            left_alone: 0,
+        };
+        count_result(&mut run, Item::Temp, Ok(t));
+        assert_eq!(run.total.bytes, 5);
+        assert!(!run.item_failed);
+    }
+
+    #[test]
+    fn a_policy_controlled_storage_sense_is_reported_as_such() {
+        let mut ctx = test_ctx();
+        let mut state = State::default();
+        let _ = update(
+            &mut state,
+            Msg::StorageReported(Ok(Reply::Unavailable)),
+            &mut ctx,
+        );
+        assert_eq!(state.storage, Cell::Known(Reply::Unavailable));
+        let _ = update(&mut state, Msg::StorageToggle(true), &mut ctx);
+        assert_eq!(state.storage, Cell::Known(Reply::Unavailable));
+    }
+
+    #[test]
+    fn leftover_folders_are_measured_only_on_the_free_up_space_tab() {
+        let mut ctx = test_ctx();
+        let mut state = super::super::State::default();
+        let _ = super::super::load_space_tab(&mut state, &ctx);
+        assert_eq!(state.space.generation, 0);
+        state.tab = super::super::Tab::Space;
+        let _ = super::super::load_space_tab(&mut state, &ctx);
+        assert_eq!(state.space.generation, 1);
+        state.space.pending = [1; COUNT];
+        let _ = super::super::load_space_tab(&mut state, &ctx);
+        assert_eq!(state.space.generation, 1);
+        let _ = &mut ctx;
     }
 
     #[test]
