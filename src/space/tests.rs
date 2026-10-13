@@ -429,6 +429,14 @@ fn the_component_cleanup_counts_only_a_success() {
 }
 
 #[test]
+fn sizes_round_to_the_nearest_megabyte() {
+    const MB: u64 = 1024 * 1024;
+    assert_eq!(size_phrase(3_153_408), "3 MB");
+    assert_eq!(size_phrase(MB + MB / 2), "2 MB");
+    assert_eq!(size_phrase(10), "1 MB");
+}
+
+#[test]
 fn the_check_runs_again_at_delete_time() {
     let mut fs = Fake::new();
     fs.file("/Windows/Temp/swapped.tmp", 10, 30);

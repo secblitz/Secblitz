@@ -336,7 +336,7 @@ pub fn size_phrase(bytes: u64) -> String {
     if bytes == 0 {
         String::new()
     } else if bytes < 1024 * MB {
-        format!("{} MB", bytes.div_ceil(MB).max(1))
+        format!("{} MB", ((bytes + MB / 2) / MB).max(1))
     } else {
         format!("{:.1} GB", bytes as f64 / (1024.0 * MB as f64))
     }
