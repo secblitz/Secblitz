@@ -233,7 +233,7 @@ fn day_section<'a>(state: &State, ctx: &Ctx, day: &Day, today: u64) -> Element<'
                 .replace("{n}", &item.n.to_string())
                 .replace(
                     "{size}",
-                    &secblitz::space::size_phrase(item.n as u64 * (1 << 20)),
+                    &secblitz::space::size_phrase((item.n as u64).saturating_mul(1 << 20)),
                 );
             let mut detail = Vec::new();
             if item.total > 0 {
