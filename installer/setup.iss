@@ -377,7 +377,7 @@ begin
 end;
 
 procedure InitializeWizard;
-var Enabled: Cardinal; BannerHeight, RunListBottom: Integer;
+var Enabled: Cardinal; BannerHeight, TasksTop: Integer;
 begin
   { Snapshot while the previous uninstall data is still available. Inno replaces
     that data before RegisterPreviousData, so that callback must not reread it. }
@@ -414,12 +414,21 @@ begin
     WizardForm.FinishedHeadingLabel.AdjustHeight;
     WizardForm.FinishedLabel.Top := WizardForm.FinishedHeadingLabel.Top + WizardForm.FinishedHeadingLabel.Height + ScaleY(12);
     WizardForm.FinishedLabel.AdjustHeight;
-    RunListBottom := WizardForm.RunList.Top + WizardForm.RunList.Height;
+    { Inno places RunList under FinishedLabel itself when the page opens, measured from YesRadio. }
     WizardForm.RunList.Left := ScaleX(28);
     WizardForm.RunList.Width := WizardForm.FinishedHeadingLabel.Width;
-    WizardForm.RunList.Top := WizardForm.FinishedLabel.Top + WizardForm.FinishedLabel.Height + ScaleY(12);
-    WizardForm.RunList.Height := RunListBottom - WizardForm.RunList.Top;
+    TasksTop := WizardForm.SelectTasksLabel.Top;
+    WizardForm.SelectTasksLabel.Visible := False;
+    WizardForm.TasksList.Height := WizardForm.TasksList.Height + WizardForm.TasksList.Top - TasksTop;
+    WizardForm.TasksList.Top := TasksTop;
   end;
+end;
+
+{ The Ready page is skipped, so this click installs. }
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if CurPageID = wpSelectTasks then
+    WizardForm.NextButton.Caption := SetupMessage(msgButtonInstall);
 end;
 
 function DesktopDefault: Boolean;
