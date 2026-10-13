@@ -10,6 +10,8 @@ pub const NATIVE_64: bool = cfg!(any(target_arch = "x86_64", target_arch = "aarc
 #[cfg(windows)]
 #[path = "platform/windows.rs"]
 mod windows;
+#[cfg(windows)]
+pub(crate) use windows::{run_dism_json, run_json};
 
 #[cfg(windows)]
 pub mod security;

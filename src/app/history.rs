@@ -17,6 +17,7 @@ pub enum Kind {
     Restore,
     Recovery,
     SecureBootRenewal,
+    FreedSpace,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -145,6 +146,7 @@ pub fn label(kind: Kind, n: usize) -> &'static str {
         (Kind::Restore, 0 | 1) => "Restored an app",
         (Kind::Restore, _) => "Restored {n} apps",
         (Kind::Recovery, _) => "Undo history started fresh",
+        (Kind::FreedSpace, _) => "Freed {size}",
         (Kind::SecureBootRenewal, _) => {
             "Started the startup security renewal. This can't be undone."
         }
@@ -265,6 +267,15 @@ mod tests {
     }
 
     #[test]
+    fn freed_space_entries_round_trip_and_stay_out_of_the_score_chart() {
+        let entry = e(7, Kind::FreedSpace, 0, 0, 3600);
+        let text = serde_json::to_string(&entry).unwrap();
+        assert!(text.contains("\"freed_space\""));
+        assert_eq!(serde_json::from_str::<Entry>(&text).unwrap(), entry);
+        assert!(daily_scores(&[entry], 30).is_empty());
+    }
+
+    #[test]
     fn put_back_entries_round_trip() {
         let dir = tempfile::tempdir().unwrap();
         record(dir.path(), &e(9, Kind::UndoSome, 4, 6, 2)).unwrap();
@@ -323,6 +334,7 @@ mod tests {
         assert_eq!(label(Kind::Fix, 1), "Fixed 1 problem");
         assert_eq!(label(Kind::Fix, 3), "Fixed {n} problems");
         assert_eq!(label(Kind::Undo, 0), "Undid your last fixes");
+        assert_eq!(label(Kind::FreedSpace, 3600), "Freed {size}");
         assert_eq!(label(Kind::UndoSome, 1), "Put back 1 setting");
         assert_eq!(label(Kind::UndoSome, 4), "Put back {n} settings");
         assert_eq!(label(Kind::Debloat, 12), "Removed {n} apps");

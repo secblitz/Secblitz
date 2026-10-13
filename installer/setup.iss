@@ -1,4 +1,4 @@
-; Compile through scripts/build-release.ps1 (Inno Setup 6.4 or later).
+; Compile through scripts/build-release.ps1 (Inno Setup 6.7.3 or later).
 #ifndef AppVersion
   #error AppVersion must be supplied by build-release.ps1
 #endif
@@ -13,6 +13,9 @@
 #endif
 #ifndef OutputPath
   #define OutputPath "..\dist"
+#endif
+#if Ver < EncodeVer(6, 7, 3)
+  #error Secblitz needs Inno Setup 6.7.3 or later. Run scripts/install-inno.ps1.
 #endif
 
 [Setup]
@@ -46,7 +49,13 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 #endif
 MinVersion=10.0
-WizardStyle=modern
+WizardStyle=modern dynamic hidebevels
+; The banner adds height, so the pages keep their usual height rather than the modern 120%.
+WizardSizePercent=120,100
+DisableWelcomePage=no
+DisableReadyPage=yes
+WizardImageFile=
+WizardSmallImageFile=
 SetupIconFile=..\assets\secblitz.ico
 UninstallDisplayIcon={app}\secblitz.exe
 OutputDir={#OutputPath}
@@ -215,6 +224,73 @@ it.SettingsLeft=Alcune impostazioni di Windows non è stato possibile ripristina
 it.RemoveFailed=Non è stato possibile rimuovere Secblitz e non è stato modificato nulla. Riavvia il PC e riprova. Se continua a non funzionare, apri Secblitz e cerca un aggiornamento.
 it.FixedFolder=Secblitz può essere installato solo nella sua cartella standard in Programmi. Mantieni la cartella suggerita e riprova.
 
+[Messages]
+en.WelcomeLabel1=Install Secblitz
+es.WelcomeLabel1=Instalar Secblitz
+fr.WelcomeLabel1=Installer Secblitz
+de.WelcomeLabel1=Secblitz installieren
+pt.WelcomeLabel1=Instalar o Secblitz
+it.WelcomeLabel1=Installa Secblitz
+en.WelcomeLabel2=Secblitz checks how safe and private your PC is, and fixes what you choose. Nothing changes until you say yes.%n%nSetup takes about a minute. Your apps stay open and your PC does not restart.
+es.WelcomeLabel2=Secblitz revisa qué tan seguro y privado es tu PC y corrige lo que tú elijas. No cambia nada hasta que digas que sí.%n%nLa instalación tarda cerca de un minuto. Tus aplicaciones siguen abiertas y tu PC no se reinicia.
+fr.WelcomeLabel2=Secblitz vérifie la sécurité et la confidentialité de votre PC et corrige ce que vous choisissez. Rien ne change tant que vous n'avez pas dit oui.%n%nL'installation dure environ une minute. Vos applications restent ouvertes et votre PC ne redémarre pas.
+de.WelcomeLabel2=Secblitz prüft, wie sicher und privat Dein PC ist, und behebt, was Du auswählst. Nichts ändert sich, bevor Du Ja sagst.%n%nDie Installation dauert etwa eine Minute. Deine Apps bleiben geöffnet und Dein PC startet nicht neu.
+pt.WelcomeLabel2=O Secblitz verifica o quanto o seu PC é seguro e privado e corrige o que você escolher. Nada muda até você dizer sim.%n%nA instalação leva cerca de um minuto. Seus aplicativos continuam abertos e o PC não reinicia.
+it.WelcomeLabel2=Secblitz controlla quanto è sicuro e privato il tuo PC e corregge ciò che scegli tu. Non cambia nulla finché non dici di sì.%n%nL'installazione richiede circa un minuto. Le tue app restano aperte e il PC non si riavvia.
+en.WizardSelectTasks=Choose what you want
+es.WizardSelectTasks=Elige lo que quieres
+fr.WizardSelectTasks=Choisissez ce que vous voulez
+de.WizardSelectTasks=Wähle, was Du möchtest
+pt.WizardSelectTasks=Escolha o que você quer
+it.WizardSelectTasks=Scegli cosa vuoi
+en.SelectTasksDesc=Untick anything you don't want.
+es.SelectTasksDesc=Desmarca lo que no quieras.
+fr.SelectTasksDesc=Décochez ce que vous ne voulez pas.
+de.SelectTasksDesc=Entferne den Haken bei allem, was Du nicht möchtest.
+pt.SelectTasksDesc=Desmarque o que você não quiser.
+it.SelectTasksDesc=Deseleziona ciò che non vuoi.
+en.SelectTasksLabel2=Tick or untick the extras below, then click Next.
+es.SelectTasksLabel2=Marca o desmarca los extras de abajo y haz clic en Siguiente.
+fr.SelectTasksLabel2=Cochez ou décochez les options ci-dessous, puis cliquez sur Suivant.
+de.SelectTasksLabel2=Setze oder entferne die Haken bei den Extras unten und klicke auf Weiter.
+pt.SelectTasksLabel2=Marque ou desmarque os extras abaixo e clique em Avançar.
+it.SelectTasksLabel2=Seleziona o deseleziona gli extra qui sotto e fai clic su Avanti.
+en.FinishedHeadingLabel=Secblitz is ready
+es.FinishedHeadingLabel=Secblitz está listo
+fr.FinishedHeadingLabel=Secblitz est prêt
+de.FinishedHeadingLabel=Secblitz ist bereit
+pt.FinishedHeadingLabel=O Secblitz está pronto
+it.FinishedHeadingLabel=Secblitz è pronto
+en.FinishedLabel=Open it and run your first check. Nothing changes until you say yes.
+es.FinishedLabel=Ábrelo y haz tu primera revisión. No cambia nada hasta que digas que sí.
+fr.FinishedLabel=Ouvrez-le et lancez votre première vérification. Rien ne change tant que vous n'avez pas dit oui.
+de.FinishedLabel=Öffne es und starte Deine erste Prüfung. Nichts ändert sich, bevor Du Ja sagst.
+pt.FinishedLabel=Abra-o e faça sua primeira verificação. Nada muda até você dizer sim.
+it.FinishedLabel=Aprilo e fai il primo controllo. Non cambia nulla finché non dici di sì.
+en.FinishedLabelNoIcons=Open it and run your first check. Nothing changes until you say yes.
+es.FinishedLabelNoIcons=Ábrelo y haz tu primera revisión. No cambia nada hasta que digas que sí.
+fr.FinishedLabelNoIcons=Ouvrez-le et lancez votre première vérification. Rien ne change tant que vous n'avez pas dit oui.
+de.FinishedLabelNoIcons=Öffne es und starte Deine erste Prüfung. Nichts ändert sich, bevor Du Ja sagst.
+pt.FinishedLabelNoIcons=Abra-o e faça sua primeira verificação. Nada muda até você dizer sim.
+it.FinishedLabelNoIcons=Aprilo e fai il primo controllo. Non cambia nulla finché non dici di sì.
+en.InstallingLabel=Secblitz is installing. This takes about a minute.
+es.InstallingLabel=Secblitz se está instalando. Tarda alrededor de un minuto.
+fr.InstallingLabel=Secblitz est en cours d'installation. Cela prend environ une minute.
+de.InstallingLabel=Secblitz wird installiert. Das dauert etwa eine Minute.
+pt.InstallingLabel=O Secblitz está sendo instalado. Isso leva cerca de um minuto.
+it.InstallingLabel=Secblitz è in fase di installazione. Ci vuole circa un minuto.
+en.ClickFinish=Click Finish to close Setup.
+es.ClickFinish=Haz clic en Finalizar para cerrar el instalador.
+fr.ClickFinish=Cliquez sur Terminer pour fermer l'installation.
+de.ClickFinish=Klicke auf "Fertigstellen", um das Setup zu schließen.
+pt.ClickFinish=Clique em Concluir para fechar o instalador.
+it.ClickFinish=Fai clic su Fine per chiudere l'installazione.
+en.ConfirmUninstall=Do you want to remove %1 from this PC?
+es.ConfirmUninstall=¿Quieres quitar %1 de este PC?
+fr.ConfirmUninstall=Voulez-vous supprimer %1 de ce PC ?
+de.ConfirmUninstall=Möchtest Du %1 von diesem PC entfernen?
+pt.ConfirmUninstall=Deseja remover o %1 deste PC?
+it.ConfirmUninstall=Vuoi rimuovere %1 da questo PC?
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:DesktopIcon}"; Check: DesktopDefault
@@ -226,6 +302,9 @@ Name: "autoupdates"; Description: "{cm:AutoUpdates}"; Flags: unchecked; Check: A
 
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "secblitz.exe"; Flags: ignoreversion
+Source: "art\banner-*.png"; Flags: dontcopy
+; Uninstall cannot extract temporary files, so the Remove Secblitz window reads its banner from here.
+Source: "art\banner-*.png"; DestDir: "{app}\art"; Flags: ignoreversion
 
 [Registry]
 ; Per-machine logon entry for the unelevated tray agent; removed on uninstall.
@@ -240,6 +319,7 @@ Name: "{commondesktop}\Secblitz"; Filename: "{app}\secblitz.exe"; WorkingDir: "{
 ; directory (tray status file written by the monitor/app) is removed.
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\Status"
+Type: filesandordirs; Name: "{app}\art"
 ; Setup records the program folder only when it creates it; an install into a
 ; folder that already existed would otherwise leave it behind, empty.
 Type: dirifempty; Name: "{app}"
@@ -275,8 +355,54 @@ var ResumeAfterUpgrade, ResumeFilterAfterUpgrade, PostInstallFailed: Boolean;
     PreviousDesktopSelected, PreviousAutoUpdatesEnabled, PreviousHasUpdatePreference: Boolean;
     PrivacyPage: TOutputMsgWizardPage;
 
+const SM_CYMAXIMIZED = 62;
+
+function GetSystemMetrics(Index: Integer): Integer;
+  external 'GetSystemMetrics@user32.dll stdcall';
+
+{ The smallest banner at least as wide as the space it fills, so it is never stretched up. }
+function BannerWidth(Width: Integer): Integer;
+begin
+  if Width <= 600 then Result := 600
+  else if Width <= 750 then Result := 750
+  else if Width <= 900 then Result := 900
+  else if Width <= 1050 then Result := 1050
+  else if Width <= 1200 then Result := 1200
+  else Result := 1500;
+end;
+
+{ Puts the banner across the top of Parent and returns its height, or 0 when none is shown.
+  Banners are 3.8 times wider than tall. FromFolder is empty in Setup (the files are unpacked
+  from the installer) and the installed art folder in Uninstall. }
+function AddBanner(Parent: TWinControl; FromFolder: String; Width: Integer): Integer;
+var
+  Image: TBitmapImage;
+  Theme, Name: String;
+begin
+  Result := 0;
+  if HighContrastActive then Exit;
+  if IsDarkInstallMode then Theme := 'dark' else Theme := 'light';
+  Name := 'banner-' + Theme + '-' + IntToStr(BannerWidth(Width)) + '.png';
+  try
+    if FromFolder = '' then begin
+      ExtractTemporaryFile(Name);
+      FromFolder := ExpandConstant('{tmp}');
+    end;
+    FromFolder := AddBackslash(FromFolder);
+    if not FileExists(FromFolder + Name) then Exit;
+    Image := TBitmapImage.Create(Parent);
+    Image.Stretch := True;
+    Image.PngImage.LoadFromFile(FromFolder + Name);
+    Image.Parent := Parent;
+    Result := (Width * 5 + 9) div 19;
+    Image.SetBounds(0, 0, Width, Result);
+  except
+    Result := 0;
+  end;
+end;
+
 procedure InitializeWizard;
-var Enabled: Cardinal;
+var Enabled: Cardinal; BannerHeight, Grow, TasksTop: Integer;
 begin
   { Snapshot while the previous uninstall data is still available. Inno replaces
     that data before RegisterPreviousData, so that callback must not reread it. }
@@ -286,6 +412,52 @@ begin
   if PreviousHasUpdatePreference then PreviousAutoUpdatesEnabled := Enabled <> 0;
   PrivacyPage := CreateOutputMsgPage(wpWelcome, CustomMessage('PrivacyTitle'),
     CustomMessage('PrivacySubtitle'), CustomMessage('PrivacyText'));
+  { The banner replaces the header strip and the side images, so the pages are pushed down
+    and the text may use the full width. Changing the form's height first lets the anchored
+    buttons follow; the page area is then moved down and shortened by the banner's height. }
+  BannerHeight := AddBanner(WizardForm, '', WizardForm.ClientWidth);
+  if BannerHeight > 0 then begin
+    { On a short screen the window only grows as far as a maximized window would reach. }
+    Grow := GetSystemMetrics(SM_CYMAXIMIZED) - WizardForm.Height;
+    if Grow > BannerHeight then Grow := BannerHeight;
+    if Grow < 0 then Grow := 0;
+    WizardForm.ClientHeight := WizardForm.ClientHeight + Grow;
+    WizardForm.OuterNotebook.Top := WizardForm.OuterNotebook.Top + BannerHeight;
+    WizardForm.OuterNotebook.Height := WizardForm.OuterNotebook.Height - BannerHeight;
+    WizardForm.WizardSmallBitmapImage.Visible := False;
+    WizardForm.PageNameLabel.Width := WizardForm.MainPanel.ClientWidth - WizardForm.PageNameLabel.Left * 2;
+    WizardForm.PageDescriptionLabel.Width := WizardForm.PageNameLabel.Width;
+    WizardForm.WizardBitmapImage.Visible := False;
+    WizardForm.WizardBitmapImage2.Visible := False;
+    WizardForm.WelcomeLabel1.Left := ScaleX(28);
+    WizardForm.WelcomeLabel1.Width := WizardForm.WelcomePage.ClientWidth - ScaleX(56);
+    WizardForm.WelcomeLabel2.Left := ScaleX(28);
+    WizardForm.WelcomeLabel2.Width := WizardForm.WelcomeLabel1.Width;
+    WizardForm.FinishedHeadingLabel.Left := ScaleX(28);
+    WizardForm.FinishedHeadingLabel.Width := WizardForm.FinishedPage.ClientWidth - ScaleX(56);
+    WizardForm.FinishedLabel.Left := ScaleX(28);
+    WizardForm.FinishedLabel.Width := WizardForm.FinishedHeadingLabel.Width;
+    WizardForm.WelcomeLabel1.AdjustHeight;
+    WizardForm.WelcomeLabel2.Top := WizardForm.WelcomeLabel1.Top + WizardForm.WelcomeLabel1.Height + ScaleY(12);
+    WizardForm.WelcomeLabel2.AdjustHeight;
+    WizardForm.FinishedHeadingLabel.AdjustHeight;
+    WizardForm.FinishedLabel.Top := WizardForm.FinishedHeadingLabel.Top + WizardForm.FinishedHeadingLabel.Height + ScaleY(12);
+    WizardForm.FinishedLabel.AdjustHeight;
+    { Inno places RunList under FinishedLabel itself when the page opens, measured from YesRadio. }
+    WizardForm.RunList.Left := ScaleX(28);
+    WizardForm.RunList.Width := WizardForm.FinishedHeadingLabel.Width;
+    TasksTop := WizardForm.SelectTasksLabel.Top;
+    WizardForm.SelectTasksLabel.Visible := False;
+    WizardForm.TasksList.Height := WizardForm.TasksList.Height + WizardForm.TasksList.Top - TasksTop;
+    WizardForm.TasksList.Top := TasksTop;
+  end;
+end;
+
+{ The Ready page is skipped, so this click installs. }
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if CurPageID = wpSelectTasks then
+    WizardForm.NextButton.Caption := SetupMessage(msgButtonInstall);
 end;
 
 function DesktopDefault: Boolean;
@@ -616,9 +788,11 @@ begin
   { Inno 6.3+: client size, then whether to keep it when the dialog font scales. }
   Form := CreateCustomForm(ScaleX(470), ScaleY(300), False, False);
   try
+    { The form can scale its starting size a second time on a high-DPI screen. }
+    Form.ClientWidth := ScaleX(470);
     Form.Caption := CustomMessage('RemoveTitle');
-    Top := ScaleY(16);
-    Question := AddText(Form, Top, 0, CustomMessage('RemoveQuestion'), True);
+    Top := AddBanner(Form, ExpandConstant('{app}\art'), Form.ClientWidth) + ScaleY(16);
+    Question :=AddText(Form, Top, 0, CustomMessage('RemoveQuestion'), True);
     Top := Question.Top + Question.Height + ScaleY(14);
     KeepChoice := AddChoice(Form, Top, CustomMessage('KeepChoice'));
     Top := KeepChoice.Top + KeepChoice.Height + ScaleY(2);

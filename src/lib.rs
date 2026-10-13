@@ -19,6 +19,7 @@ pub mod platform;
 pub mod readiness;
 pub mod service;
 pub mod software_install;
+pub mod space;
 pub mod status;
 pub mod text;
 pub mod updater;

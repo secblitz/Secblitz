@@ -9,6 +9,15 @@ dated version section when a release is prepared (see `docs/RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-13
+
+### Added
+- A new Free up space tab in Clean up apps removes old temporary files, update leftovers, crash memory files and saved picture previews you choose.
+- You can turn on Storage Sense from Free up space, so Windows removes temporary files on its own.
+
+### Changed
+- The installer and the Remove Secblitz window have a new look with a banner, and follow Windows light or dark.
+
 ## [1.0.0] - 2026-10-09
 
 ### Added

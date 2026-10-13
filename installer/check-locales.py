@@ -5,6 +5,8 @@ import re
 
 INSTALL_KEYS = ("Monitor", "Failed", "FixedFolder", "DesktopIcon", "LaunchSecblitz", "AutoUpdates", "TrayIcon",
                 "PrivacyTitle", "PrivacySubtitle", "PrivacyText")
+MESSAGE_KEYS = ("WelcomeLabel1", "WelcomeLabel2", "WizardSelectTasks", "SelectTasksDesc", "SelectTasksLabel2",
+                "FinishedHeadingLabel", "FinishedLabel", "FinishedLabelNoIcons", "InstallingLabel", "ClickFinish", "ConfirmUninstall")
 REMOVE_KEYS = ("RemoveTitle", "RemoveQuestion", "KeepChoice", "KeepDetail", "PutBackChoice",
                "PutBackDetail", "RemoveNote", "WebStops", "PuttingBack", "LeftIntro", "PersonalLeft", "SettingsLeft", "RemoveFailed")
 
@@ -37,6 +39,22 @@ def check(source):
             assert (locale, key) not in messages, f"Duplicate message: {locale}.{key}"
             assert value.strip(), f"Empty message: {locale}.{key}"
             messages[locale, key] = value
+    wizard = {}
+    for line in sections["Messages"]:
+        entry = re.fullmatch(r"([a-z]+)\.(\w+)=(.*)", line.strip())
+        if entry:
+            locale, key, value = entry.groups()
+            assert locale in languages, f"Unknown message language: {locale}"
+            assert (locale, key) not in wizard, f"Duplicate wizard message: {locale}.{key}"
+            assert value.strip(), f"Empty wizard message: {locale}.{key}"
+            assert "\u2014" not in value, f"Em dash in wizard message: {locale}.{key}"
+            wizard[locale, key] = value
+    for locale in languages:
+        for key in MESSAGE_KEYS:
+            assert (locale, key) in wizard, f"Missing wizard message: {locale}.{key}"
+            if locale != "en":
+                assert wizard[locale, key] != wizard["en", key], f"English placeholder: {locale}.{key}"
+    assert {key for _, key in wizard} == set(MESSAGE_KEYS)
     keys = {key for _, key in messages} | set(re.findall(r"\{cm:([\w]+)\}", source))
     assert set(INSTALL_KEYS) | set(REMOVE_KEYS) == keys
     for locale in languages:
@@ -109,8 +127,9 @@ def check(source):
     assert "ExpandConstant('{param:SECBLITZUPDATE|0}') = '1'" in code
     assert not entries('InstallDelete'), 'Installation must not delete unrelated files'
     assert entries('UninstallDelete') == [{'Type': 'filesandordirs', 'Name': r'{app}\Status'},
+                                          {'Type': 'filesandordirs', 'Name': r'{app}\art'},
                                           {'Type': 'dirifempty', 'Name': '{app}'}], \
-        'Uninstall removes only the fixed Status directory, and the program folder once empty'
+        'Uninstall removes only the fixed Status and art directories, and the program folder once empty'
     latch = code.index('PostInstallFailed := True;')
     clear = code.index('PostInstallFailed := False;')
     for action in ('Secure', 'InstallFilter', 'InstallMonitor', 'ResumeMonitor', 'ResumeFilter',
@@ -158,7 +177,7 @@ def uninstall_contract(code):
 def regression_checks(source):
     mutations = []
     for locale in ('en', 'es', 'fr', 'de', 'pt', 'it'):
-        for key in INSTALL_KEYS + REMOVE_KEYS:
+        for key in INSTALL_KEYS + REMOVE_KEYS + MESSAGE_KEYS:
             mutations.append(re.sub(rf'^{locale}\.{key}=.*$', '', source, flags=re.MULTILINE))
     for before, after in (
         ('Flags: nowait postinstall', 'Flags: unchecked nowait postinstall'),
@@ -205,6 +224,7 @@ def regression_checks(source):
     for section in ('InstallDelete', 'UninstallDelete'):
         mutations.append(source + f'\n[{section}]\nType: filesandordirs; Name: "{{app}}"\n')
     mutations.append(source.replace('Name: "{app}\\Status"', 'Name: "{app}"'))
+    mutations.append(source.replace('Name: "{app}\\art"', 'Name: "{app}"'))
     mutations.append(source.replace('Type: dirifempty; Name: "{app}"', 'Type: filesandordirs; Name: "{app}"'))
     mutations.append(source.replace("not RemoveDir(ExpandConstant('{app}'))", "not DelTree(ExpandConstant('{app}'), True, True, True)"))
     for mutated in mutations:

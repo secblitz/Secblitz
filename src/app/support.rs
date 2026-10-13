@@ -170,6 +170,7 @@ fn kind_name(kind: HistoryKind) -> &'static str {
         HistoryKind::Restore => "app restore",
         HistoryKind::Recovery => "recovery",
         HistoryKind::SecureBootRenewal => "secure boot renewal",
+        HistoryKind::FreedSpace => "freed space",
     }
 }
 
