@@ -9,6 +9,10 @@ dated version section when a release is prepared (see `docs/RELEASING.md`).
 
 ## [Unreleased]
 
+### Changed
+
+- The installer and the Remove Secblitz window have a new look with a banner, and follow Windows light or dark.
+
 ## [1.0.0] - 2026-10-09
 
 ### Added
