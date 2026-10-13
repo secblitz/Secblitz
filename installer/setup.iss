@@ -377,7 +377,7 @@ begin
 end;
 
 procedure InitializeWizard;
-var Enabled: Cardinal; BannerHeight: Integer;
+var Enabled: Cardinal; BannerHeight, RunListBottom: Integer;
 begin
   { Snapshot while the previous uninstall data is still available. Inno replaces
     that data before RegisterPreviousData, so that callback must not reread it. }
@@ -393,8 +393,6 @@ begin
   BannerHeight := AddBanner(WizardForm, '', WizardForm.ClientWidth);
   if BannerHeight > 0 then begin
     WizardForm.ClientHeight := WizardForm.ClientHeight + BannerHeight;
-    WizardForm.MainPanel.Top := WizardForm.MainPanel.Top + BannerHeight;
-    WizardForm.Bevel1.Top := WizardForm.Bevel1.Top + BannerHeight;
     WizardForm.OuterNotebook.Top := WizardForm.OuterNotebook.Top + BannerHeight;
     WizardForm.OuterNotebook.Height := WizardForm.OuterNotebook.Height - BannerHeight;
     WizardForm.WizardSmallBitmapImage.Visible := False;
@@ -410,8 +408,17 @@ begin
     WizardForm.FinishedHeadingLabel.Width := WizardForm.FinishedPage.ClientWidth - ScaleX(56);
     WizardForm.FinishedLabel.Left := ScaleX(28);
     WizardForm.FinishedLabel.Width := WizardForm.FinishedHeadingLabel.Width;
+    WizardForm.WelcomeLabel1.AdjustHeight;
+    WizardForm.WelcomeLabel2.Top := WizardForm.WelcomeLabel1.Top + WizardForm.WelcomeLabel1.Height + ScaleY(12);
+    WizardForm.WelcomeLabel2.AdjustHeight;
+    WizardForm.FinishedHeadingLabel.AdjustHeight;
+    WizardForm.FinishedLabel.Top := WizardForm.FinishedHeadingLabel.Top + WizardForm.FinishedHeadingLabel.Height + ScaleY(12);
+    WizardForm.FinishedLabel.AdjustHeight;
+    RunListBottom := WizardForm.RunList.Top + WizardForm.RunList.Height;
     WizardForm.RunList.Left := ScaleX(28);
     WizardForm.RunList.Width := WizardForm.FinishedHeadingLabel.Width;
+    WizardForm.RunList.Top := WizardForm.FinishedLabel.Top + WizardForm.FinishedLabel.Height + ScaleY(12);
+    WizardForm.RunList.Height := RunListBottom - WizardForm.RunList.Top;
   end;
 end;
 
