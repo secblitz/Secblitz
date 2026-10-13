@@ -185,6 +185,8 @@ try {
         & (Join-Path $PSScriptRoot 'install-inno.ps1') -DownloadDirectory $dist
     }
     if (-not (Test-Path -LiteralPath $IsccPath)) { throw 'Install official Inno Setup 6.7.3 or later, or pass -DownloadInno from an elevated build shell.' }
+    $artBytes = (Get-ChildItem -LiteralPath (Join-Path $root 'installer\art') -Filter 'banner-*.png' | Measure-Object Length -Sum).Sum
+    if ($artBytes -gt 1500000) { throw "The installer banners are $artBytes bytes, over the 1.5 MB budget." }
     $compilerArgs = @("/DAppVersion=$version", "/DSourceExe=$exe", "/DOutputPath=$dist", "/DArch=$Arch")
     if ($CertificateThumbprint) {
         Sign-ReleaseFile $exe
