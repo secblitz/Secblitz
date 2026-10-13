@@ -50,6 +50,8 @@ ArchitecturesInstallIn64BitMode=x64compatible
 #endif
 MinVersion=10.0
 WizardStyle=modern dynamic hidebevels
+; The banner adds height, so the pages keep their usual height rather than the modern 120%.
+WizardSizePercent=120,100
 DisableWelcomePage=no
 DisableReadyPage=yes
 WizardImageFile=
@@ -353,6 +355,11 @@ var ResumeAfterUpgrade, ResumeFilterAfterUpgrade, PostInstallFailed: Boolean;
     PreviousDesktopSelected, PreviousAutoUpdatesEnabled, PreviousHasUpdatePreference: Boolean;
     PrivacyPage: TOutputMsgWizardPage;
 
+const SM_CYMAXIMIZED = 62;
+
+function GetSystemMetrics(Index: Integer): Integer;
+  external 'GetSystemMetrics@user32.dll stdcall';
+
 { The smallest banner at least as wide as the space it fills, so it is never stretched up. }
 function BannerWidth(Width: Integer): Integer;
 begin
@@ -395,7 +402,7 @@ begin
 end;
 
 procedure InitializeWizard;
-var Enabled: Cardinal; BannerHeight, TasksTop: Integer;
+var Enabled: Cardinal; BannerHeight, Grow, TasksTop: Integer;
 begin
   { Snapshot while the previous uninstall data is still available. Inno replaces
     that data before RegisterPreviousData, so that callback must not reread it. }
@@ -407,10 +414,14 @@ begin
     CustomMessage('PrivacySubtitle'), CustomMessage('PrivacyText'));
   { The banner replaces the header strip and the side images, so the pages are pushed down
     and the text may use the full width. Changing the form's height first lets the anchored
-    buttons follow; the page area is then moved down and shortened back to its old size. }
+    buttons follow; the page area is then moved down and shortened by the banner's height. }
   BannerHeight := AddBanner(WizardForm, '', WizardForm.ClientWidth);
   if BannerHeight > 0 then begin
-    WizardForm.ClientHeight := WizardForm.ClientHeight + BannerHeight;
+    { On a short screen the window only grows as far as a maximized window would reach. }
+    Grow := GetSystemMetrics(SM_CYMAXIMIZED) - WizardForm.Height;
+    if Grow > BannerHeight then Grow := BannerHeight;
+    if Grow < 0 then Grow := 0;
+    WizardForm.ClientHeight := WizardForm.ClientHeight + Grow;
     WizardForm.OuterNotebook.Top := WizardForm.OuterNotebook.Top + BannerHeight;
     WizardForm.OuterNotebook.Height := WizardForm.OuterNotebook.Height - BannerHeight;
     WizardForm.WizardSmallBitmapImage.Visible := False;
@@ -777,6 +788,8 @@ begin
   { Inno 6.3+: client size, then whether to keep it when the dialog font scales. }
   Form := CreateCustomForm(ScaleX(470), ScaleY(300), False, False);
   try
+    { The form can scale its starting size a second time on a high-DPI screen. }
+    Form.ClientWidth := ScaleX(470);
     Form.Caption := CustomMessage('RemoveTitle');
     Top := AddBanner(Form, ExpandConstant('{app}\art'), Form.ClientWidth) + ScaleY(16);
     Question :=AddText(Form, Top, 0, CustomMessage('RemoveQuestion'), True);
