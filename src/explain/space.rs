@@ -5,13 +5,13 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
     Some(match id {
         "space.temp" => Explainer {
             what: "Apps and installers keep working files here and often forget to remove them.",
-            risk: "Old ones only take space, and temporary folders are a place harmful downloads like to hide.",
+            risk: "Old ones only take up space.",
             change: "Files older than a week that nothing is using are deleted for good. No app needs them.",
         },
         "space.update_leftovers" => Explainer {
             what: "Windows keeps older copies of system files for a while after updating.",
-            risk: "They take space that future security updates need.",
-            change: "Secblitz asks Windows to tidy them as it does on its own. This can take a few minutes and can't be undone.",
+            risk: "They only take up space.",
+            change: "Secblitz asks Windows to tidy them. Updates from the last 30 days can still be removed. This can take a few minutes and can't be undone.",
         },
         "space.crash_dumps" => Explainer {
             what: "When Windows or an app crashes, it can save a copy of what was in memory.",
