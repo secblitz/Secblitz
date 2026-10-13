@@ -154,6 +154,10 @@ pub(crate) fn label(ctx: &Ctx, setting: Setting) -> (Icon, String) {
             Icon::Gamepad,
             ctx.t("Stop Game Bar pop-ups and its controller button"),
         ),
+        Setting::StorageSense => (
+            Icon::Trash,
+            ctx.t("Let Windows remove temporary files on its own"),
+        ),
         _ => (Icon::Settings, ctx.t("Windows settings")),
     }
 }
