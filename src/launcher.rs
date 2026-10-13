@@ -722,6 +722,17 @@ mod imp {
                         }
                         continue;
                     }
+                    Some(Request::Space(area, op)) => {
+                        let tally = match op {
+                            broker::SpaceOp::Measure => secblitz::space::measure_user(area),
+                            broker::SpaceOp::Clean => secblitz::space::clean_user(area),
+                        };
+                        let reply = broker::encode_space_reply(Reply::Done, tally);
+                        if !write_reply(pipe.0, event.0, child_handle, &reply) {
+                            break;
+                        }
+                        continue;
+                    }
                     Some(request) => handle(request),
                     None => Reply::Unavailable,
                 };

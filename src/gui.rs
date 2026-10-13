@@ -222,6 +222,25 @@ impl Ctx {
             map,
         )
     }
+
+    /// Measures or clears one of the signed-in person's own leftover folders through the helper.
+    #[allow(dead_code)]
+    pub fn space_task(
+        &self,
+        area: secblitz::space::UserArea,
+        op: crate::broker::SpaceOp,
+        map: impl Fn(Result<(crate::broker::Reply, secblitz::space::Tally), String>) -> Message
+            + Send
+            + 'static,
+    ) -> Task<Message> {
+        let Some(client) = self.broker.clone() else {
+            return Task::done(map(Err("unavailable".into())));
+        };
+        Task::perform(
+            blocking(move || client.space(area, op).map_err(|e| format!("{e:#}"))),
+            map,
+        )
+    }
 }
 
 #[derive(Debug, Clone)]

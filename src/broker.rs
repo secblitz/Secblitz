@@ -1,8 +1,15 @@
 //! Launcher <-> elevated GUI broker: a closed set of user-context actions.
 
 use crate::app::app_access::{self, Capability, Target};
+use secblitz::space::{Tally, UserArea};
 use secblitz::user_settings::{Op, Setting};
 use std::time::Duration;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpaceOp {
+    Measure,
+    Clean,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Request {
@@ -45,6 +52,8 @@ pub enum Request {
     /// Followed on the wire by a `FileHeader` and the zip itself; sent with `Client::save_file`.
     SaveSupportFile,
     UserSetting(Setting, Op),
+    /// Answered with `SPACE_REPLY` bytes; sent with `Client::space`.
+    Space(UserArea, SpaceOp),
     BitwardenStatus,
     AppAccessList(Capability),
     AppAccessSet {
@@ -139,7 +148,8 @@ impl Request {
             | Request::OpenRecoveryKey
             | Request::OpenDownloadPage
             | Request::ShowSupportFile
-            | Request::SaveSupportFile => true,
+            | Request::SaveSupportFile
+            | Request::Space(..) => true,
             Request::UserSetting(_, Op::Apply | Op::Undo)
             | Request::InstallBitwarden
             | Request::BlockSuggestedApps
@@ -221,7 +231,8 @@ impl Request {
             | Request::AppAccessSet { .. }
             | Request::StartTray
             | Request::ShowSupportFile
-            | Request::SaveSupportFile => return None,
+            | Request::SaveSupportFile
+            | Request::Space(..) => return None,
         })
     }
 
@@ -266,6 +277,7 @@ impl Request {
                 13,
                 u16::from(setting.to_byte()) | (u16::from(op.to_byte()) << 8),
             ),
+            Request::Space(area, op) => (46, u16::from(area.to_byte()) | ((op as u16) << 8)),
             Request::BitwardenStatus => (17, 0),
             Request::StartStoreApp(i) => (18, i),
             Request::StoreAppStatus(i) => (19, i),
@@ -291,7 +303,7 @@ impl Request {
     pub fn decode_with(bytes: [u8; 3], catalog_len: usize) -> Option<Self> {
         let [kind, lo, hi] = bytes;
         let arg = u16::from_le_bytes([lo, hi]);
-        if !matches!(kind, 7 | 13 | 18 | 19 | 39 | 40) && arg != 0 {
+        if !matches!(kind, 7 | 13 | 18 | 19 | 39 | 40 | 46) && arg != 0 {
             return None;
         }
         Some(match kind {
@@ -331,6 +343,14 @@ impl Request {
             44 => Request::ShowSupportFile,
             45 => Request::SaveSupportFile,
             13 => Request::UserSetting(Setting::from_byte(lo)?, Op::from_byte(hi)?),
+            46 => Request::Space(
+                UserArea::from_byte(lo)?,
+                match hi {
+                    0 => SpaceOp::Measure,
+                    1 => SpaceOp::Clean,
+                    _ => return None,
+                },
+            ),
             17 => Request::BitwardenStatus,
             18 if usize::from(arg) < catalog_len => Request::StartStoreApp(arg),
             19 if usize::from(arg) < catalog_len => Request::StoreAppStatus(arg),
@@ -353,6 +373,8 @@ impl Request {
             Request::ReinstallStoreApp(_) | Request::InstallBitwarden => {
                 Duration::from_secs(15 * 60)
             }
+            Request::Space(_, SpaceOp::Clean) => Duration::from_secs(10 * 60),
+            Request::Space(_, SpaceOp::Measure) => Duration::from_secs(2 * 60),
             _ => Duration::from_secs(30),
         }
     }
@@ -360,6 +382,29 @@ impl Request {
 
 /// The largest support file the launcher accepts; the zip itself stays under 1 MB.
 pub const MAX_FILE: usize = 1 << 20;
+
+/// Status byte, then the bytes found or freed and the files left alone, each 8 bytes little endian.
+pub const SPACE_REPLY: usize = 17;
+
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn encode_space_reply(reply: Reply, tally: Tally) -> [u8; SPACE_REPLY] {
+    let mut out = [0u8; SPACE_REPLY];
+    out[0] = reply.encode();
+    out[1..9].copy_from_slice(&tally.bytes.to_le_bytes());
+    out[9..].copy_from_slice(&tally.left_alone.to_le_bytes());
+    out
+}
+
+#[allow(dead_code)]
+pub fn decode_space_reply(bytes: [u8; SPACE_REPLY]) -> Option<(Reply, Tally)> {
+    let reply = Reply::decode(bytes[0])?;
+    let tally = Tally {
+        bytes: u64::from_le_bytes(bytes[1..9].try_into().ok()?),
+        files: 0,
+        left_alone: u64::from_le_bytes(bytes[9..].try_into().ok()?),
+    };
+    Some((reply, tally))
+}
 
 /// When the file was made, which names it, and how many bytes follow.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -448,8 +493,8 @@ impl Client {
 
     pub fn send(&self, request: Request) -> anyhow::Result<Reply> {
         anyhow::ensure!(
-            request != Request::SaveSupportFile,
-            "a support file is sent with save_file"
+            request != Request::SaveSupportFile && !matches!(request, Request::Space(..)),
+            "this request has its own method"
         );
         #[cfg(windows)]
         {
@@ -463,6 +508,28 @@ impl Client {
         #[cfg(not(windows))]
         {
             let _ = request;
+            anyhow::bail!("The broker is only available on Windows")
+        }
+    }
+
+    /// Asks the launcher, which runs as the signed-in person, to measure or clear one of
+    /// that person's own leftover folders.
+    #[allow(dead_code)]
+    pub fn space(&self, area: UserArea, op: SpaceOp) -> anyhow::Result<(Reply, Tally)> {
+        #[cfg(windows)]
+        {
+            let request = Request::Space(area, op);
+            let mut pipe = self.inner.lock().map_err(|e| {
+                eprintln!("{e}");
+                anyhow::anyhow!("broker unavailable")
+            })?;
+            let bytes =
+                pipe.round_trip_fixed::<SPACE_REPLY>(request.encode(), request.timeout())?;
+            decode_space_reply(bytes).ok_or_else(|| anyhow::anyhow!("invalid broker reply"))
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = (area, op);
             anyhow::bail!("The broker is only available on Windows")
         }
     }
@@ -693,6 +760,25 @@ mod imp {
             result
         }
 
+        #[allow(dead_code)]
+        pub fn round_trip_fixed<const N: usize>(
+            &mut self,
+            mut request: [u8; 3],
+            timeout: Duration,
+        ) -> anyhow::Result<[u8; N]> {
+            anyhow::ensure!(!self.broken, "broker unavailable");
+            let result = (|| {
+                self.io(true, &mut request, Duration::from_secs(10))?;
+                let mut reply = [0u8; N];
+                self.io(false, &mut reply, timeout)?;
+                Ok(reply)
+            })();
+            if result.is_err() {
+                self.broken = true;
+            }
+            result
+        }
+
         pub fn round_trip_bytes(
             &mut self,
             mut message: Vec<u8>,
@@ -786,6 +872,15 @@ mod tests {
                     })
             })
         }))
+        .chain(
+            [UserArea::Temp, UserArea::CrashDumps, UserArea::Thumbnails]
+                .into_iter()
+                .flat_map(|area| {
+                    [SpaceOp::Measure, SpaceOp::Clean]
+                        .into_iter()
+                        .map(move |op| Request::Space(area, op))
+                }),
+        )
         .chain(Setting::ALL.iter().flat_map(|s| {
             [Op::Query, Op::Apply, Op::Undo]
                 .into_iter()
@@ -874,7 +969,7 @@ mod tests {
 
     #[test]
     fn decode_is_strict() {
-        for kind in [0u8, 46, 100, 255] {
+        for kind in [0u8, 47, 100, 255] {
             assert_eq!(Request::decode_with([kind, 0, 0], 100), None);
         }
         for kind in (1..=6u8)
@@ -960,6 +1055,51 @@ mod tests {
             assert_eq!(Request::decode_with([kind, 5, 0], 5), None);
             assert_eq!(Request::decode_with([kind, 255, 255], 100), None);
         }
+    }
+
+    #[test]
+    fn space_requests_have_fixed_wire_bytes_and_strict_decode() {
+        assert_eq!(
+            Request::Space(UserArea::Temp, SpaceOp::Measure).encode(),
+            [46, 0, 0]
+        );
+        assert_eq!(
+            Request::Space(UserArea::Thumbnails, SpaceOp::Clean).encode(),
+            [46, 2, 1]
+        );
+        assert_eq!(Request::decode([46, 3, 0]), None);
+        assert_eq!(Request::decode([46, 0, 2]), None);
+        assert_eq!(Request::decode([46, 255, 255]), None);
+    }
+
+    #[test]
+    fn space_replies_round_trip() {
+        let t = Tally {
+            bytes: 5 << 30,
+            files: 0,
+            left_alone: 3,
+        };
+        assert_eq!(
+            decode_space_reply(encode_space_reply(Reply::Done, t)),
+            Some((Reply::Done, t))
+        );
+        let mut bad = encode_space_reply(Reply::Done, t);
+        bad[0] = 0;
+        assert_eq!(decode_space_reply(bad), None);
+    }
+
+    #[test]
+    fn space_requests_keep_the_saved_check_and_get_long_timeouts() {
+        assert!(Request::Space(UserArea::Temp, SpaceOp::Clean).is_read_only());
+        assert!(!Request::Space(UserArea::Temp, SpaceOp::Clean).opens_window());
+        assert_eq!(
+            Request::Space(UserArea::Temp, SpaceOp::Clean).timeout(),
+            Duration::from_secs(10 * 60)
+        );
+        assert_eq!(
+            Request::Space(UserArea::Temp, SpaceOp::Measure).timeout(),
+            Duration::from_secs(2 * 60)
+        );
     }
 
     #[test]
