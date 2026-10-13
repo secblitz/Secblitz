@@ -510,9 +510,10 @@ What it needs, as far as we know:
   changes security settings, so describe it plainly. The foundation decides.
 - The policy text lives in `docs/CODE_SIGNING.md` and `website/code-signing.html`
   (keep them in step), is linked from the home page, the footer and the README,
-  and the fixed footer in `docs/release-footer.md` is added to every release
-  body by `release-notes.py --with-footer`. All of it must be published before
-  applying.
+  and the fixed footer in `docs/release-footer.md` is added to the release
+  body by `release-notes.py --with-footer` once `SIGNPATH_ENABLED` is on, so an
+  unsigned release never claims to be signed. The policy page and README must
+  be published before applying.
 - In the artifact configurations, require the product name `Secblitz` and the
   release version as the product version for every signed file. The build
   checks the same two values (`Assert-ProductMetadata` in `build-release.ps1`).

@@ -95,8 +95,11 @@ jobs:
           if ! git merge-base --is-ancestor HEAD origin/main; then
             echo "::error::Tag $TAG is not on the main branch."; exit 1
           fi
-          # Fails when the changelog has no dated section with entries.
-          python3 scripts/release-notes.py "$version" --with-footer > release-notes.md
+          # Fails when the changelog has no dated section with entries. The signing
+          # footer names SignPath, so it is added only when the files are signed.
+          footer=()
+          if [ "$SIGNING_VAR" = "true" ]; then footer=(--with-footer); fi
+          python3 scripts/release-notes.py "$version" "${footer[@]}" > release-notes.md
           # Fails when the website or README show any other version, or lack
           # the download link or the checksum element.
           python3 scripts/bump-version.py "$version" --check-site
