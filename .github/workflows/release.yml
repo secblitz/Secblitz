@@ -471,8 +471,7 @@ jobs:
           $signature = Get-AuthenticodeSignature -LiteralPath $setup[0].FullName
           $signature | Format-List Status, StatusMessage, SignerCertificate
           if ($signature.Status -ne 'Valid') { throw "The setup is not validly signed: $($signature.Status)" }
-      - name: Install Inno Setup where the runner image lacks it
-        if: ${{ matrix.arch == 'arm64' }}
+      - name: Install Inno Setup 6.7.3 where the runner image lacks it
         shell: pwsh
         run: ./scripts/install-inno.ps1
       - name: Check the Inno Setup compiler is on the runner

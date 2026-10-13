@@ -1,4 +1,4 @@
-; Compile through scripts/build-release.ps1 (Inno Setup 6.4 or later).
+; Compile through scripts/build-release.ps1 (Inno Setup 6.7.3 or later).
 #ifndef AppVersion
   #error AppVersion must be supplied by build-release.ps1
 #endif
@@ -13,6 +13,9 @@
 #endif
 #ifndef OutputPath
   #define OutputPath "..\dist"
+#endif
+#if Ver < EncodeVer(6, 7, 3)
+  #error Secblitz needs Inno Setup 6.7.3 or later. Run scripts/install-inno.ps1.
 #endif
 
 [Setup]

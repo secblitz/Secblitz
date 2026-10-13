@@ -181,10 +181,10 @@ try {
     if (-not $IsccPath) {
         $IsccPath = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
     }
-    if (-not (Test-Path -LiteralPath $IsccPath) -and $DownloadInno) {
+    if ($DownloadInno) {
         & (Join-Path $PSScriptRoot 'install-inno.ps1') -DownloadDirectory $dist
     }
-    if (-not (Test-Path -LiteralPath $IsccPath)) { throw 'Install official Inno Setup 6.4+ or pass -DownloadInno from an elevated build shell.' }
+    if (-not (Test-Path -LiteralPath $IsccPath)) { throw 'Install official Inno Setup 6.7.3 or later, or pass -DownloadInno from an elevated build shell.' }
     $compilerArgs = @("/DAppVersion=$version", "/DSourceExe=$exe", "/DOutputPath=$dist", "/DArch=$Arch")
     if ($CertificateThumbprint) {
         Sign-ReleaseFile $exe
