@@ -307,6 +307,15 @@ fn scan_task(state: &mut State) -> Task<Message> {
     ])
 }
 
+/// The leftover folders are only measured while the Free up space tab is the one showing.
+fn load_space_tab(state: &mut State, ctx: &Ctx) -> Task<Message> {
+    if state.tab == Tab::Space {
+        space::load(&mut state.space, ctx)
+    } else {
+        Task::none()
+    }
+}
+
 pub fn on_enter(state: &mut State, ctx: &mut Ctx) -> Task<Message> {
     if !matches!(state.sheet, Sheet::None) {
         return Task::none();
@@ -316,7 +325,7 @@ pub fn on_enter(state: &mut State, ctx: &mut Ctx) -> Task<Message> {
         scan_task(state),
         suggested_task(ctx),
         ads::load(&mut state.ads, ctx),
-        space::load(&mut state.space, ctx),
+        load_space_tab(state, ctx),
     ])
 }
 
@@ -499,7 +508,7 @@ fn apply(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
         }
         Msg::SetTab(tab) => {
             state.tab = tab;
-            Task::none()
+            load_space_tab(state, ctx)
         }
         Msg::Search(text) => {
             state.search = text;
@@ -1354,6 +1363,6 @@ pub fn preload(state: &mut State, ctx: &mut Ctx) -> Task<Message> {
         scan_task(state),
         suggested_task(ctx),
         ads::load(&mut state.ads, ctx),
-        space::load(&mut state.space, ctx),
+        load_space_tab(state, ctx),
     ])
 }
