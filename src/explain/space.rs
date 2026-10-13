@@ -11,7 +11,7 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
         "space.update_leftovers" => Explainer {
             what: "Windows keeps older copies of system files for a while after updating.",
             risk: "They only take up space.",
-            change: "Secblitz asks Windows to tidy them. Updates from the last 30 days can still be removed. This can take a few minutes and can't be undone.",
+            change: "Secblitz asks Windows to tidy them. An update that causes trouble can still be uninstalled. This can take several minutes and can't be undone.",
         },
         "space.crash_dumps" => Explainer {
             what: "When Windows or an app crashes, it can save a copy of what was in memory.",

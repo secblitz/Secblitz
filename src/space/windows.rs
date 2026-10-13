@@ -468,7 +468,7 @@ fn run_json(script: &str, timeout: Duration) -> Result<Value> {
 
 fn delivery_cache_bytes() -> Option<u64> {
     let reply = run_json(
-        "[pscustomobject]@{ bytes = [int64](Get-DeliveryOptimizationPerfSnap).CacheSizeBytes } | ConvertTo-Json -Compress",
+        "$WarningPreference = 'SilentlyContinue'; [pscustomobject]@{ bytes = [int64](Get-DeliveryOptimizationPerfSnap).CacheSizeBytes } | ConvertTo-Json -Compress",
         Duration::from_secs(60),
     )
     .ok()?;
@@ -485,27 +485,28 @@ fn free_bytes() -> Option<u64> {
     (ok != 0).then_some(free)
 }
 
+// The Servicing\StartComponentCleanup task can sit queued for a long time when started on
+// demand, so this runs the same cleanup through the inbox DISM module and reports its result.
 const COMPONENT_CLEANUP: &str = r"
 $ErrorActionPreference = 'Stop'
-$path = '\Microsoft\Windows\Servicing\'
-$name = 'StartComponentCleanup'
-Start-ScheduledTask -TaskPath $path -TaskName $name
-Start-Sleep -Seconds 5
-$deadline = (Get-Date).AddMinutes(60)
-while ((Get-ScheduledTask -TaskPath $path -TaskName $name).State -eq 'Running' -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 15 }
-$running = (Get-ScheduledTask -TaskPath $path -TaskName $name).State -eq 'Running'
-$info = Get-ScheduledTaskInfo -TaskPath $path -TaskName $name
-[pscustomobject]@{ result = [int64]$info.LastTaskResult; running = [bool]$running } | ConvertTo-Json -Compress
+$ProgressPreference = 'SilentlyContinue'
+$WarningPreference = 'SilentlyContinue'
+$PSModuleAutoLoadingPreference = 'None'
+$modules = [IO.Path]::Combine($env:SystemRoot, 'System32\WindowsPowerShell\v1.0\Modules')
+$null = Import-Module ([IO.Path]::Combine($modules, 'Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1'))
+$null = Import-Module ([IO.Path]::Combine($modules, 'Dism\Dism.psd1'))
+$code = 0
+try { $null = Repair-WindowsImage -Online -StartComponentCleanup -NoRestart } catch { $code = [int64]$_.Exception.HResult }
+[pscustomobject]@{ code = $code } | ConvertTo-Json -Compress
 ";
 
 fn clean_update_leftovers() -> Result<Tally> {
     let before = free_bytes();
-    let reply = run_json(COMPONENT_CLEANUP, Duration::from_secs(65 * 60))
+    let reply = crate::platform::run_dism_json(COMPONENT_CLEANUP, Duration::from_secs(60 * 60))
         .context("Windows could not tidy the leftovers from updates")?;
-    component_cleanup_outcome(&reply)
-        .context("Windows did not finish tidying the leftovers from updates")?;
+    component_cleanup_outcome(&reply)?;
     let _ = run_json(
-        "Delete-DeliveryOptimizationCache -Force; [pscustomobject]@{ ok = $true } | ConvertTo-Json -Compress",
+        "$WarningPreference = 'SilentlyContinue'; Delete-DeliveryOptimizationCache -Force; [pscustomobject]@{ ok = $true } | ConvertTo-Json -Compress",
         Duration::from_secs(5 * 60),
     );
     let bytes = match (before, free_bytes()) {

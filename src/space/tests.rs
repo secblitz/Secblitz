@@ -415,16 +415,17 @@ fn a_folder_that_became_a_link_or_moved_out_is_not_removed() {
 }
 
 #[test]
-fn the_component_cleanup_counts_only_a_finished_success() {
+fn the_component_cleanup_counts_only_a_success() {
     use serde_json::json;
-    assert!(component_cleanup_outcome(&json!({"result": 0, "running": false})).is_ok());
-    assert!(component_cleanup_outcome(&json!({"result": 0, "running": true})).is_err());
-    assert!(component_cleanup_outcome(&json!({"result": 267009, "running": true})).is_err());
-    assert!(
-        component_cleanup_outcome(&json!({"result": 2147942402u64, "running": false})).is_err()
-    );
-    assert!(component_cleanup_outcome(&json!({"running": false})).is_err());
-    assert!(component_cleanup_outcome(&json!({"result": 0})).is_err());
+    assert!(component_cleanup_outcome(&json!({"code": 0})).is_ok());
+    assert!(component_cleanup_outcome(&json!({"code": 3010})).is_ok());
+    let pending = component_cleanup_outcome(&json!({"code": -2146498554i64})).unwrap_err();
+    assert_eq!(pending.to_string(), NEEDS_RESTART);
+    let pending = component_cleanup_outcome(&json!({"code": 0x800F_0806u32})).unwrap_err();
+    assert_eq!(pending.to_string(), NEEDS_RESTART);
+    assert!(component_cleanup_outcome(&json!({"code": 87})).is_err());
+    assert!(component_cleanup_outcome(&json!({"code": 2147942402u64})).is_err());
+    assert!(component_cleanup_outcome(&json!({})).is_err());
 }
 
 #[test]

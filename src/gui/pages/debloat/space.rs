@@ -40,6 +40,7 @@ enum Sheet {
         left_alone: u64,
         failed: bool,
         approx: bool,
+        restart: bool,
     },
 }
 
@@ -50,6 +51,7 @@ struct Run {
     item_failed: bool,
     failed: bool,
     approx: bool,
+    restart: bool,
 }
 
 #[derive(Debug)]
@@ -186,6 +188,10 @@ fn count_result(run: &mut Run, item: Item, result: Result<Tally, String>) {
     match result {
         Ok(tally) => run.total.add(tally),
         Err(e) if e == "unavailable" && user_area(item).is_none() => {}
+        Err(e) if e == secblitz::space::NEEDS_RESTART => {
+            run.item_failed = true;
+            run.restart = true;
+        }
         Err(_) => run.item_failed = true,
     }
 }
@@ -317,7 +323,7 @@ fn start_next(state: &mut State, ctx: &mut Ctx) -> Task<Message> {
 
 fn end_item(state: &mut State, item: Item) {
     let failed = state.run.item_failed;
-    state.run.failed |= failed;
+    state.run.failed |= failed && !(item == Item::UpdateLeftovers && state.run.restart);
     if let Sheet::Working(items) = &mut state.sheet {
         if let Some(entry) = items.iter_mut().find(|(i, _)| *i == item) {
             entry.1 = Step::Done(Instant::now(), failed);
@@ -333,6 +339,7 @@ fn finish(state: &mut State, ctx: &mut Ctx) -> Task<Message> {
         left_alone: total.left_alone,
         failed: state.run.failed,
         approx: state.run.approx,
+        restart: state.run.restart,
     };
     state.ticked = [false; COUNT];
     if total.bytes > 0 {
@@ -673,8 +680,9 @@ pub fn modal<'a>(state: &'a State, ctx: &'a Ctx) -> Option<El<'a>> {
             left_alone,
             failed,
             approx,
+            restart,
         } => Some(widgets::appear::settle(
-            result_sheet(ctx, *freed, *left_alone, *failed, *approx),
+            result_sheet(ctx, *freed, *left_alone, *failed, *approx, *restart),
             ctx.palette.surface,
         )),
     }
@@ -769,7 +777,14 @@ fn working_sheet<'a>(state: &State, items: &[(Item, Step)], ctx: &Ctx) -> El<'a>
     col.into()
 }
 
-fn result_sheet<'a>(ctx: &Ctx, freed: u64, left_alone: u64, failed: bool, approx: bool) -> El<'a> {
+fn result_sheet<'a>(
+    ctx: &Ctx,
+    freed: u64,
+    left_alone: u64,
+    failed: bool,
+    approx: bool,
+    restart: bool,
+) -> El<'a> {
     let p = ctx.palette;
     let headline = if freed > 0 {
         ctx.t(if approx {
@@ -793,6 +808,13 @@ fn result_sheet<'a>(ctx: &Ctx, freed: u64, left_alone: u64, failed: bool, approx
             p,
             Tone::Warn,
             ctx.t("Some files couldn't be removed. Nothing else was changed."),
+        ));
+    }
+    if restart {
+        col = col.push(widgets::inline_notice(
+            p,
+            Tone::Warn,
+            ctx.t("Windows needs to restart to finish an update before it can tidy the update leftovers. Restart when it suits you, then try again."),
         ));
     }
     col.push(space::vertical().height(theme::S1))
@@ -894,6 +916,32 @@ mod tests {
         count_result(&mut run, Item::Temp, Ok(t));
         assert_eq!(run.total.bytes, 5);
         assert!(!run.item_failed);
+    }
+
+    #[test]
+    fn a_pending_restart_asks_for_a_restart_instead_of_a_failure() {
+        let mut ctx = test_ctx();
+        let mut state = State {
+            sheet: Sheet::Working(vec![(Item::UpdateLeftovers, Step::Working)]),
+            ..State::default()
+        };
+        state.run.pending = 1;
+        let _ = update(
+            &mut state,
+            Msg::Cleaned(
+                Item::UpdateLeftovers,
+                Err(secblitz::space::NEEDS_RESTART.into()),
+            ),
+            &mut ctx,
+        );
+        assert!(matches!(
+            state.sheet,
+            Sheet::Done {
+                failed: false,
+                restart: true,
+                ..
+            }
+        ));
     }
 
     #[test]

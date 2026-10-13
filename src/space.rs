@@ -314,15 +314,21 @@ pub fn single_file(
     tally
 }
 
-/// Reads the answer of the Windows component cleanup. Anything but a finished task that
-/// reports success counts as not done.
+/// The error text when Windows must restart to finish an update before it can tidy.
+pub const NEEDS_RESTART: &str = "needs restart";
+
+/// Reads the result of the component cleanup: 0, or the error code Windows gave. 3010 means a
+/// restart would finish the job, which Secblitz leaves to the person.
 #[cfg_attr(not(windows), allow(dead_code))]
 fn component_cleanup_outcome(reply: &serde_json::Value) -> anyhow::Result<()> {
-    let running = reply.get("running").and_then(|v| v.as_bool()) != Some(false);
-    let result = reply.get("result").and_then(|v| v.as_i64());
-    anyhow::ensure!(!running, "the cleanup was still running");
-    anyhow::ensure!(result == Some(0), "the cleanup reported {result:?}");
-    Ok(())
+    const CBS_E_PENDING: u32 = 0x800F_0806;
+    match reply.get("code").and_then(|v| v.as_i64()) {
+        Some(0 | 3010) => Ok(()),
+        Some(code) if code as u32 == CBS_E_PENDING => anyhow::bail!(NEEDS_RESTART),
+        code => {
+            anyhow::bail!("Windows did not finish tidying the leftovers from updates ({code:?})")
+        }
+    }
 }
 
 pub fn size_phrase(bytes: u64) -> String {

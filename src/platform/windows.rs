@@ -33,6 +33,11 @@ pub(crate) fn run_json(script: &str, timeout: Duration) -> Result<Value> {
     run_script(script.to_owned(), timeout)
 }
 
+/// The same runner with room for the DISM host processes that the DISM module starts.
+pub(crate) fn run_dism_json(script: &str, timeout: Duration) -> Result<Value> {
+    run_script_in(script.to_owned(), timeout, DISM_PROCESSES)
+}
+
 struct Handle(HANDLE);
 impl Drop for Handle {
     fn drop(&mut self) {
