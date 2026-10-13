@@ -159,6 +159,7 @@ fn kind_icon(kind: Kind) -> (Icon, Tone) {
         Kind::Debloat => (Icon::Package, Tone::Neutral),
         Kind::Restore => (Icon::Refresh, Tone::Good),
         Kind::Recovery => (Icon::Refresh, Tone::Neutral),
+        Kind::FreedSpace => (Icon::Trash, Tone::Good),
         Kind::SecureBootRenewal => (Icon::ShieldCheck, Tone::Neutral),
     }
 }
@@ -229,7 +230,11 @@ fn day_section<'a>(state: &State, ctx: &Ctx, day: &Day, today: u64) -> Element<'
             let (icon, tone) = kind_icon(item.kind);
             let label = ctx
                 .t(log::label(item.kind, item.n))
-                .replace("{n}", &item.n.to_string());
+                .replace("{n}", &item.n.to_string())
+                .replace(
+                    "{size}",
+                    &secblitz::space::size_phrase(item.n as u64 * (1 << 20)),
+                );
             let mut detail = Vec::new();
             if item.total > 0 {
                 detail.push(

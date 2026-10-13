@@ -4,6 +4,7 @@ mod access;
 mod core;
 mod detect;
 mod network;
+mod space;
 mod system;
 mod user;
 mod web;
@@ -21,6 +22,7 @@ pub fn for_check(id: &str) -> Option<Explainer> {
         .or_else(|| network::get(id))
         .or_else(|| system::get(id))
         .or_else(|| user::get(id))
+        .or_else(|| space::get(id))
         .or_else(|| web::get(id))
         .or_else(|| detect::get(id))
 }

@@ -224,7 +224,6 @@ impl Ctx {
     }
 
     /// Measures or clears one of the signed-in person's own leftover folders through the helper.
-    #[allow(dead_code)]
     pub fn space_task(
         &self,
         area: secblitz::space::UserArea,

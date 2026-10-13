@@ -395,7 +395,6 @@ pub fn encode_space_reply(reply: Reply, tally: Tally) -> [u8; SPACE_REPLY] {
     out
 }
 
-#[allow(dead_code)]
 pub fn decode_space_reply(bytes: [u8; SPACE_REPLY]) -> Option<(Reply, Tally)> {
     let reply = Reply::decode(bytes[0])?;
     let tally = Tally {
@@ -514,7 +513,6 @@ impl Client {
 
     /// Asks the launcher, which runs as the signed-in person, to measure or clear one of
     /// that person's own leftover folders.
-    #[allow(dead_code)]
     pub fn space(&self, area: UserArea, op: SpaceOp) -> anyhow::Result<(Reply, Tally)> {
         #[cfg(windows)]
         {
@@ -760,7 +758,6 @@ mod imp {
             result
         }
 
-        #[allow(dead_code)]
         pub fn round_trip_fixed<const N: usize>(
             &mut self,
             mut request: [u8; 3],

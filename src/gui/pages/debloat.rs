@@ -19,6 +19,7 @@ pub enum Tab {
     Apps,
     Removed,
     Ads,
+    Space,
 }
 
 #[derive(Debug, Default)]
@@ -112,6 +113,7 @@ pub struct State {
     held: Option<(Instant, Box<Finished>)>,
     menu_fillers: Vec<u16>,
     ads: ads::State,
+    space: space::State,
     points: widgets::point::Opened,
 }
 
@@ -150,6 +152,7 @@ impl Default for State {
             held: None,
             menu_fillers: Vec::new(),
             ads: ads::State::default(),
+            space: space::State::default(),
             points: widgets::point::Opened::default(),
         }
     }
@@ -206,6 +209,7 @@ pub enum Msg {
     Copies(BTreeSet<u16>, u64),
     Icons(BTreeMap<u16, Handle>),
     Ads(ads::Msg),
+    Space(space::Msg),
     Point(String),
 }
 
@@ -312,6 +316,7 @@ pub fn on_enter(state: &mut State, ctx: &mut Ctx) -> Task<Message> {
         scan_task(state),
         suggested_task(ctx),
         ads::load(&mut state.ads, ctx),
+        space::load(&mut state.space, ctx),
     ])
 }
 
@@ -332,6 +337,9 @@ pub fn subscription(state: &State) -> Subscription<Message> {
 fn is_animating(state: &State) -> bool {
     if !anim::animating() {
         return false;
+    }
+    if space::is_animating(&state.space) {
+        return true;
     }
     if matches!(state.scan, Scan::Loading) || state.restoring.is_some() || state.batch.is_some() {
         return true;
@@ -359,8 +367,10 @@ pub fn escape(state: &mut State) {
         Sheet::Review | Sheet::Done(_) | Sheet::Delete(_)
     ) {
         state.sheet = Sheet::None;
-    } else {
+    } else if !space::is_busy(&state.space) {
         clear_search(state);
+    } else {
+        space::escape(&mut state.space);
     }
 }
 
@@ -578,6 +588,7 @@ fn apply(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
             Task::none()
         }
         Msg::Ads(msg) => ads::update(&mut state.ads, msg, ctx),
+        Msg::Space(msg) => space::update(&mut state.space, msg, ctx),
     }
 }
 
@@ -589,6 +600,7 @@ fn toggle_app(state: &mut State, index: u16) {
 
 fn on_frame(state: &mut State, now: Instant) {
     state.now = now;
+    space::on_frame(&mut state.space, now);
     let held = state.held.as_ref().map(|(at, _)| *at);
     if held.is_some_and(|at| now.saturating_duration_since(at) >= handoff::sheet_hold()) {
         show_held(state);
@@ -1318,6 +1330,7 @@ fn count_text(ctx: &Ctx, n: usize, one: &str, many: &str) -> String {
 }
 
 pub(crate) mod ads;
+mod space;
 mod view;
 pub use view::{footer, modal, view};
 
@@ -1327,7 +1340,7 @@ pub fn is_current_scan(state: &State, generation: u32) -> bool {
 
 /// The app list must not be reloaded under an open sheet.
 pub fn is_busy(state: &State) -> bool {
-    !matches!(state.sheet, Sheet::None)
+    !matches!(state.sheet, Sheet::None) || space::is_busy(&state.space)
 }
 
 pub fn preload(state: &mut State, ctx: &mut Ctx) -> Task<Message> {
@@ -1341,5 +1354,6 @@ pub fn preload(state: &mut State, ctx: &mut Ctx) -> Task<Message> {
         scan_task(state),
         suggested_task(ctx),
         ads::load(&mut state.ads, ctx),
+        space::load(&mut state.space, ctx),
     ])
 }

@@ -13,7 +13,7 @@ type El<'a> = Element<'a, Message>;
 const COUNT: usize = Setting::ADS_AND_TIPS.len();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Cell {
+pub(super) enum Cell {
     Idle,
     Loading,
     Known(Reply),
