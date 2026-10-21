@@ -83,7 +83,9 @@ Scripts must stay compatible with Windows PowerShell 5.1.
 On Windows, `scripts/build-release.ps1` runs the tests, clippy and the MSVC
 build and compiles the installer. CI (`.github/workflows/ci.yml` and
 `windows.yml`) runs all of the above plus the installer harnesses in
-`installer/test-*.ps1` and a RustSec audit. All of it must pass before merging.
+`installer/test-*.ps1` and a RustSec audit, skipping the app and installer
+checks when a change touches only the website or prose. All of it must pass
+before merging.
 
 Tests are not enough. Before calling a change done, run the built app on a real
 Windows 11 PC or VM and use the feature the way a user would: install, check,
