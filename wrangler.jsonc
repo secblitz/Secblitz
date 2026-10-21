@@ -3,13 +3,5 @@
   // Run scripts/stage-pages.py first; never deploy the website source tree.
   "name": "secblitz",
   "pages_build_output_dir": "./dist/pages",
-  "compatibility_date": "2026-10-02",
-  // Download counts (functions/). Schema: deploy/downloads.sql.
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "secblitz-downloads",
-      "database_id": "ca65ecfc-13de-4041-8320-84e5d2608c15"
-    }
-  ]
+  "compatibility_date": "2026-10-02"
 }

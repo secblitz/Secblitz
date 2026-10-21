@@ -57,21 +57,6 @@
       });
   }
 
-  // ---- Download count ----
-  const downloads = document.getElementById("downloads");
-  if (downloads) {
-    fetch("/api/downloads")
-      .then((response) => (response.ok ? response.json() : Promise.reject()))
-      .then(({ total }) => {
-        if (!Number.isSafeInteger(total) || total < 1) return;
-        downloads.querySelector("span").textContent = total.toLocaleString("en-US");
-        downloads.hidden = false;
-      })
-      .catch(() => {
-        // Not shown; the page works without it.
-      });
-  }
-
   // ---- Tour video: plays only while visible. Reduced motion and data saver
   // start on the still; the button lets anyone play or pause it. ----
   const video = document.getElementById("tour-video");
