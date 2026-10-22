@@ -9,6 +9,9 @@ dated version section when a release is prepared (see `docs/RELEASING.md`).
 
 ## [Unreleased]
 
+### Fixed
+- Secure connections for updates and block lists use newer versions that fix recently found weaknesses.
+
 ## [1.1.0] - 2026-10-13
 
 ### Added
