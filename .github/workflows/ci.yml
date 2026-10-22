@@ -1,19 +1,18 @@
 name: CI
 
-# Tests and lints on every push and pull request. Nothing here can publish
+# Tests and lints on every pull request; the release runs its own. A change to
+# only the website or prose skips the app tests and the license check. Nothing here can publish
 # anything: the token is read-only and there are no secrets. Releases are built
 # by release.yml and deployed by publish-website.yml. Caching is fine here
 # (nothing built here is released) and is never used in those two.
 on:
-  push:
   pull_request:
 
 permissions: {}
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  # A newer push to the same pull request replaces the older run. Runs on
-  # branches and tags always finish, so every commit keeps a result.
+  # A newer push to the same pull request replaces the older run.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -21,8 +20,32 @@ env:
   CARGO_INCREMENTAL: "0"
 
 jobs:
+  changes:
+    name: Which checks this change needs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      app: ${{ steps.files.outputs.app }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Look at the changed files
+        id: files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: bash .github/app-changed.sh
+
   rust:
     name: Rust tests and lints (Windows ${{ matrix.arch }}, MSVC)
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -113,6 +136,8 @@ jobs:
 
   licenses:
     name: Dependency licenses and sources (cargo-deny)
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

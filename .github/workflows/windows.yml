@@ -2,10 +2,10 @@ name: Installer and dependency checks
 
 # Audits Cargo.lock against RustSec and runs the installer harnesses (setup
 # exit codes, upgrade with a running monitor, uninstall preservation) on a
-# full unsigned build. Releases themselves come from release.yml.
+# full unsigned build. A change to only the website or prose skips them.
+# Releases themselves come from release.yml.
 
 on:
-  push:
   pull_request:
   workflow_dispatch:
 
@@ -16,8 +16,32 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Which checks this change needs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      app: ${{ steps.files.outputs.app }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Look at the changed files
+        id: files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: bash .github/app-changed.sh
+
   dependency-audit:
     name: RustSec audit of Cargo.lock
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

@@ -21,12 +21,12 @@ bump PR -> merge -> tag -> release build (tests, installer tests, attestations) 
 | `scripts/bump-version.py` | Moves the version in every file: Cargo, installer resources, changelog, website, README |
 | `scripts/make-sbom.py` | Writes the parts list (CycloneDX SBOM) of one build target from `cargo metadata` and `Cargo.lock` |
 | `scripts/release-notes.py` | Prints one version's changelog section (the release text) |
-| `.github/workflows/ci.yml` | Tests, lints, tool tests and the workflow security audit (zizmor) on every push and pull request |
+| `.github/workflows/ci.yml` | Tests, lints, tool tests and the workflow security audit (zizmor) on every pull request; the app tests and license check are skipped when only the website or prose changed |
 | `.github/workflows/bump-version.yml` | Runs the bump script and opens a pull request |
 | `.github/workflows/tag-release.yml` | Tags a merged "Release X.Y.Z" commit and starts the release build on that tag |
 | `.github/workflows/release.yml` | Builds, tests the installer, optionally signs, attests and drafts the GitHub Release |
 | `.github/workflows/publish-website.yml` | After you publish: verifies the release, deploys the website, checks the live site |
-| `.github/workflows/windows.yml` | RustSec audit and the installer harnesses on every push (the release also runs the harnesses) |
+| `.github/workflows/windows.yml` | RustSec audit and the installer harnesses on every pull request, skipped when only the website or prose changed (the release always runs the harnesses) |
 | `scripts/build-release.ps1` | The build itself (`-Stage Exe`, `-Stage Setup` or both) |
 | `scripts/assemble-site.py` | Builds the exact site tree to deploy from the verified release files |
 | `scripts/finalize-site.py` | Writes the real checksum and size into the staged page |
@@ -472,7 +472,7 @@ byte comparison, is the proof of origin.
   refuses anything that does not verify.
 - Python packages are installed with `--require-hashes`; the deploy tool with
   `npm ci --ignore-scripts` from a lock file with integrity hashes.
-- `ci.yml` runs `zizmor` (pinned, hash-checked) on every push and pull request.
+- `ci.yml` runs `zizmor` (pinned, hash-checked) on every pull request.
   Any finding fails the check.
 - A weekly Dependabot run proposes updates to actions, crates and the deploy
   tool. Review the pinned SHA and the version comment together.
