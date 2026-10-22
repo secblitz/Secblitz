@@ -11,7 +11,7 @@ case "$BASE" in ""|0000000000000000000000000000000000000000) answer true ;; esac
 
 # A renamed file counts under its old path too. The compare API lists at most 300 files.
 if ! compare=$(gh api "repos/$REPO/compare/$BASE...$HEAD"); then answer true; fi
-count=$(jq '.files | length' <<< "$compare")
+count=$(jq -e '.files | arrays | length' <<< "$compare") || answer true
 [ "$count" -eq 0 ] || [ "$count" -ge 300 ] && answer true
 files=$(jq -r '.files[] | .filename, (.previous_filename // empty)' <<< "$compare")
 
