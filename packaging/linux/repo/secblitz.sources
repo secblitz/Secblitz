@@ -1,0 +1,5 @@
+Types: deb
+URIs: https://secblitz.lol/linux/apt
+Suites: stable
+Components: main
+Signed-By: /usr/share/keyrings/secblitz.gpg

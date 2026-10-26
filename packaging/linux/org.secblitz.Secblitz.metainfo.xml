@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.secblitz.Secblitz</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Secblitz</name>
+  <summary>Check your computer's security and privacy and fix what you approve</summary>
+  <summary xml:lang="es">Revisa la seguridad y la privacidad de tu equipo y corrige lo que apruebes</summary>
+  <summary xml:lang="fr">Vérifiez la sécurité et la confidentialité de votre ordinateur et corrigez ce que vous approuvez</summary>
+  <summary xml:lang="de">Prüfen Sie Sicherheit und Datenschutz Ihres Computers und beheben Sie, was Sie freigeben</summary>
+  <summary xml:lang="pt">Verifique a segurança e a privacidade do seu computador e corrija o que você aprovar</summary>
+  <summary xml:lang="it">Controlla la sicurezza e la privacy del tuo computer e correggi ciò che approvi</summary>
+  <description>
+    <p>Secblitz looks at your computer's security and privacy settings and tells you in plain words what it finds. Checking never changes anything. Nothing changes without your clear yes, and every change can be undone.</p>
+    <p>Secblitz asks for your password only when a change needs it.</p>
+  </description>
+  <launchable type="desktop-id">org.secblitz.Secblitz.desktop</launchable>
+  <url type="homepage">https://secblitz.lol</url>
+  <url type="bugtracker">https://github.com/secblitz/Secblitz/issues</url>
+  <developer id="lol.secblitz">
+    <name>Secblitz</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <provides>
+    <binary>secblitz</binary>
+  </provides>
+  <releases>
+    <release version="@VERSION@" date="@DATE@"/>
+  </releases>
+</component>

@@ -1,0 +1,24 @@
+[Unit]
+Description=Secblitz background check
+Documentation=https://secblitz.lol
+ConditionPathExists=/usr/bin/secblitz
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/secblitz monitor-once
+User=root
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+CapabilityBoundingSet=
+StateDirectory=secblitz
+StateDirectoryMode=0700
+ReadWritePaths=/var/lib/secblitz

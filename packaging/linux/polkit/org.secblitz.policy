@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Secblitz</vendor>
+  <vendor_url>https://secblitz.lol</vendor_url>
+  <icon_name>org.secblitz.Secblitz</icon_name>
+
+  <action id="org.secblitz.check">
+    <description>Check this computer</description>
+    <description xml:lang="es">Revisar este equipo</description>
+    <description xml:lang="fr">Vérifier cet ordinateur</description>
+    <description xml:lang="de">Diesen Computer prüfen</description>
+    <description xml:lang="pt">Verificar este computador</description>
+    <description xml:lang="it">Controllare questo computer</description>
+    <message>Secblitz needs to look at the settings of this computer.</message>
+    <message xml:lang="es">Secblitz necesita ver los ajustes de este equipo.</message>
+    <message xml:lang="fr">Secblitz doit consulter les réglages de cet ordinateur.</message>
+    <message xml:lang="de">Secblitz muss die Einstellungen dieses Computers ansehen.</message>
+    <message xml:lang="pt">O Secblitz precisa ver as configurações deste computador.</message>
+    <message xml:lang="it">Secblitz deve controllare le impostazioni di questo computer.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+
+  <action id="org.secblitz.change">
+    <description>Change security settings</description>
+    <description xml:lang="es">Cambiar ajustes de seguridad</description>
+    <description xml:lang="fr">Modifier les réglages de sécurité</description>
+    <description xml:lang="de">Sicherheitseinstellungen ändern</description>
+    <description xml:lang="pt">Alterar configurações de segurança</description>
+    <description xml:lang="it">Modificare le impostazioni di sicurezza</description>
+    <message>Enter your password to let Secblitz change settings on this computer.</message>
+    <message xml:lang="es">Escribe tu contraseña para que Secblitz cambie ajustes en este equipo.</message>
+    <message xml:lang="fr">Saisissez votre mot de passe pour que Secblitz modifie des réglages sur cet ordinateur.</message>
+    <message xml:lang="de">Geben Sie Ihr Passwort ein, damit Secblitz Einstellungen auf diesem Computer ändern darf.</message>
+    <message xml:lang="pt">Digite sua senha para o Secblitz alterar configurações neste computador.</message>
+    <message xml:lang="it">Inserisci la password per permettere a Secblitz di modificare le impostazioni di questo computer.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="org.secblitz.remove">
+    <description>Remove programs and files</description>
+    <description xml:lang="es">Quitar programas y archivos</description>
+    <description xml:lang="fr">Supprimer des programmes et des fichiers</description>
+    <description xml:lang="de">Programme und Dateien entfernen</description>
+    <description xml:lang="pt">Remover programas e arquivos</description>
+    <description xml:lang="it">Rimuovere programmi e file</description>
+    <message>Enter your password to let Secblitz remove programs or files from this computer.</message>
+    <message xml:lang="es">Escribe tu contraseña para que Secblitz quite programas o archivos de este equipo.</message>
+    <message xml:lang="fr">Saisissez votre mot de passe pour que Secblitz supprime des programmes ou des fichiers de cet ordinateur.</message>
+    <message xml:lang="de">Geben Sie Ihr Passwort ein, damit Secblitz Programme oder Dateien von diesem Computer entfernen darf.</message>
+    <message xml:lang="pt">Digite sua senha para o Secblitz remover programas ou arquivos deste computador.</message>
+    <message xml:lang="it">Inserisci la password per permettere a Secblitz di rimuovere programmi o file da questo computer.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+  </action>
+</policyconfig>
