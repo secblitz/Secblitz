@@ -39,6 +39,12 @@ const fn flag(name: &'static str, absent_safe: bool) -> Key {
     set(name, "", &[0], absent_safe, Some(0), 1)
 }
 
+/// A setting that may be at the desktop's own default: 0 is the safe value, 1 is unsafe because the person set it,
+/// 2 is unsafe because nothing was ever set. Undo puts 2 back with a reset, not by writing the value.
+const fn unsafe_by_default(name: &'static str) -> Key {
+    set(name, "", &[0], true, Some(0), 2)
+}
+
 const fn on(name: &'static str) -> Key {
     set(name, "", &[1], false, Some(1), 1)
 }
@@ -181,13 +187,17 @@ const SPECS: &[LinuxSpec] = &[
             Some("stable"),
         )],
     },
-    // lock_enabled: 1 when the screen locks; idle_never: 1 when the screen never goes idle (idle-delay 0), fixed to 300 seconds.
+    // lock_enabled: 0 when the screen does not lock, 1 when it locks because the person set that, 2 when it locks by default;
+    // idle_never: 1 when the screen never goes idle (idle-delay 0), fixed to 300 seconds.
     LinuxSpec {
         id: "linux.screen_lock",
         scope: Scope::Person,
         ask: false,
         reboot: false,
-        keys: &[on("lock_enabled"), flag("idle_never", false)],
+        keys: &[
+            set("lock_enabled", "", &[1, 2], false, Some(1), 2),
+            flag("idle_never", false),
+        ],
     },
     // rdp, vnc: 1 when GNOME Remote Desktop accepts that kind of connection.
     LinuxSpec {
@@ -197,29 +207,35 @@ const SPECS: &[LinuxSpec] = &[
         reboot: false,
         keys: &[flag("rdp", true), flag("vnc", true)],
     },
-    // keep_forever: 1 when recent files are remembered with no age limit; fixed to 30 days.
+    // keep_forever: 1 when recent files are remembered with no age limit that the person set, 2 when that is the default
+    // (the age limit was never set); fixed to 30 days.
     LinuxSpec {
         id: "linux.recent_files",
         scope: Scope::Person,
         ask: true,
         reboot: false,
-        keys: &[flag("keep_forever", false)],
+        keys: &[unsafe_by_default("keep_forever")],
     },
-    // show_on_lock: 1 when notification text shows on the lock screen.
+    // show_on_lock: 1 when notification text shows on the lock screen because the person set that, 2 when it shows by default.
     LinuxSpec {
         id: "linux.lock_previews",
         scope: Scope::Person,
         ask: false,
         reboot: false,
-        keys: &[flag("show_on_lock", true)],
+        keys: &[unsafe_by_default("show_on_lock")],
     },
-    // shared: 1 when any Ubuntu Insights source may send data.
+    // linux, desktop_provision, release_upgrader: 1 when that Ubuntu Insights source may send data (consent_state = true),
+    // 0 when its consent file says false, null when it has no consent file.
     LinuxSpec {
         id: "linux.ubuntu_insights",
         scope: Scope::Person,
         ask: false,
         reboot: false,
-        keys: &[flag("shared", true)],
+        keys: &[
+            flag("linux", true),
+            flag("desktop_provision", true),
+            flag("release_upgrader", true),
+        ],
     },
 ];
 

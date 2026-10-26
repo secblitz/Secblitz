@@ -3,3 +3,4 @@
 pub mod catalog;
 pub mod cmd;
 pub mod distro;
+pub mod person;
