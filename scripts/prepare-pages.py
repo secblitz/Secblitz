@@ -23,8 +23,10 @@ ARCHES = {
 }
 # Linux and macOS feeds, apart from ARCHES so the Windows download checks never see them.
 PACKAGES = {
-    "linux-x64": dict(target="linux-x86_64", tag="linux-x64", suffixes=(".deb", ".rpm"), feed="releases/stable-linux-x64.json"),
-    "linux-arm64": dict(target="linux-aarch64", tag="linux-arm64", suffixes=(".deb", ".rpm"), feed="releases/stable-linux-arm64.json"),
+    "linux-x64": dict(target="linux-x86_64", tag="linux-x64", suffixes=(".deb", ".rpm"),
+                  feeds=dict(deb="releases/stable-linux-x64-deb.json", rpm="releases/stable-linux-x64-rpm.json")),
+    "linux-arm64": dict(target="linux-aarch64", tag="linux-arm64", suffixes=(".deb", ".rpm"),
+                    feeds=dict(deb="releases/stable-linux-arm64-deb.json", rpm="releases/stable-linux-arm64-rpm.json")),
     "macos": dict(target="macos-universal", tag="macos-universal", suffixes=(".dmg",), feed="releases/stable-macos.json"),
 }
 SECRET_MARKERS = re.compile(
@@ -67,10 +69,13 @@ def unique_object(pairs):
     return result
 
 
-def verify_feed(site, expected_version=None, feed_path=None, installer_directory=None, arch="x64"):
+def verify_feed(site, expected_version=None, feed_path=None, installer_directory=None, arch="x64", package=None):
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
     info = ARCHES[arch] if arch in ARCHES else PACKAGES[arch]
-    feed_bytes = (feed_path or site / info["feed"]).read_bytes()
+    if ("feeds" in info) != (package is not None):
+        raise ValueError("a package kind is needed for linux feeds and not allowed for the others")
+    feed = info["feeds"][package] if package else info["feed"]
+    feed_bytes = (feed_path or site / feed).read_bytes()
     if len(feed_bytes) > 16384:
         raise ValueError("feed exceeds 16 KiB")
     envelope = json.loads(feed_bytes, object_pairs_hook=unique_object)
@@ -91,7 +96,7 @@ def verify_feed(site, expected_version=None, feed_path=None, installer_directory
         raise ValueError("invalid stable version")
     if expected_version and payload["version"] != expected_version:
         raise ValueError("signed feed version does not match expected release version")
-    suffixes = info.get("suffixes", ("-setup.exe",))
+    suffixes = (f".{package}",) if package else info.get("suffixes", ("-setup.exe",))
     if payload["filename"] not in {f"secblitz-{payload['version']}-{info['tag']}{suffix}" for suffix in suffixes}:
         raise ValueError("invalid installer filename")
     if any(type(payload[k]) is not int for k in ("size", "published_at", "expires_at")):
@@ -277,6 +282,7 @@ def main():
     parser.add_argument("--require-feed", action="store_true", help="require a verified signed stable feed")
     parser.add_argument("--expected-version", help="require this exact release version (release gate defaults to Cargo.toml)")
     parser.add_argument("--arch", choices=sorted({**ARCHES, **PACKAGES}), default="x64", help="architecture of the feed given to --verify-feed")
+    parser.add_argument("--package", choices=("deb", "rpm"), help="package kind of the feed given to --verify-feed, for linux architectures")
     parser.add_argument("--verify-feed", type=Path, help="verify a separately downloaded feed locally, without modifying files")
     parser.add_argument("--installer-directory", type=Path, help="directory containing the downloaded installer for --verify-feed")
     args = parser.parse_args()
@@ -294,7 +300,7 @@ def main():
     if args.verify_feed:
         if not args.installer_directory or args.origin or args.require_feed:
             parser.error("--verify-feed requires --installer-directory and cannot configure origin or use --require-feed")
-        verify_feed(site, expected, args.verify_feed, args.installer_directory, args.arch)
+        verify_feed(site, expected, args.verify_feed, args.installer_directory, args.arch, args.package)
         return
     if args.installer_directory:
         parser.error("--installer-directory requires --verify-feed")

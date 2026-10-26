@@ -541,6 +541,7 @@ mod tests {
             "A new version is ready to install.",
             "Secblitz is installing the update. It is ready the next time you open it.",
             "Secblitz has not looked for updates yet.",
+            "No update yet",
         ];
         for text in secblitz::updater::linux::SENTENCES
             .into_iter()

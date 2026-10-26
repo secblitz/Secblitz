@@ -893,6 +893,7 @@ fn floor_keeps_its_history_when_the_pc_switches_to_the_other_architecture() {
 
 #[test]
 fn each_build_reads_only_its_own_feed_and_installer() {
+    #[cfg(not(target_os = "linux"))]
     assert!(arch::STABLE_FEED.starts_with("releases/stable"));
     assert!(arch::CANDIDATE_FEED.starts_with("releases/candidate"));
     assert!(arch::DELIVERY_FEED.starts_with("releases/delivery"));
@@ -919,18 +920,33 @@ fn each_build_reads_only_its_own_feed_and_installer() {
             "secblitz-9.0.0-macos-universal.dmg"
         );
     } else if cfg!(target_os = "linux") {
-        assert!(arch::STABLE_FEED.contains("linux"));
         assert!(arch::TARGET.starts_with("linux-"));
         assert!(setup_filename("9.0.0").ends_with(".deb"));
     } else if cfg!(target_arch = "aarch64") {
-        assert_eq!(arch::STABLE_FEED, "releases/stable-arm64.json");
+        assert_eq!(arch::TARGET, "windows-aarch64");
     } else {
-        assert_eq!(arch::STABLE_FEED, "releases/stable.json");
         assert_eq!(arch::TARGET, "windows-x86_64");
         assert_eq!(
             setup_filename("9.0.0"),
             "secblitz-9.0.0-windows-x64-setup.exe"
         );
+    }
+    #[cfg(all(
+        not(any(target_os = "linux", target_os = "macos")),
+        target_arch = "aarch64"
+    ))]
+    assert_eq!(arch::STABLE_FEED, "releases/stable-arm64.json");
+    #[cfg(all(
+        not(any(target_os = "linux", target_os = "macos")),
+        not(target_arch = "aarch64")
+    ))]
+    assert_eq!(arch::STABLE_FEED, "releases/stable.json");
+    #[cfg(target_os = "linux")]
+    {
+        assert!(arch::STABLE_FEED_DEB.starts_with("releases/stable-linux-"));
+        assert!(arch::STABLE_FEED_DEB.ends_with("-deb.json"));
+        assert!(arch::STABLE_FEED_RPM.starts_with("releases/stable-linux-"));
+        assert!(arch::STABLE_FEED_RPM.ends_with("-rpm.json"));
     }
 }
 
