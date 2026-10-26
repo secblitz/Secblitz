@@ -1437,6 +1437,7 @@ mod tests {
         assert!(consent_line("").is_none());
     }
 
+    #[cfg(unix)]
     #[test]
     fn the_journal_and_configuration_folders_follow_the_standard_variables() {
         let home = Path::new("/home/p");

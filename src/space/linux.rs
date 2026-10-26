@@ -498,5 +498,6 @@ mod real {
     }
 }
 
-#[cfg(test)]
+// The Linux backend only runs on Linux, and these tests rely on Unix path rules.
+#[cfg(all(test, unix))]
 mod tests;

@@ -18,13 +18,14 @@ pub mod services;
 pub mod units;
 pub mod updates;
 
-#[cfg(test)]
+// The Linux backend only runs on Linux, and these tests rely on Unix path rules.
+#[cfg(all(test, unix))]
 mod browser_policy_tests;
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod browser_tests;
-#[cfg(test)]
+#[cfg(all(test, unix))]
 pub(crate) mod sim;
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests;
 
 use super::cmd::{Output, Sys};
