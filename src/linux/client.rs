@@ -39,7 +39,11 @@ impl DbusTransport {
         }
         let builder = match &self.address {
             Some(address) => zbus::connection::Builder::address(address.as_str()),
+            #[cfg(not(test))]
             None => zbus::connection::Builder::system(),
+            // Tests never reach the helper a real install runs on this machine.
+            #[cfg(test)]
+            None => anyhow::bail!(NOT_INSTALLED),
         };
         let connection = builder.build().await.map_err(|error| {
             eprintln!("Cannot reach the system bus: {error}");
