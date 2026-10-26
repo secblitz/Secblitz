@@ -119,7 +119,7 @@ jobs:
           python3 scripts/release-tests.py
           python3 scripts/bump-version-tests.py
       - name: Keep the release notes
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-notes
           path: release-notes.md
@@ -157,7 +157,7 @@ jobs:
         run: ./scripts/build-release.ps1 -Stage Exe
       - name: Upload the unsigned exe
         id: upload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: exe-unsigned
           path: dist/secblitz-*-windows-x64.exe
@@ -190,7 +190,7 @@ jobs:
           wait-for-completion-timeout-in-seconds: 1800
           output-artifact-directory: signed-exe
       - name: Upload the signed exe
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: exe-signed
           path: signed-exe/secblitz-*-windows-x64.exe
@@ -245,7 +245,7 @@ jobs:
         run: ./scripts/build-release.ps1 -Stage Setup -DownloadInno
       - name: Upload the unsigned setup
         id: upload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: setup-unsigned
           path: dist/secblitz-*-windows-x64-setup.exe
@@ -275,7 +275,7 @@ jobs:
           wait-for-completion-timeout-in-seconds: 1800
           output-artifact-directory: signed-setup
       - name: Upload the signed setup
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: setup-signed
           path: signed-setup/secblitz-*-windows-x64-setup.exe
@@ -313,7 +313,7 @@ jobs:
         run: ./scripts/build-release.ps1 -Stage Exe -Arch arm64
       - name: Upload the unsigned exe
         id: upload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: exe-unsigned-arm64
           path: dist/secblitz-*-windows-arm64.exe
@@ -346,7 +346,7 @@ jobs:
           wait-for-completion-timeout-in-seconds: 1800
           output-artifact-directory: signed-exe-arm64
       - name: Upload the signed exe
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: exe-signed-arm64
           path: signed-exe-arm64/secblitz-*-windows-arm64.exe
@@ -401,7 +401,7 @@ jobs:
         run: ./scripts/build-release.ps1 -Stage Setup -Arch arm64 -DownloadInno
       - name: Upload the unsigned setup
         id: upload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: setup-unsigned-arm64
           path: dist/secblitz-*-windows-arm64-setup.exe
@@ -431,7 +431,7 @@ jobs:
           wait-for-completion-timeout-in-seconds: 1800
           output-artifact-directory: signed-setup-arm64
       - name: Upload the signed setup
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: setup-signed-arm64
           path: signed-setup-arm64/secblitz-*-windows-arm64-setup.exe
@@ -583,7 +583,7 @@ jobs:
           ARCH: ${{ matrix.arch }}
         run: python3 scripts/linux-install-check.py dist "$VERSION" "$ARCH"
       - name: Upload the packages
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: linux-packages-${{ matrix.arch }}
           path: dist/secblitz-*-linux-${{ matrix.arch }}.*
@@ -688,7 +688,7 @@ jobs:
           subject-path: release/secblitz-*-windows-arm64.exe
           sbom-path: release/secblitz-${{ needs.verify.outputs.version }}-windows-arm64.cdx.json
       - name: Keep the release files
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-files
           path: release/*
