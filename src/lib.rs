@@ -11,6 +11,7 @@ pub mod engine;
 pub mod explain;
 pub mod filter;
 pub mod hardening;
+pub mod linux;
 pub mod model;
 pub mod operations;
 pub mod os;

@@ -26,7 +26,7 @@ const VBS_GATE: Gate = Gate {
     ..NO_GATE
 };
 
-const fn set(
+pub(crate) const fn set(
     name: &'static str,
     path: &'static str,
     safe: &'static [u32],
@@ -48,7 +48,7 @@ const fn set(
     }
 }
 
-const fn text(
+pub(crate) const fn text(
     name: &'static str,
     path: &'static str,
     safe: &'static [&'static str],
