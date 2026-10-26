@@ -168,7 +168,7 @@ pub fn control_impact(id: &str) -> &'static str {
         "recovery.winre_enabled" => {
             "Being stuck without a way to repair Windows if it stops starting"
         }
-        _ => "",
+        _ => super::linux::impact(id).unwrap_or(""),
     }
 }
 
@@ -190,6 +190,6 @@ pub fn finding_impact(title: &str) -> &'static str {
             "A driver bug causing serious trouble in the core of Windows"
         }
         "Automatic logon" => "Anyone who turns on your computer getting straight into your account",
-        _ => "",
+        _ => super::linux::finding_impact(title).unwrap_or(""),
     }
 }

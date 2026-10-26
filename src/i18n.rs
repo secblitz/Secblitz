@@ -9,6 +9,7 @@ mod fixes;
 mod guided;
 mod interface;
 mod italian;
+mod linux;
 mod maintenance;
 mod results;
 
@@ -139,6 +140,7 @@ const MAINTENANCE_PARTS: &[&[[&str; 6]]] = &[
     fixes::ROWS,
     results::ROWS,
     guided::ROWS,
+    linux::ROWS,
 ];
 
 const TEXT_PARTS: &[&[[&str; 5]]] = &[

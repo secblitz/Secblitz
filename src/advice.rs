@@ -3,6 +3,7 @@
 mod choice;
 mod impact;
 mod labels;
+mod linux;
 mod reasons;
 
 use crate::model::CheckStatus;
@@ -10,10 +11,22 @@ pub use choice::{choice_consequence, is_choice_check_id};
 pub use impact::{control_impact, finding_impact};
 use labels::control_help;
 pub use labels::control_label;
+#[cfg(test)]
+pub(crate) use linux::assert_plain_words as assert_plain_linux_words;
+pub use linux::{
+    DISK_ENCRYPTION, PROGRAM_LIMITS, RESTART_NEEDED, SECURE_BOOT as LINUX_SECURE_BOOT,
+    UPDATES_WAITING,
+};
 use reasons::{managed, not_offered, repair_help};
 
 /// The optional group a choice belongs to. These never count against the score.
 pub fn extra_section(id: &str) -> Option<&'static str> {
+    if matches!(
+        id,
+        "linux.connectivity_check" | "linux.wifi_mac" | "linux.recent_files"
+    ) {
+        return Some("Privacy extras");
+    }
     Some(match id.split_once('.')?.0 {
         "privacy" | "browser" => "Privacy extras",
         "ai" => "AI features",
@@ -318,7 +331,11 @@ pub fn for_finding(title: &str, status: &CheckStatus, detail: &str) -> Advice {
         "Service permissions: SecblitzMonitor" => ("Protection monitor permissions", "We leave this one alone. If a fix is available, it appears under Needs your attention.", ReviewWithAdministrator),
         "Journal recovery" => ("Saved changes", "Undo your last fixes before making new ones.", ReviewUndo),
         "Assessment unavailable" | "Windows service settings" => ("Additional protection checks", "Check again in a moment. Nothing has been changed.", CheckAgain),
-        _ => ("Protection check", "Check again in a moment. Nothing has been changed.", CheckAgain),
+        _ => linux::finding(title).unwrap_or((
+            "Protection check",
+            "Check again in a moment. Nothing has been changed.",
+            CheckAgain,
+        )),
     };
     let mut a = base(label, status, (next, step));
     if *status == CheckStatus::Info {

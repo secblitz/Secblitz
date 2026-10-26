@@ -3,6 +3,7 @@
 mod access;
 mod core;
 mod detect;
+mod linux;
 mod network;
 mod space;
 mod system;
@@ -25,6 +26,7 @@ pub fn for_check(id: &str) -> Option<Explainer> {
         .or_else(|| space::get(id))
         .or_else(|| web::get(id))
         .or_else(|| detect::get(id))
+        .or_else(|| linux::get(id))
 }
 
 #[cfg(test)]

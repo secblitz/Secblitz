@@ -1,6 +1,6 @@
 //! Checks that ask first, and what choosing them changes.
 pub fn is_choice_check_id(id: &str) -> bool {
-    crate::hardening::is_ask_check_id(id)
+    crate::hardening::is_ask_check_id(id) || crate::linux::catalog::spec(id).is_some_and(|s| s.ask)
 }
 
 pub fn choice_consequence(id: &str) -> &'static str {
@@ -181,6 +181,6 @@ pub fn choice_consequence(id: &str) -> &'static str {
         "browser.dns_bypass" => {
             "Keep Web protection on. Browsers will say they are managed by your organization, which only means a setting was made."
         }
-        _ => "",
+        _ => super::linux::consequence(id).unwrap_or(""),
     }
 }
