@@ -59,7 +59,13 @@ mod tests {
         for page in [Page::Web, Page::Tools] {
             assert!(applies(Os::Linux, page), "{page:?}");
         }
-        for page in [Page::Home, Page::Fixes, Page::Debloat, Page::History, Page::Settings] {
+        for page in [
+            Page::Home,
+            Page::Fixes,
+            Page::Debloat,
+            Page::History,
+            Page::Settings,
+        ] {
             assert!(!applies(Os::Linux, page), "{page:?}");
         }
     }
