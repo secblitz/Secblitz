@@ -226,12 +226,12 @@ fn run_job(shared: &Shared, id: u64, request: Request, open: &Opener, recover: &
             };
             emit(Event::Done(match result {
                 Ok(()) => Reply::Ok,
-                Err(error) => Reply::Failed(format!("{error:#}")),
+                Err(error) => remote::failure(&error),
             }));
         }
         request => match open() {
             Ok(mut session) => remote::serve(session.as_mut(), request, &mut emit),
-            Err(error) => emit(Event::Done(Reply::Failed(format!("{error:#}")))),
+            Err(error) => emit(Event::Done(remote::failure(&error))),
         },
     }));
     if !finished {

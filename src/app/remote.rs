@@ -2,11 +2,12 @@
 //! rights, and the helper side that answers them. Windows keeps its own
 //! elevated window; this is the cut the Unix helper will use.
 use super::worker::Session;
+use secblitz::engine::recover::{DamageKind, JournalDamaged};
 use secblitz::engine::{ItemChoice, Progress, ProgressStep, Report};
 use secblitz::model::CheckStatus;
 use serde::{Deserialize, Serialize};
 
-pub const PROTOCOL: u32 = 1;
+pub const PROTOCOL: u32 = 2;
 pub const MAX_MESSAGE: usize = 1 << 20;
 const MAX_IDS: usize = 512;
 const MAX_ID_LEN: usize = 128;
@@ -67,6 +68,19 @@ pub enum Reply {
     History(Vec<String>),
     Ok,
     Failed(String),
+    /// The saved undo history cannot be trusted. Typed, so the window can offer a fresh start.
+    Damaged { kind: DamageKind, files: usize },
+}
+
+/// The reply for an error. A damaged undo history keeps its type across the cut.
+pub fn failure(error: &anyhow::Error) -> Reply {
+    match error.downcast_ref::<JournalDamaged>() {
+        Some(damage) => Reply::Damaged {
+            kind: damage.kind,
+            files: damage.files,
+        },
+        None => Reply::Failed(format!("{error:#}")),
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -176,7 +190,7 @@ pub fn serve(session: &mut dyn Session, request: Request, emit: &mut dyn FnMut(E
         Request::UndoSelected { ids } => report(session.undo_selected(&ids, &mut emit_progress)),
         Request::History => match session.history() {
             Ok(lines) => Reply::History(lines),
-            Err(error) => Reply::Failed(format!("{error:#}")),
+            Err(error) => failure(&error),
         },
         Request::CanStart { undo } => done(session.can_start(undo)),
         Request::ChooseItems { picked } => done(session.choose_items(picked)),
@@ -188,14 +202,14 @@ pub fn serve(session: &mut dyn Session, request: Request, emit: &mut dyn FnMut(E
 fn report(result: anyhow::Result<Report>) -> Reply {
     match result {
         Ok(report) => Reply::Report(report),
-        Err(error) => Reply::Failed(format!("{error:#}")),
+        Err(error) => failure(&error),
     }
 }
 
 fn done(result: anyhow::Result<()>) -> Reply {
     match result {
         Ok(()) => Reply::Ok,
-        Err(error) => Reply::Failed(format!("{error:#}")),
+        Err(error) => failure(&error),
     }
 }
 
@@ -251,6 +265,9 @@ impl<T: Transport> RemoteSession<T> {
         })?;
         match reply.ok_or_else(|| anyhow::anyhow!(NOT_INSTALLED))? {
             Reply::Failed(message) => anyhow::bail!(message),
+            Reply::Damaged { kind, files } => {
+                Err(anyhow::Error::new(JournalDamaged { kind, files }))
+            }
             reply => Ok(reply),
         }
     }
@@ -329,6 +346,7 @@ pub fn start_fresh<T: Transport>(transport: &mut T) -> anyhow::Result<()> {
     match reply.ok_or_else(|| anyhow::anyhow!(NOT_INSTALLED))? {
         Reply::Ok => Ok(()),
         Reply::Failed(message) => anyhow::bail!(message),
+        Reply::Damaged { kind, files } => Err(anyhow::Error::new(JournalDamaged { kind, files })),
         _ => anyhow::bail!(BAD_ANSWER),
     }
 }
@@ -571,11 +589,12 @@ mod tests {
                 String::from_utf8_lossy(&bytes[..bytes.len().min(80)])
             )
         };
-        refused(br#"{"v":2,"request":{"op":"audit"}}"#.to_vec());
+        refused(br#"{"v":1,"request":{"op":"audit"}}"#.to_vec());
+        refused(br#"{"v":3,"request":{"op":"audit"}}"#.to_vec());
         refused(br#"{"request":{"op":"audit"}}"#.to_vec());
-        refused(br#"{"v":1,"request":{"op":"run_command","cmd":"id"}}"#.to_vec());
+        refused(envelope(r#"{"op":"run_command","cmd":"id"}"#));
         refused(envelope(r#"{"op":"audit","extra":1}"#));
-        refused(br#"{"v":1,"request":{"op":"audit"},"extra":1}"#.to_vec());
+        refused(format!(r#"{{"v":{PROTOCOL},"request":{{"op":"audit"}},"extra":1}}"#).into_bytes());
         refused(envelope(r#"{"op":"apply","ids":["a/b"]}"#));
         refused(envelope(r#"{"op":"apply","ids":["Upper"]}"#));
         refused(envelope(r#"{"op":"apply","ids":[""]}"#));
@@ -608,6 +627,72 @@ mod tests {
         let mut bytes = br#"{"done":"ok"}"#.to_vec();
         bytes.resize(MAX_MESSAGE + 1, b' ');
         assert!(decode_event(&bytes).is_err());
+    }
+
+    struct Damaged;
+
+    impl Session for Damaged {
+        fn available(&self) -> Vec<String> {
+            Vec::new()
+        }
+        fn restart_ids(&self) -> Vec<String> {
+            Vec::new()
+        }
+        fn audit(&mut self, _: &mut dyn FnMut(Progress<'_>)) -> anyhow::Result<Report> {
+            Err(anyhow::Error::new(JournalDamaged {
+                kind: DamageKind::Partial,
+                files: 3,
+            })
+            .context("outer"))
+        }
+        fn apply(
+            &mut self,
+            _: &[String],
+            _: &mut dyn FnMut(Progress<'_>),
+        ) -> anyhow::Result<Report> {
+            anyhow::bail!("disk full")
+        }
+        fn undo(&mut self, _: &mut dyn FnMut(Progress<'_>)) -> anyhow::Result<Report> {
+            anyhow::bail!("disk full")
+        }
+        fn undo_selected(
+            &mut self,
+            _: &[String],
+            _: &mut dyn FnMut(Progress<'_>),
+        ) -> anyhow::Result<Report> {
+            anyhow::bail!("disk full")
+        }
+        fn history(&mut self) -> anyhow::Result<Vec<String>> {
+            anyhow::bail!("disk full")
+        }
+        fn can_start(&mut self, _: bool) -> anyhow::Result<()> {
+            anyhow::bail!("disk full")
+        }
+    }
+
+    #[test]
+    fn a_damaged_undo_history_keeps_its_type_across_the_cut() {
+        let reply = failure(&anyhow::Error::new(JournalDamaged {
+            kind: DamageKind::OtherPc,
+            files: 7,
+        }));
+        let bytes = serde_json::to_vec(&Event::Done(reply)).unwrap();
+        let Event::Done(Reply::Damaged { kind, files }) = decode_event(&bytes).unwrap() else {
+            panic!("the type was lost");
+        };
+        assert_eq!((kind, files), (DamageKind::OtherPc, 7));
+
+        let mut damaged = Damaged;
+        let mut remote = RemoteSession::connect(Loopback {
+            session: &mut damaged,
+        })
+        .unwrap();
+        let error = remote.audit(&mut |_| {}).unwrap_err();
+        let damage = error.downcast_ref::<JournalDamaged>().unwrap();
+        assert_eq!((damage.kind, damage.files), (DamageKind::Partial, 3));
+        let error = remote.undo(&mut |_| {}).unwrap_err();
+        assert!(error.downcast_ref::<JournalDamaged>().is_none());
+        assert_eq!(format!("{error:#}"), "disk full");
     }
 
     #[test]
