@@ -5,6 +5,8 @@ use crate::app::remote::{self, Event, Reply, Request};
 use crate::app::worker::Session;
 use secblitz::engine::recover::NotDamaged;
 use secblitz::linux::backend::LinuxBackend;
+use secblitz::linux::cmd::RealSys;
+use secblitz::updater;
 use std::collections::VecDeque;
 use std::future::Future;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -224,6 +226,13 @@ fn remove_self() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn update_reply(result: anyhow::Result<updater::UpdateStatus>) -> Reply {
+    match result {
+        Ok(status) => Reply::Update(status),
+        Err(error) => Reply::Failed(format!("{error:#}")),
+    }
+}
+
 /// Runs one request to its final event. A start fresh needs no open session, since a damaged history is why none could open.
 fn run_job(shared: &Shared, id: u64, request: Request, open: &Opener, recover: &Recover) {
     let mut finished = false;
@@ -249,6 +258,16 @@ fn run_job(shared: &Shared, id: u64, request: Request, open: &Opener, recover: &
                 Err(error) => remote::failure(&error),
             }));
         }
+        Request::MonitorTimer { on } => emit(Event::Done(match updater::linux::set_monitor_timer(
+            &RealSys, on,
+        ) {
+            Ok(()) => Reply::Ok,
+            Err(error) => Reply::Failed(format!("{error:#}")),
+        })),
+        Request::UpdateStatus => emit(Event::Done(update_reply(updater::linux::status(&RealSys)))),
+        Request::InstallUpdate => emit(Event::Done(update_reply(
+            updater::linux::install(&RealSys).and_then(|_| updater::linux::status(&RealSys)),
+        ))),
         request => match open() {
             Ok(mut session) => remote::serve(session.as_mut(), request, &mut emit),
             Err(error) => emit(Event::Done(remote::failure(&error))),
@@ -489,6 +508,34 @@ mod tests {
             secblitz::linux::remove::CANNOT_REMOVE,
         ] {
             assert_ne!(crate::i18n::Lang::De.t(text), text, "{text}");
+        }
+    }
+
+    #[test]
+    fn every_sentence_the_update_features_show_is_translated_in_every_language() {
+        let others = [
+            "This cannot be done from here.",
+            "A newer version of Secblitz is ready to install.",
+            "Look for updates automatically?",
+            "Once a day, Secblitz looks for a newer version of itself. It never changes anything on its own.",
+            "Stop looking for updates?",
+            "Secblitz stops looking for updates by itself. You can still update it from your software app or from our website.",
+            "Look for updates automatically",
+            "Once a day, Secblitz looks for a newer version of itself.",
+            "A new version is ready. Install it from your software app.",
+            "A new version is ready to install.",
+            "Secblitz is installing the update. It is ready the next time you open it.",
+            "Secblitz has not looked for updates yet.",
+        ];
+        for text in secblitz::updater::linux::SENTENCES
+            .into_iter()
+            .chain(others)
+        {
+            for lang in ["es", "fr", "de", "pt", "it"] {
+                let lang = crate::i18n::Lang::parse(lang).unwrap();
+                assert_ne!(lang.t(text), text, "{text} in {lang:?}");
+                assert!(!lang.t(text).contains('\u{2014}'), "{text}");
+            }
         }
     }
 

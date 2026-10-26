@@ -5,6 +5,7 @@ use super::worker::Session;
 use secblitz::engine::recover::{DamageKind, JournalDamaged};
 use secblitz::engine::{ItemChoice, Progress, ProgressStep, Report};
 use secblitz::model::CheckStatus;
+use secblitz::updater::UpdateStatus;
 use serde::{Deserialize, Serialize};
 
 pub const PROTOCOL: u32 = 2;
@@ -16,6 +17,7 @@ const MAX_ITEM_LEN: usize = 512;
 use crate::launcher::NOT_INSTALLED;
 const BAD_ANSWER: &str = NOT_INSTALLED;
 const NOT_DAMAGED: &str = "Nothing needs to be started fresh.";
+const NOT_HERE: &str = "This cannot be done from here.";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, tag = "op", rename_all = "snake_case")]
@@ -40,6 +42,11 @@ pub enum Request {
     StartFresh,
     /// Takes Secblitz's own package off the computer. It needs no open session.
     RemoveSelf,
+    MonitorTimer {
+        on: bool,
+    },
+    UpdateStatus,
+    InstallUpdate,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,6 +83,7 @@ pub enum Reply {
     Ids(Vec<String>),
     Report(Report),
     History(Vec<String>),
+    Update(UpdateStatus),
     Ok,
     Failed(String),
     /// The saved undo history cannot be trusted. Typed, so the window can offer a fresh start.
@@ -209,6 +217,9 @@ pub fn serve(session: &mut dyn Session, request: Request, emit: &mut dyn FnMut(E
         Request::ChooseItems { picked } => done(session.choose_items(picked)),
         Request::StartFresh => Reply::Failed(NOT_DAMAGED.to_owned()),
         Request::RemoveSelf => Reply::Failed(BAD_ANSWER.to_owned()),
+        Request::MonitorTimer { .. } | Request::UpdateStatus | Request::InstallUpdate => {
+            Reply::Failed(NOT_HERE.to_owned())
+        }
     };
     emit(Event::Done(reply));
 }
@@ -379,6 +390,47 @@ pub fn remove_self<T: Transport>(transport: &mut T) -> anyhow::Result<()> {
     match reply.ok_or_else(|| anyhow::anyhow!(NOT_INSTALLED))? {
         Reply::Ok => Ok(()),
         Reply::Failed(message) => anyhow::bail!(message),
+        _ => anyhow::bail!(BAD_ANSWER),
+    }
+}
+
+/// Sends one request that needs no open session and returns its final reply.
+fn ask_once<T: Transport>(transport: &mut T, request: &Request) -> anyhow::Result<Reply> {
+    let bytes = encode_request(request)?;
+    let mut reply = None;
+    transport.call(&bytes, &mut |event| {
+        anyhow::ensure!(reply.is_none(), BAD_ANSWER);
+        if let Event::Done(done) = decode_event(event)? {
+            reply = Some(done);
+        }
+        Ok(())
+    })?;
+    match reply.ok_or_else(|| anyhow::anyhow!(NOT_INSTALLED))? {
+        Reply::Failed(message) => anyhow::bail!(message),
+        reply => Ok(reply),
+    }
+}
+
+/// Turns the daily background check on or off.
+pub fn set_monitor_timer<T: Transport>(transport: &mut T, on: bool) -> anyhow::Result<()> {
+    match ask_once(transport, &Request::MonitorTimer { on })? {
+        Reply::Ok => Ok(()),
+        _ => anyhow::bail!(BAD_ANSWER),
+    }
+}
+
+/// What the last background check found.
+pub fn update_status<T: Transport>(transport: &mut T) -> anyhow::Result<UpdateStatus> {
+    match ask_once(transport, &Request::UpdateStatus)? {
+        Reply::Update(status) => Ok(status),
+        _ => anyhow::bail!(BAD_ANSWER),
+    }
+}
+
+/// Installs the waiting version when no software repository looks after Secblitz.
+pub fn install_update<T: Transport>(transport: &mut T) -> anyhow::Result<UpdateStatus> {
+    match ask_once(transport, &Request::InstallUpdate)? {
+        Reply::Update(status) => Ok(status),
         _ => anyhow::bail!(BAD_ANSWER),
     }
 }
@@ -725,6 +777,47 @@ mod tests {
         let error = remote.undo(&mut |_| {}).unwrap_err();
         assert!(error.downcast_ref::<JournalDamaged>().is_none());
         assert_eq!(format!("{error:#}"), "disk full");
+    }
+
+    #[test]
+    fn the_update_requests_round_trip_and_refuse_extra_fields() {
+        for (text, want) in [
+            (
+                r#"{"op":"monitor_timer","on":true}"#,
+                Request::MonitorTimer { on: true },
+            ),
+            (
+                r#"{"op":"monitor_timer","on":false}"#,
+                Request::MonitorTimer { on: false },
+            ),
+            (r#"{"op":"update_status"}"#, Request::UpdateStatus),
+            (r#"{"op":"install_update"}"#, Request::InstallUpdate),
+        ] {
+            assert_eq!(decode_request(&envelope(text)).unwrap(), want);
+            assert_eq!(
+                decode_request(&encode_request(&want).unwrap()).unwrap(),
+                want
+            );
+        }
+        for text in [
+            r#"{"op":"monitor_timer"}"#,
+            r#"{"op":"monitor_timer","on":"yes"}"#,
+            r#"{"op":"monitor_timer","on":true,"unit":"ssh.service"}"#,
+            r#"{"op":"install_update","url":"https://example.invalid/x.deb"}"#,
+            r#"{"op":"update_status","path":"/etc/shadow"}"#,
+        ] {
+            assert!(decode_request(&envelope(text)).is_err(), "{text}");
+        }
+    }
+
+    #[test]
+    fn a_session_alone_does_not_answer_the_update_requests() {
+        let mut fake = Fake::default();
+        let error = set_monitor_timer(&mut Loopback { session: &mut fake }, true).unwrap_err();
+        assert_eq!(format!("{error:#}"), NOT_HERE);
+        assert!(update_status(&mut Loopback { session: &mut fake }).is_err());
+        assert!(install_update(&mut Loopback { session: &mut fake }).is_err());
+        assert!(fake.log.is_empty());
     }
 
     #[test]

@@ -385,19 +385,6 @@ fn device_id(root: &Path, create_missing: bool) -> Result<[u8; 16]> {
             anyhow::anyhow!("Invalid rollout identity")
         })
 }
-fn fetch_manifest(client: &reqwest::blocking::Client, url: reqwest::Url) -> Result<Vec<u8>> {
-    let response = client.get(url).send()?;
-    ensure!(
-        response.status() == reqwest::StatusCode::OK,
-        "Manifest HTTP request failed"
-    );
-    let mut bytes = Vec::new();
-    response
-        .take((MANIFEST_LIMIT + 1) as u64)
-        .read_to_end(&mut bytes)?;
-    ensure!(bytes.len() <= MANIFEST_LIMIT, "Manifest too large");
-    Ok(bytes)
-}
 fn select_delivery(
     client: &reqwest::blocking::Client,
     root: &Path,
@@ -1223,20 +1210,6 @@ fn scan_busy(path: &Path, root: &Path) -> Result<(bool, Vec<u32>)> {
         }
     }
     Ok((false, trays))
-}
-fn config() -> Result<Option<reqwest::Url>> {
-    origin(
-        option_env!("SECBLITZ_UPDATE_ORIGIN")
-            .unwrap_or(include_str!("../../assets/update-origin.txt")),
-    )
-}
-fn key() -> Result<[u8; 32]> {
-    let bytes = hex::decode(include_str!("../../assets/update-public-key.hex").trim())
-        .context("Invalid embedded update public key")?;
-    bytes.try_into().map_err(|v: Vec<u8>| {
-        eprintln!("{} bytes", v.len());
-        anyhow::anyhow!("Embedded update public key must be 32 bytes")
-    })
 }
 fn record(root: &Path, result: UpdateOutcome) -> Result<UpdateOutcome> {
     replace(

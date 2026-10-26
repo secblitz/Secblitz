@@ -31,12 +31,15 @@ pub fn action_for(request: &Request) -> Action {
         | Request::RestartIds
         | Request::Audit
         | Request::History
-        | Request::CanStart { .. } => Action::Check,
+        | Request::CanStart { .. }
+        | Request::UpdateStatus => Action::Check,
         Request::Apply { .. }
         | Request::Undo
         | Request::UndoSelected { .. }
         | Request::ChooseItems { .. }
-        | Request::StartFresh => Action::Change,
+        | Request::StartFresh
+        | Request::MonitorTimer { .. }
+        | Request::InstallUpdate => Action::Change,
         Request::RemoveSelf => Action::Remove,
     }
 }
@@ -202,6 +205,7 @@ mod tests {
             Request::Audit,
             Request::History,
             Request::CanStart { undo: true },
+            Request::UpdateStatus,
         ] {
             assert_eq!(action_for(&request), Action::Check, "{request:?}");
         }
@@ -213,6 +217,9 @@ mod tests {
                 picked: Default::default(),
             },
             Request::StartFresh,
+            Request::MonitorTimer { on: true },
+            Request::MonitorTimer { on: false },
+            Request::InstallUpdate,
         ] {
             assert_eq!(action_for(&request), Action::Change, "{request:?}");
         }

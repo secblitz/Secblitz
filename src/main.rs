@@ -86,6 +86,7 @@ fn command(lang: Lang) -> Command {
                 .arg(Arg::new("user").long("user").action(ArgAction::SetTrue)),
         )
         .subcommand(Command::new("helper").hide(true))
+        .subcommand(Command::new("monitor-once").hide(true))
         .subcommand(
             Command::new("uninstall-cleanup").hide(true).arg(
                 Arg::new("user")
@@ -224,6 +225,12 @@ fn execute(matches: &ArgMatches, lang: Lang) -> Result<i32> {
         #[cfg(not(target_os = "linux"))]
         bail!(launcher::NOT_INSTALLED);
     }
+    if matches.subcommand_matches("monitor-once").is_some() {
+        #[cfg(target_os = "linux")]
+        return monitor_once(lang);
+        #[cfg(not(target_os = "linux"))]
+        bail!(launcher::NOT_INSTALLED);
+    }
     if update_command(matches) == Some(UpdateCommand::Health) {
         anyhow::ensure!(matches.get_flag("json"), "update-health-requires-json");
         return write_health(updater::health()?, &mut io::stdout().lock());
@@ -289,6 +296,22 @@ fn execute(matches: &ArgMatches, lang: Lang) -> Result<i32> {
         _ => unreachable!(),
     }
     Ok(0)
+}
+
+/// The daily background check the packaged timer starts. It runs as root only and never changes the computer: it
+/// looks at the signed update feed and keeps what it found for the window to show.
+#[cfg(target_os = "linux")]
+fn monitor_once(lang: Lang) -> Result<i32> {
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    if unsafe { libc::geteuid() } != 0 {
+        eprintln!("{}", lang.t(updater::linux::NOT_ROOT));
+        return Ok(2);
+    }
+    let outcome = updater::linux::check(&secblitz::linux::cmd::RealSys)?;
+    Ok(i32::from(matches!(
+        outcome,
+        updater::UpdateOutcome::Failed { .. }
+    )))
 }
 
 /// A site name exactly as Web protection writes it, so the argument cannot be anything else.
@@ -465,6 +488,7 @@ impl UpdateReport {
                 "Your update is ready. Close Secblitz so the installer can continue."
             }
             UpdateOutcome::Installed { .. } => "Secblitz was updated.",
+            UpdateOutcome::Available { .. } => "A newer version of Secblitz is ready to install.",
             UpdateOutcome::Failed { .. } => "The update could not be completed. Check your internet connection and try again later. If it keeps happening, download the latest Secblitz from our website.",
         }
     }
@@ -681,7 +705,7 @@ fn main() {
             gui_entry = matches.subcommand_name().is_none();
             plumbing = matches!(
                 matches.subcommand_name(),
-                Some("filter" | "uninstall-revert" | "uninstall-cleanup")
+                Some("filter" | "uninstall-revert" | "uninstall-cleanup" | "monitor-once")
             );
             execute(&matches, lang)
         }
@@ -898,6 +922,21 @@ mod tests {
             .is_err());
         let help = command(Lang::En).render_help().to_string();
         assert!(!help.contains("filter"), "{help}");
+    }
+
+    #[test]
+    fn the_background_check_is_hidden_and_takes_nothing() {
+        let matches = command(Lang::En)
+            .try_get_matches_from(["secblitz", "monitor-once"])
+            .unwrap();
+        assert!(matches.subcommand_matches("monitor-once").is_some());
+        for extra in ["--url=https://example.invalid", "now", "--force"] {
+            assert!(command(Lang::En)
+                .try_get_matches_from(["secblitz", "monitor-once", extra])
+                .is_err());
+        }
+        let help = command(Lang::En).render_help().to_string();
+        assert!(!help.contains("monitor-once"), "{help}");
     }
 
     #[test]
