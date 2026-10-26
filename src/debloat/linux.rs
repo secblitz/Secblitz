@@ -263,11 +263,13 @@ fn installed(sys: &dyn Sys, manager: Manager, package: &str) -> Result<bool> {
 /// Simulates, checks the plan and removes one app's package, then reads back that it is gone.
 pub fn remove_package(sys: &dyn Sys, package: &str) -> PackageOutcome {
     let attempt = || -> Result<()> {
+        ensure!(is_valid_package(package), REFUSED);
         let manager = manager(sys)?;
-        gate(package, &simulate(sys, manager, package)?)?;
+        // Another package of the same app can take this one with it, and dnf fails a removal of nothing.
         if !installed(sys, manager, package)? {
             return Ok(());
         }
+        gate(package, &simulate(sys, manager, package)?)?;
         let out = match manager {
             Manager::Apt => sys.run_long("/usr/bin/apt-get", &["remove", "-y", package])?,
             Manager::Dnf => sys.run_long(

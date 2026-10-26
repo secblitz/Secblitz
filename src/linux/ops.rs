@@ -410,6 +410,12 @@ mod tests {
             0,
             "Remv anydesk [7]\nRemv ubuntu-desktop [1]\n",
         );
+        machine.reply(
+            "/usr/bin/dpkg-query",
+            &["-W", "-f=${db:Status-Abbrev}", "anydesk"],
+            0,
+            "ii ",
+        );
         let (lines, reply) = collect(
             &machine,
             Request::RemoveApps {

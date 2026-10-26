@@ -301,6 +301,12 @@ fn removing_transmission_takes_its_shared_files_and_nothing_else() {
         0,
         "Remv transmission-gtk [4]\nRemv mint-meta-cinnamon [1]\n",
     );
+    sys.reply(
+        "/usr/bin/dpkg-query",
+        &["-W", "-f=${db:Status-Abbrev}", "transmission-gtk"],
+        0,
+        "ii ",
+    );
     assert_eq!(
         remove_package(&sys, "transmission-gtk"),
         PackageOutcome::Failed(REFUSED.into())
@@ -356,6 +362,12 @@ fn a_plan_that_takes_other_programs_runs_nothing() {
         &["-s", "remove", "teamviewer"],
         0,
         "Remv teamviewer [15]\nRemv ubuntu-desktop [1]\n",
+    );
+    sys.reply(
+        "/usr/bin/dpkg-query",
+        &["-W", "-f=${db:Status-Abbrev}", "teamviewer"],
+        0,
+        "ii ",
     );
     assert_eq!(
         remove_package(&sys, "teamviewer"),
@@ -600,6 +612,32 @@ fn reinstalling_installs_the_app_and_clears_its_line() {
     reinstall_package(&seen, "xrdp").unwrap();
     assert!(called(&sys, "/usr/bin/apt-get install -y xrdp"));
     assert_eq!(record_of(&sys), "anydesk\t10\n");
+}
+
+#[test]
+fn a_package_that_went_with_an_earlier_one_counts_as_removed_on_fedora() {
+    let sys = fedora();
+    sys.reply("/usr/bin/rpm", &["-q", "transmission-gtk"], 1, "");
+    // dnf says "No packages to remove" on its error output and fails, which must not read as a failed removal.
+    sys.reply(
+        "/usr/bin/dnf",
+        &[
+            "remove",
+            "--assumeno",
+            "--no-autoremove",
+            "transmission-gtk",
+        ],
+        1,
+        "",
+    );
+    assert_eq!(
+        remove_package(&sys, "transmission-gtk"),
+        PackageOutcome::Removed
+    );
+    assert!(!called(
+        &sys,
+        "/usr/bin/dnf remove -y --no-autoremove transmission-gtk"
+    ));
 }
 
 #[test]

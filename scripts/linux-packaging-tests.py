@@ -86,11 +86,15 @@ class StaticFiles(unittest.TestCase):
         self.assertEqual(unit["Type"], "dbus")
         self.assertEqual(unit["BusName"], "org.secblitz.Helper1")
         self.assertEqual(unit["ExecStart"], "/usr/bin/secblitz helper")
-        for key, value in {"NoNewPrivileges": "yes", "PrivateTmp": "yes", "ProtectHome": "read-only",
+        for key, value in {"PrivateTmp": "yes", "ProtectHome": "read-only",
                            "StateDirectory": "secblitz", "StateDirectoryMode": "0700"}.items():
             self.assertEqual(unit[key], value, key)
         # Removing an old kernel writes /usr/lib/modules, which ProtectKernelModules makes read-only.
         self.assertNotIn("ProtectKernelModules", unit)
+        # On Fedora, SELinux runs no rpm package script for a service with no new privileges.
+        self.assertNotIn("NoNewPrivileges", unit)
+        # Packages that ship setuid programs could not be installed again.
+        self.assertNotIn("RestrictSUIDSGID", unit)
 
     def test_monitor_units(self):
         unit = ini(PKG / "systemd" / "secblitz-monitor.service")["Service"]
