@@ -74,7 +74,8 @@ impl Topic {
                 | "linux.source_routing"
                 | "linux.broadcast_pings"
                 | "linux.announce_name"
-                | "linux.old_network_services",
+                | "linux.old_network_services"
+                | "linux.bluetooth_autostart",
             ) => Topic::Network,
             (
                 "linux",
@@ -107,7 +108,7 @@ impl Topic {
                 | "linux.crash_files",
             ) => Topic::Privacy,
             ("linux", "linux.printer_sharing" | "linux.printer_discovery") => Topic::Network,
-            ("linux", "linux.ubuntu_news") => Topic::Privacy,
+            ("linux", "linux.ubuntu_news" | "linux.usage_survey") => Topic::Privacy,
             (
                 "linux",
                 "linux.memory_shuffle"
@@ -130,7 +131,9 @@ impl Topic {
             "Windows Firewall" => Topic::Network,
             secblitz::advice::ACCOUNTS_WITHOUT_PASSWORD
             | secblitz::advice::ADMIN_WITHOUT_PASSWORD
-            | secblitz::advice::EXTRA_ADMIN_ACCOUNTS => Topic::SignIn,
+            | secblitz::advice::EXTRA_ADMIN_ACCOUNTS
+            | secblitz::advice::ADMIN_ACCOUNTS => Topic::SignIn,
+            secblitz::advice::OPEN_PROGRAMS => Topic::Network,
             _ if title.starts_with("asr.") || title.starts_with("cfa.") => Topic::Threats,
             _ if title.starts_with("dns.") => Topic::Network,
             _ => Topic::of(title),
@@ -386,6 +389,10 @@ mod tests {
             ("linux.app_sandbox_limits", Windows),
             ("linux.processor_updates", Windows),
             ("linux.root_account", SignIn),
+            ("linux.bluetooth_autostart", Network),
+            ("linux.usage_survey", Privacy),
+            ("linux.mint_app_updates", Windows),
+            ("linux.app_store_updates", Windows),
         ];
         for (id, topic) in expected {
             assert_eq!(Topic::of(id), *topic, "{id}");
@@ -407,6 +414,7 @@ mod tests {
             secblitz::advice::UNCHECKED_SOURCES,
             secblitz::advice::SECURITY_SUPPORT,
             secblitz::advice::HARDWARE_UPDATES,
+            secblitz::advice::SWAP_PROTECTION,
         ] {
             assert_eq!(Topic::of_finding(title), Windows, "{title}");
         }
@@ -414,9 +422,11 @@ mod tests {
             secblitz::advice::ACCOUNTS_WITHOUT_PASSWORD,
             secblitz::advice::ADMIN_WITHOUT_PASSWORD,
             secblitz::advice::EXTRA_ADMIN_ACCOUNTS,
+            secblitz::advice::ADMIN_ACCOUNTS,
         ] {
             assert_eq!(Topic::of_finding(title), SignIn, "{title}");
         }
+        assert_eq!(Topic::of_finding(secblitz::advice::OPEN_PROGRAMS), Network);
     }
 
     #[test]

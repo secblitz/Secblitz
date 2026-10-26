@@ -75,7 +75,7 @@ pub(super) fn put_back_file(cx: &Cx, path: &str, bytes: &[u8]) -> Result<()> {
     cx.sys.write_atomic(Path::new(path), bytes, 0o644)
 }
 
-fn two_state(want: &Items, key: &str) -> Result<Option<u32>> {
+pub(super) fn two_state(want: &Items, key: &str) -> Result<Option<u32>> {
     match num_of(want, key)? {
         Some(n) if n > 1 => Err(plain(UNRECOGNISED)),
         other => Ok(other),

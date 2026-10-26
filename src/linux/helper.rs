@@ -562,12 +562,15 @@ mod tests {
 
     #[test]
     fn every_sentence_the_linux_checks_show_is_translated_in_every_language() {
-        use secblitz::linux::controls::{browsers, findings, hardening, services, SENTENCES};
+        use secblitz::linux::controls::{
+            browsers, devices, findings, hardening, services, SENTENCES,
+        };
         let names = ["AppArmor", "SELinux", "Secure Boot", "Firewall"];
         let all = SENTENCES
             .iter()
             .chain(&findings::SENTENCES)
             .chain(&services::SENTENCES)
+            .chain(&devices::SENTENCES)
             .chain(&browsers::SENTENCES)
             .chain(&hardening::SENTENCES)
             .copied()

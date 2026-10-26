@@ -18,3 +18,4 @@
 /etc/chromium
 /usr/lib/NetworkManager/conf.d
 /etc/modprobe.d
+/etc/bluetooth

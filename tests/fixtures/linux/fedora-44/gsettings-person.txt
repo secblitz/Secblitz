@@ -6,3 +6,4 @@ org.gnome.desktop.privacy remove-old-trash-files false
 org.gnome.desktop.privacy report-technical-problems false
 org.gnome.desktop.privacy send-software-usage-stats false
 org.gnome.system.location enabled false
+org.gnome.software download-updates true

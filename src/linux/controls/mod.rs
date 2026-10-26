@@ -3,6 +3,7 @@
 
 pub mod accounts;
 pub mod browsers;
+pub mod devices;
 pub mod findings;
 pub mod firewall;
 pub mod hardening;

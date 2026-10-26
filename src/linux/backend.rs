@@ -19,7 +19,7 @@ pub struct LinuxBackend<S: Sys> {
     memo: PathBuf,
 }
 
-const TEXT: [(&str, &str, &str); 41] = [
+const TEXT: [(&str, &str, &str); 43] = [
     (
         "linux.firewall",
         "Firewall",
@@ -225,6 +225,16 @@ const TEXT: [(&str, &str, &str); 41] = [
         "Main administrator account",
         "Whether the account that can change everything on this computer can be signed in to with a password.",
     ),
+    (
+        "linux.bluetooth_autostart",
+        "Bluetooth at start",
+        "Whether Bluetooth switches itself on every time the computer starts.",
+    ),
+    (
+        "linux.usage_survey",
+        "Installed programs report",
+        "Sends the list of programs installed on this computer to its makers once a week.",
+    ),
 ];
 
 /// Every title and description a person can read, for the translation tests.
@@ -262,6 +272,11 @@ impl<S: Sys> LinuxBackend<S> {
             "linux.crash_reports" => self.distro.family == Family::Debian,
             "linux.ubuntu_news" | "linux.app_sandbox_limits" => self.distro.id == "ubuntu",
             "linux.crash_files" => self.distro.id != "ubuntu",
+            "linux.bluetooth_autostart" => controls::devices::bluetooth_present(&self.cx()),
+            "linux.usage_survey" => {
+                self.distro.family == Family::Debian
+                    && controls::devices::survey_present(&self.cx())
+            }
             _ => true,
         }
     }
@@ -374,6 +389,8 @@ impl<S: Sys> Backend for LinuxBackend<S> {
             "linux.app_sandbox_limits" => controls::hardening::observe_app_sandbox(&cx),
             "linux.processor_updates" => controls::hardening::observe_processor_updates(&cx),
             "linux.root_account" => controls::hardening::observe_root_account(&cx),
+            "linux.bluetooth_autostart" => controls::devices::observe_bluetooth(&cx),
+            "linux.usage_survey" => controls::devices::observe_usage_survey(&cx),
             _ => bail!("Unknown control id: {id}"),
         };
         result.map_err(|e| detail(id, &e, READ_FAILED))
@@ -428,6 +445,8 @@ impl<S: Sys> Backend for LinuxBackend<S> {
             "linux.app_sandbox_limits" => controls::hardening::write_app_sandbox(&cx, &want),
             "linux.processor_updates" => controls::hardening::write_processor_updates(&cx, &want),
             "linux.root_account" => controls::hardening::write_root_account(&cx, &want),
+            "linux.bluetooth_autostart" => controls::devices::write_bluetooth(&cx, &want),
+            "linux.usage_survey" => controls::devices::write_usage_survey(&cx, &want),
             _ => bail!("Unknown control id: {id}"),
         };
         result.map_err(|e| detail(id, &e, CHANGE_FAILED))

@@ -16,3 +16,4 @@
 /usr/share/lightdm/lightdm.conf.d
 /var/lib/linuxmint
 /etc/modprobe.d
+/etc/bluetooth
