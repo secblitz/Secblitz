@@ -381,6 +381,78 @@ const SPECS: &[LinuxSpec] = &[
         reboot: false,
         keys: &[flag("firefox", true)],
     },
+    // firefox, chromium: 1 when that browser (Chromium means Chrome, Chromium, Brave or Edge) does not block trackers; null when none supports it.
+    LinuxSpec {
+        id: "linux.browser_tracking",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[flag("firefox", true), flag("chromium", true)],
+    },
+    // chromium: 1 when a Chromium browser still builds an ad interest list; null when none is installed.
+    LinuxSpec {
+        id: "linux.browser_ad_topics",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[flag("chromium", true)],
+    },
+    // firefox: 1 when Firefox still shows sponsored shortcuts, stories or suggestions; null when it is not installed.
+    LinuxSpec {
+        id: "linux.browser_sponsored",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[flag("firefox", true)],
+    },
+    // firefox: 1 when Pocket is not switched off in Firefox; null when it is not installed.
+    LinuxSpec {
+        id: "linux.browser_pocket",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[flag("firefox", true)],
+    },
+    // firefox, chromium: 1 when a policy has turned the dangerous site warning off; null when no supporting browser is installed.
+    LinuxSpec {
+        id: "linux.browser_safe_browsing",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[flag("firefox", true), flag("chromium", true)],
+    },
+    // chromium: 1 when leaked password warnings are not switched on by policy; null when none is installed.
+    LinuxSpec {
+        id: "linux.browser_password_leaks",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[flag("chromium", true)],
+    },
+    // chromium: 1 when the browser may keep running after its windows close; null when none is installed.
+    LinuxSpec {
+        id: "linux.browser_background",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[flag("chromium", true)],
+    },
+    // firefox, chromium: 1 when the browser still sends typing to a search company for suggestions; null when none is installed.
+    LinuxSpec {
+        id: "linux.browser_search_suggestions",
+        scope: Scope::System,
+        ask: true,
+        reboot: false,
+        keys: &[flag("firefox", true), flag("chromium", true)],
+    },
+    // firefox, chromium: 1 when the browser does not hide website lookups; null when none is installed.
+    LinuxSpec {
+        id: "linux.browser_encrypted_dns",
+        scope: Scope::System,
+        ask: true,
+        reboot: false,
+        keys: &[flag("firefox", true), flag("chromium", true)],
+    },
 ];
 
 /// The only words these keys can hold. Other text keys hold names or ranges, so they are only kept to plain ASCII.
@@ -486,7 +558,7 @@ mod tests {
         for windows in crate::engine::catalog::ids(Os::Windows) {
             assert!(spec(windows).is_none(), "{windows}");
         }
-        assert_eq!(specs().len(), 34);
+        assert_eq!(specs().len(), 43);
     }
 
     #[test]
@@ -513,6 +585,8 @@ mod tests {
             "linux.app_usage",
             "linux.old_files",
             "linux.browser_https_only",
+            "linux.browser_search_suggestions",
+            "linux.browser_encrypted_dns",
         ];
         for s in specs() {
             let want = if person.contains(&s.id) {

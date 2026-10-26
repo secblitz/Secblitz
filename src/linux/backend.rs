@@ -6,6 +6,7 @@
 
 use super::catalog::{self, Scope};
 use super::cmd::Sys;
+use super::controls::browser_policies::Ctl;
 use super::controls::{self, detail, Cx, CHANGE_FAILED, MACHINE_ID_MISSING, READ_FAILED};
 use super::distro::{self, Distro, Family};
 use crate::model::{Backend, Control, Finding, Observation};
@@ -13,13 +14,17 @@ use anyhow::{bail, Result};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
+fn browser_control(id: &str) -> Option<Ctl> {
+    Ctl::ALL.into_iter().find(|c| c.id() == id)
+}
+
 pub struct LinuxBackend<S: Sys> {
     sys: S,
     distro: Distro,
     memo: PathBuf,
 }
 
-const TEXT: [(&str, &str, &str); 23] = [
+const TEXT: [(&str, &str, &str); 32] = [
     (
         "linux.firewall",
         "Firewall",
@@ -134,6 +139,51 @@ const TEXT: [(&str, &str, &str); 23] = [
         "linux.browser_https_only",
         "Secure connections only",
         "Whether Firefox warns you before it opens a page that is not protected.",
+    ),
+    (
+        "linux.browser_tracking",
+        "Tracker blocking",
+        "Whether your browsers stop websites from following you around the internet.",
+    ),
+    (
+        "linux.browser_ad_topics",
+        "Interest-based ads",
+        "Whether Chrome and its relatives build a list of your interests and let sites use it for ads.",
+    ),
+    (
+        "linux.browser_sponsored",
+        "Sponsored shortcuts",
+        "Whether Firefox shows paid shortcuts, stories and suggestions on the new tab page and in the address bar.",
+    ),
+    (
+        "linux.browser_pocket",
+        "Pocket suggestions",
+        "Whether Firefox suggests stories and saves pages through the Pocket service.",
+    ),
+    (
+        "linux.browser_safe_browsing",
+        "Warnings about dangerous sites",
+        "Whether your browsers warn you before opening a site known to steal passwords or spread harmful programs.",
+    ),
+    (
+        "linux.browser_password_leaks",
+        "Leaked password warnings",
+        "Whether your browser warns you when a saved password has shown up in a known data leak.",
+    ),
+    (
+        "linux.browser_background",
+        "Browser running after you close it",
+        "Whether Chrome and its relatives keep running in the background after you close their windows.",
+    ),
+    (
+        "linux.browser_search_suggestions",
+        "Search suggestions while typing",
+        "Whether your browsers send what you type in the address bar to a search company to suggest results.",
+    ),
+    (
+        "linux.browser_encrypted_dns",
+        "Private website lookups",
+        "Whether your browsers hide which websites you look up from the network you are on.",
     ),
 ];
 
@@ -263,8 +313,9 @@ impl<S: Sys> Backend for LinuxBackend<S> {
             "linux.printer_discovery" => controls::services::observe_printer_discovery(&cx),
             "linux.ubuntu_news" => controls::services::observe_ubuntu_news(&cx),
             "linux.snap_updates" => controls::services::observe_snap_updates(&cx),
-            "linux.browser_data_collection" => controls::browsers::observe_data_collection(&cx),
-            "linux.browser_https_only" => controls::browsers::observe_https_only(&cx),
+            id if browser_control(id).is_some() => {
+                controls::browsers::observe(&cx, browser_control(id).unwrap_or(Ctl::Data))
+            }
             _ => bail!("Unknown control id: {id}"),
         };
         result.map_err(|e| detail(id, &e, READ_FAILED))
@@ -297,10 +348,9 @@ impl<S: Sys> Backend for LinuxBackend<S> {
             "linux.printer_discovery" => controls::services::write_printer_discovery(&cx, &want),
             "linux.ubuntu_news" => controls::services::write_ubuntu_news(&cx, &want),
             "linux.snap_updates" => controls::services::write_snap_updates(&cx, &want),
-            "linux.browser_data_collection" => {
-                controls::browsers::write_data_collection(&cx, &want)
+            id if browser_control(id).is_some() => {
+                controls::browsers::write(&cx, browser_control(id).unwrap_or(Ctl::Data), &want)
             }
-            "linux.browser_https_only" => controls::browsers::write_https_only(&cx, &want),
             _ => bail!("Unknown control id: {id}"),
         };
         result.map_err(|e| detail(id, &e, CHANGE_FAILED))

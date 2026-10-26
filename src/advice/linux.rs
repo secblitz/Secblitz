@@ -49,6 +49,15 @@ pub(super) fn label(id: &str) -> Option<&'static str> {
         "linux.home_private" => "Privacy of your home folder",
         "linux.browser_data_collection" => "Browser usage data",
         "linux.browser_https_only" => "Secure connections only",
+        "linux.browser_tracking" => "Tracker blocking",
+        "linux.browser_ad_topics" => "Interest-based ads",
+        "linux.browser_sponsored" => "Sponsored shortcuts",
+        "linux.browser_pocket" => "Pocket suggestions",
+        "linux.browser_safe_browsing" => "Warnings about dangerous sites",
+        "linux.browser_password_leaks" => "Leaked password warnings",
+        "linux.browser_background" => "Browser running after you close it",
+        "linux.browser_search_suggestions" => "Search suggestions while typing",
+        "linux.browser_encrypted_dns" => "Private website lookups",
         _ => return None,
     })
 }
@@ -129,6 +138,33 @@ pub(super) fn impact(id: &str) -> Option<&'static str> {
         "linux.browser_https_only" => {
             "Someone on the same network reading or changing a page that is not protected"
         }
+        "linux.browser_tracking" => {
+            "Websites and advertisers following you from page to page to learn what you like"
+        }
+        "linux.browser_ad_topics" => {
+            "Your browser keeping a list of your interests that sites use to pick ads for you"
+        }
+        "linux.browser_sponsored" => {
+            "Paid shortcuts and stories being placed where you look first in Firefox"
+        }
+        "linux.browser_pocket" => {
+            "Firefox suggesting stories from a third party and sending it details about what you read"
+        }
+        "linux.browser_safe_browsing" => {
+            "Opening a fake or harmful site with no warning"
+        }
+        "linux.browser_password_leaks" => {
+            "Using a password that criminals already have without being told"
+        }
+        "linux.browser_background" => {
+            "A browser staying active and online after you thought you had closed it"
+        }
+        "linux.browser_search_suggestions" => {
+            "Everything you type in the address bar being sent to a search company before you press Enter"
+        }
+        "linux.browser_encrypted_dns" => {
+            "Anyone on your network seeing which websites you look up"
+        }
         _ => return None,
     })
 }
@@ -181,6 +217,13 @@ pub(super) fn repair(id: &str) -> Option<&'static str> {
         "linux.browser_data_collection" => {
             "Your browsers will stop sending usage data to the companies that make them."
         }
+        "linux.browser_tracking" => "Your browsers will block the trackers that follow you from site to site.",
+        "linux.browser_ad_topics" => "Your browser will stop building a list of your interests for ads.",
+        "linux.browser_sponsored" => "Firefox will stop showing paid shortcuts, stories and suggestions.",
+        "linux.browser_pocket" => "Pocket will be switched off in Firefox.",
+        "linux.browser_safe_browsing" => "Your browsers will warn you again before opening dangerous sites.",
+        "linux.browser_password_leaks" => "Your browser will warn you when a saved password has been leaked.",
+        "linux.browser_background" => "Your browser will stop running after you close its windows.",
         _ => return None,
     })
 }
@@ -195,6 +238,8 @@ pub(super) fn consequence(id: &str) -> Option<&'static str> {
         "linux.app_usage" => "Your computer stops keeping track of which apps you use most. Search may list apps in a different order. You can undo this.",
         "linux.old_files" => "Files in the Trash for over 30 days, and old temporary files, are deleted for good. Undo cannot bring them back.",
         "linux.browser_https_only" => "Firefox warns you before opening a page that is not protected. You can still open it. You can undo this.",
+        "linux.browser_search_suggestions" => "Suggestions while you type in the address bar will stop. You can still search as before. You can undo this.",
+        "linux.browser_encrypted_dns" => "Your browsers look up websites through a private service. Some work or school networks may not load. You can undo this.",
         _ => return None,
     })
 }
@@ -297,6 +342,7 @@ pub(super) fn not_offered(reason: &str) -> Option<&'static str> {
         c::UNRECOGNISED,
         c::browsers::NO_BROWSER,
         c::browsers::NO_FIREFOX,
+        c::browsers::NO_CHROMIUM,
         crate::linux::person::UNAVAILABLE,
     ]
     .into_iter()
@@ -380,6 +426,8 @@ mod tests {
             "linux.app_usage",
             "linux.old_files",
             "linux.browser_https_only",
+            "linux.browser_search_suggestions",
+            "linux.browser_encrypted_dns",
         ] {
             assert_eq!(crate::advice::extra_section(id), Some("Privacy extras"));
             let a = for_control(id, &CheckStatus::Attention, "Eligible");
@@ -433,6 +481,7 @@ mod tests {
             c::UNRECOGNISED,
             c::browsers::NO_BROWSER,
             c::browsers::NO_FIREFOX,
+            c::browsers::NO_CHROMIUM,
             crate::linux::person::UNAVAILABLE,
         ] {
             let a = for_control("linux.firewall", &CheckStatus::Skipped, reason);

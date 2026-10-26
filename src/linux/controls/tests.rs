@@ -1144,8 +1144,8 @@ fn the_controls_listed_follow_the_distribution() {
     let ubuntu = backend(&ubuntu()).controls();
     let fedora = backend(&fedora()).controls();
     let ids = |c: &[Control]| c.iter().map(|c| c.id.clone()).collect::<Vec<_>>();
-    assert_eq!(ubuntu.len(), 21);
-    assert_eq!(fedora.len(), 21);
+    assert_eq!(ubuntu.len(), 30);
+    assert_eq!(fedora.len(), 30);
     assert!(ids(&ubuntu).contains(&"linux.crash_reports".to_string()));
     assert!(!ids(&ubuntu).contains(&"linux.countme".to_string()));
     assert!(ids(&fedora).contains(&"linux.fedora_open_ports".to_string()));
