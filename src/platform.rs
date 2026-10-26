@@ -16,6 +16,10 @@ pub(crate) use windows::{run_dism_json, run_json};
 #[cfg(windows)]
 pub mod security;
 
+#[cfg(unix)]
+#[path = "platform/unix.rs"]
+pub mod unix;
+
 /// Explicitly selected support operation, never a reversible hardening control.
 /// No scripts, paths, sources, scan arguments, or arbitrary IDs are accepted.
 pub fn support_action(id: &str) -> Result<()> {
@@ -412,7 +416,11 @@ pub fn state_dir() -> Result<PathBuf> {
     {
         windows::state_dir()
     }
-    #[cfg(not(windows))]
+    #[cfg(unix)]
+    {
+        unix::state_dir()
+    }
+    #[cfg(not(any(windows, unix)))]
     {
         bail!("The protected journal directory is only available on Windows")
     }
@@ -424,7 +432,11 @@ pub fn create_private_dir(path: &std::path::Path) -> Result<()> {
     {
         windows::create_private_dir(path)
     }
-    #[cfg(not(windows))]
+    #[cfg(unix)]
+    {
+        unix::create_private_dir(path)
+    }
+    #[cfg(not(any(windows, unix)))]
     {
         std::fs::create_dir(path)?;
         Ok(())

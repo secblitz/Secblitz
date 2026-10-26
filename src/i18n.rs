@@ -469,7 +469,10 @@ mod tests {
                     || text == "Secblitz · v{}"
                     || matches!(
                         text.as_str(),
-                        " -k netsvcs" | " -k netsvcs -p" | "Windows Update"
+                        " -k netsvcs"
+                            | " -k netsvcs -p"
+                            | "Windows Update"
+                            | "/Library/Application Support/Secblitz"
                     )
                 {
                     continue;

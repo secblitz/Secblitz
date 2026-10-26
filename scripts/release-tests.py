@@ -72,6 +72,79 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(sign.ARCHES["x64"]["feed"], "stable.json")
         self.assertEqual(sign.ARCHES["arm64"]["feed"], "stable-arm64.json")
 
+    def package_manifest(self, target, filename, **changes):
+        m = dict(self.m, target=target, filename=filename)
+        m.update(changes)
+        return m
+
+    def test_linux_and_macos_targets_sign_only_their_own_package_names(self):
+        cases = [
+            ("linux-x64", "linux-x86_64", ["secblitz-9.0.0-linux-x64.deb", "secblitz-9.0.0-linux-x64.rpm"]),
+            ("linux-arm64", "linux-aarch64", ["secblitz-9.0.0-linux-arm64.deb", "secblitz-9.0.0-linux-arm64.rpm"]),
+            ("macos", "macos-universal", ["secblitz-9.0.0-macos-universal.dmg"]),
+        ]
+        for arch, target, names in cases:
+            for name in names:
+                sign.validate_manifest(self.package_manifest(target, name), 1500, arch)
+                sign.validate_manifest(self.package_manifest(target, name), 1500)
+                raw = sign.signed_envelope(self.package_manifest(target, name), self.key)
+                self.assertEqual(sign.verify_envelope(raw, self.public)["target"], target)
+            self.assertEqual(sign.setup_names("9.0.0", arch), names)
+            for bad in [self.m["filename"], "secblitz-9.0.0-windows-arm64-setup.exe", "../" + names[0],
+                        names[0].replace("9.0.0", "9.0.1"), names[0] + ".exe"]:
+                with self.assertRaises(ValueError):
+                    sign.validate_manifest(self.package_manifest(target, bad), 1500)
+        with self.assertRaises(ValueError):
+            sign.validate_manifest(self.package_manifest("linux-x86_64", "secblitz-9.0.0-linux-arm64.deb"), 1500)
+        with self.assertRaises(ValueError):
+            sign.validate_manifest(self.package_manifest("linux-x86_64", "secblitz-9.0.0-linux-x64.dmg"), 1500)
+        for arch, target, names in cases:
+            for other in sign.TARGETS:
+                if other != arch:
+                    with self.assertRaises(ValueError):
+                        sign.validate_manifest(self.package_manifest(target, names[0]), 1500, other)
+        with self.assertRaises(ValueError):
+            sign.validate_manifest(self.package_manifest("linux-riscv64", "secblitz-9.0.0-linux-x64.deb"), 1500)
+
+    def test_pages_gate_verifies_a_linux_feed_against_its_package(self):
+        import time
+        spec = importlib.util.spec_from_file_location("prepare_pages", Path(__file__).with_name("prepare-pages.py"))
+        pages = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(pages)
+        now = int(time.time())
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "assets").mkdir()
+            (root / "assets/update-public-key.hex").write_text(self.public.hex())
+            site = root / "site"
+            (site / "releases").mkdir(parents=True)
+            (site / "downloads").mkdir()
+            name = "secblitz-9.0.0-linux-x64.rpm"
+            (site / "downloads" / name).write_bytes(self.artifact)
+            m = self.package_manifest("linux-x86_64", name, published_at=now - 10, expires_at=now + 1000)
+            (site / "releases/stable-linux-x64.json").write_bytes(sign.signed_envelope(m, self.key))
+            with patch.object(pages, "ROOT", root):
+                self.assertEqual(pages.verify_feed(site, "9.0.0", arch="linux-x64")["target"], "linux-x86_64")
+                with self.assertRaises(ValueError):
+                    pages.verify_feed(site, "9.0.0", site / "releases/stable-linux-x64.json", arch="linux-arm64")
+                with self.assertRaises(KeyError):
+                    pages.verify_feed(site, "9.0.0", arch="windows")
+                bad = self.package_manifest("linux-x86_64", "secblitz-9.0.0-linux-x64-setup.exe",
+                                            published_at=now - 10, expires_at=now + 1000)
+                (site / "releases/stable-linux-x64.json").write_bytes(sign.signed_envelope(bad, self.key))
+                with self.assertRaises(ValueError):
+                    pages.verify_feed(site, "9.0.0", arch="linux-x64")
+
+    def test_the_windows_tables_are_untouched_by_the_new_targets(self):
+        self.assertEqual(set(sign.ARCHES), {"x64", "arm64"})
+        self.assertEqual(sign.PACKAGES["linux-x64"]["feed"], "stable-linux-x64.json")
+        self.assertEqual(sign.PACKAGES["macos"]["feed"], "stable-macos.json")
+        self.assertTrue(set(sign.ARCHES).isdisjoint(sign.PACKAGES))
+        with self.assertRaises(ValueError):
+            authorize.validate_authorization(dict(self.policy(), target="linux-riscv64"), "https://example.org/")
+        for target in ("linux-x86_64", "linux-aarch64", "macos-universal"):
+            authorize.validate_authorization(dict(self.policy(), target=target), "https://example.org/")
+
     def test_arm64_renewal_and_delivery_keep_the_arm64_target(self):
         arm = self.arm64_manifest()
         raw = sign.signed_envelope(arm, self.key)
