@@ -408,7 +408,8 @@ gh release upload v1.5.0 check/stable-linux-x64-deb.json check/stable-linux-x64-
 ```
 
 The release must then carry exactly nine files: the setup and the portable exe
-for x64 and for arm64, the two parts lists, `SHA256SUMS` and the two feeds. Anything else, or a missing file, stops the
+for x64 and for arm64, the two parts lists, `SHA256SUMS` and the two feeds. From 1.5.0 it also carries the four
+Linux packages and the four Linux feeds, seventeen files in all. Anything else, or a missing file, stops the
 website deploy. Edit the notes if needed, then press Publish (a normal release,
 not a pre-release).
 
@@ -418,7 +419,7 @@ Publishing starts `publish-website.yml` on the tag.
 
 1. `verify` (no secrets): the run is on the tag, the commit is on `main`,
    `Cargo.toml`, the changelog and the website version all equal the tag, the
-   release is final and has exactly the nine files, `SHA256SUMS` matches, all
+   release is final and has exactly the expected files, `SHA256SUMS` matches, all
    four build files pass `gh attestation verify` bound to this repository, to
    `release.yml` as the signer, to `refs/tags/vX.Y.Z` and to the tagged commit,
    the two portable exes also carry a parts list attestation (predicate type
