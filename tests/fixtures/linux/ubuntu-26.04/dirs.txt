@@ -1,0 +1,16 @@
+/etc/apt/apt.conf.d
+/etc/apt/sources.list.d
+/etc/cups
+/etc/default
+/etc/gdm3
+/etc/NetworkManager
+/etc/NetworkManager/conf.d
+/etc/ssh
+/etc/sudoers.d
+/etc/sysctl.d
+/etc/systemd
+/etc/ufw
+/etc/opt
+/usr/lib/NetworkManager/conf.d
+/usr/lib/systemd/resolved.conf.d
+/usr/share/lightdm/lightdm.conf.d
