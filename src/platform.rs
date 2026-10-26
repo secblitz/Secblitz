@@ -1123,7 +1123,12 @@ mod tests {
         assert!(backend().is_err());
         assert!(is_elevated().is_err());
         assert!(elevate(&[]).is_err());
-        assert!(state_dir().is_err());
+        // A machine with Secblitz installed has the real private folder, which is rightly trusted.
+        #[cfg(unix)]
+        let installed = std::path::Path::new(unix::state_path()).exists();
+        #[cfg(not(unix))]
+        let installed = false;
+        assert!(installed || state_dir().is_err());
         assert!(permission_gate("permissions.service.bits").is_err());
         assert!(permission_gate("permissions.service.wuauserv").is_err());
     }

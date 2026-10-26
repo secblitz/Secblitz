@@ -81,7 +81,7 @@ pub(crate) fn is_root() -> bool {
     unsafe { libc::geteuid() == 0 }
 }
 
-fn state_path() -> &'static str {
+pub(super) fn state_path() -> &'static str {
     if cfg!(target_os = "macos") {
         MACOS_STATE
     } else {
