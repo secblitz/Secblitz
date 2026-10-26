@@ -29,7 +29,9 @@ bump PR -> merge -> tag -> release build (tests, installer tests, attestations) 
 | `.github/workflows/windows.yml` | RustSec audit and the installer harnesses on every pull request, skipped when only the website or prose changed (the release always runs the harnesses) |
 | `scripts/build-release.ps1` | The build itself (`-Stage Exe`, `-Stage Setup` or both) |
 | `scripts/assemble-site.py` | Builds the exact site tree to deploy from the verified release files |
-| `scripts/finalize-site.py` | Writes the real checksum and size into the staged page |
+| `scripts/finalize-site.py` | Writes the real checksum and size into the staged page, and the version and package checksums into `install.sh` |
+| `website/install.sh` | The one-line Linux installer, a template until the site is built |
+| `scripts/install-script-tests.py` | Runs `install.sh` against stand-in tools: both package kinds, a wrong checksum, unsupported systems, colors |
 | `scripts/historical-downloads.py` | Older installers that every deploy must carry, with pinned hashes |
 | `scripts/historical-downloads.sha256` | The pinned hashes of those older downloads |
 | `scripts/verify-live-site.py` | Compares the live site with the deployed files |
@@ -412,6 +414,32 @@ telling anyone to update.
 Installed copies pick the new version up from the live `releases/stable.json`
 (x64 builds) or `releases/stable-arm64.json` (native ARM builds), verified with
 the pinned key inside the app.
+
+### Linux downloads and `install.sh` (from 1.5.0)
+
+From 1.5.0 each release also carries four Linux packages
+(`secblitz-X.Y.Z-linux-x64.deb`, `-linux-x64.rpm`, `-linux-arm64.deb`,
+`-linux-arm64.rpm`), each with a build attestation, and you attach four more
+signed feeds next to `stable.json`: `stable-linux-x64-deb.json`,
+`stable-linux-x64-rpm.json`, `stable-linux-arm64-deb.json` and
+`stable-linux-arm64-rpm.json` (sign each with `sign-release.py --arch
+linux-x64|linux-arm64 --package deb|rpm`). The release then has seventeen
+files. The workflow checks the packages and feeds exactly like the Windows ones
+(`SHA256SUMS` may list the packages too), and `assemble-site.py` puts the
+packages under `downloads/` and the feeds under `releases/`. Releases before
+1.5.0 have none of this and are checked as before. A package over 25 MiB stops
+the build with a message, because Cloudflare Pages cannot host it.
+
+`website/install.sh` in git is a template. Its version and the SHA-256 of the
+four packages are placeholders (`@SECBLITZ_VERSION@`, `@SHA256_X64_DEB@` and so
+on). `finalize-site.py --packages` fills them from the verified release files on
+the staged copy only, and `stage-pages.py` refuses a script that still has one.
+`prepare-pages.py` then proves the version and every checksum in the script
+equal the packages on the site, and the live check compares the served
+`/install.sh` byte for byte. The script downloads from
+`https://secblitz.lol/downloads/`, checks the pinned checksum and refuses to
+install on a mismatch. `_headers` serves it as plain text. After editing it, run
+`python3 scripts/install-script-tests.py` (and shellcheck if you have it).
 
 ### Staged rollouts and renewals
 
