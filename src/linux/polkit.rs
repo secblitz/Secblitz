@@ -35,14 +35,16 @@ pub fn action_for(request: &Request) -> Action {
         | Request::UpdateStatus
         | Request::CheckUpdate
         | Request::SpaceMeasure { .. }
-        | Request::Apps => Action::Check,
+        | Request::Apps
+        | Request::RemovedApps => Action::Check,
         Request::Apply { .. }
         | Request::Undo
         | Request::UndoSelected { .. }
         | Request::ChooseItems { .. }
         | Request::StartFresh
         | Request::MonitorTimer { .. }
-        | Request::InstallUpdate => Action::Change,
+        | Request::InstallUpdate
+        | Request::ReinstallApp { .. } => Action::Change,
         Request::RemoveSelf | Request::SpaceClean { .. } | Request::RemoveApps { .. } => {
             Action::Remove
         }
@@ -243,9 +245,16 @@ mod tests {
                 items: vec![SpaceWire::PackageCaches],
             },
             Request::Apps,
+            Request::RemovedApps,
         ] {
             assert_eq!(action_for(&request), Action::Check, "{request:?}");
         }
+        assert_eq!(
+            action_for(&Request::ReinstallApp {
+                package: "anydesk".into()
+            }),
+            Action::Change
+        );
         for request in [
             Request::SpaceClean {
                 items: vec![SpaceWire::CrashReports],

@@ -446,3 +446,246 @@ fn every_removal_sentence_is_plain() {
     }
     assert_eq!(plain("anything else"), None);
 }
+
+const RECORD_PATH: &str = "/var/lib/secblitz/Linux/removed-apps.txt";
+
+fn record_of(sys: &FakeSys) -> String {
+    sys.files
+        .borrow()
+        .get(Path::new(RECORD_PATH))
+        .map(|b| String::from_utf8_lossy(b).into_owned())
+        .unwrap_or_default()
+}
+
+fn status(sys: &FakeSys, package: &str, installed: bool) {
+    sys.reply(
+        "/usr/bin/dpkg-query",
+        &["-W", "-f=${db:Status-Abbrev}", package],
+        i32::from(!installed),
+        if installed { "ii " } else { "" },
+    );
+}
+
+/// Answers each look at the package database from a fixed list of "installed" answers, then repeats the last.
+struct Seen<'a>(&'a FakeSys, std::cell::Cell<usize>, &'static [bool]);
+
+impl Sys for Seen<'_> {
+    fn run(&self, program: &'static str, args: &[&str]) -> Result<crate::linux::cmd::Output> {
+        if program == "/usr/bin/dpkg-query" {
+            let n = self.1.get();
+            self.1.set(n + 1);
+            let installed = self.2[n.min(self.2.len() - 1)];
+            return Ok(crate::linux::cmd::Output {
+                status: i32::from(!installed),
+                stdout: if installed {
+                    "ii ".into()
+                } else {
+                    String::new()
+                },
+                stderr: String::new(),
+            });
+        }
+        self.0.run(program, args)
+    }
+    fn read(&self, path: &Path) -> Result<Option<Vec<u8>>> {
+        self.0.read(path)
+    }
+    fn write_atomic(&self, p: &Path, b: &[u8], m: u32) -> Result<()> {
+        self.0.write_atomic(p, b, m)
+    }
+    fn remove(&self, p: &Path) -> Result<()> {
+        self.0.remove(p)
+    }
+}
+
+#[test]
+fn a_removal_is_written_down_once_per_app() {
+    let sys = ubuntu();
+    record_removal(&sys, "anydesk", 100).unwrap();
+    record_removal(&sys, "xrdp", 200).unwrap();
+    record_removal(&sys, "anydesk", 300).unwrap();
+    assert_eq!(record_of(&sys), "xrdp\t200\nanydesk\t300\n");
+    assert!(record_removal(&sys, "bash", 1).is_err());
+}
+
+#[test]
+fn the_record_keeps_only_the_newest_lines_and_skips_bad_ones() {
+    let sys = ubuntu();
+    let mut text = String::from("../evil\t5\nbash\t5\nanydesk\tsoon\nanydesk\n");
+    for n in 0..70 {
+        text.push_str(&format!("transmission-{n}\t{n}\n"));
+    }
+    sys.file(RECORD_PATH, text.as_bytes());
+    record_removal(&sys, "xrdp", 999).unwrap();
+    let written = record_of(&sys);
+    assert_eq!(written.lines().count(), 64);
+    assert!(written.ends_with("xrdp\t999\n"));
+    assert!(!written.contains("evil") && !written.contains("bash"));
+    assert!(!written.contains("transmission-0\t"));
+}
+
+#[test]
+fn a_successful_removal_is_recorded() {
+    let sys = ubuntu();
+    sys.reply(
+        "/usr/bin/apt-get",
+        &["-s", "remove", "xrdp"],
+        0,
+        "Remv xrdp [1]\n",
+    );
+    sys.reply("/usr/bin/apt-get", &["remove", "-y", "xrdp"], 0, "");
+    let seen = Seen(&sys, std::cell::Cell::new(0), &[true, true, false]);
+    assert_eq!(remove_recorded(&seen, "xrdp", 50), PackageOutcome::Removed);
+    assert_eq!(record_of(&sys), "xrdp\t50\n");
+}
+
+#[test]
+fn a_refused_removal_is_not_recorded() {
+    let sys = ubuntu();
+    sys.reply(
+        "/usr/bin/apt-get",
+        &["-s", "remove", "xrdp"],
+        0,
+        "Remv xrdp [1]\nRemv ubuntu-desktop [1]\n",
+    );
+    status(&sys, "xrdp", true);
+    assert_eq!(
+        remove_recorded(&sys, "xrdp", 50),
+        PackageOutcome::Failed(REFUSED.into())
+    );
+    assert_eq!(record_of(&sys), "");
+}
+
+#[test]
+fn an_app_that_was_never_installed_is_not_recorded() {
+    let sys = ubuntu();
+    sys.reply(
+        "/usr/bin/apt-get",
+        &["-s", "remove", "rustdesk"],
+        0,
+        "Package 'rustdesk' is not installed, so not removed\n",
+    );
+    status(&sys, "rustdesk", false);
+    assert_eq!(
+        remove_recorded(&sys, "rustdesk", 50),
+        PackageOutcome::Removed
+    );
+    assert_eq!(record_of(&sys), "");
+}
+
+#[test]
+fn the_removed_list_holds_only_apps_that_are_gone_now() {
+    let sys = ubuntu();
+    sys.file(RECORD_PATH, b"anydesk\t10\nxrdp\t20\n");
+    status(&sys, "anydesk", true);
+    status(&sys, "xrdp", false);
+    let gone = removed(&sys).unwrap();
+    assert_eq!(gone.len(), 1);
+    assert_eq!(gone[0].package, "xrdp");
+    assert_eq!(gone[0].t, 20);
+}
+
+#[test]
+fn reinstalling_installs_the_app_and_clears_its_line() {
+    let sys = ubuntu();
+    sys.file(RECORD_PATH, b"xrdp\t20\nanydesk\t10\n");
+    sys.reply(
+        "/usr/bin/apt-get",
+        &["-s", "install", "xrdp"],
+        0,
+        "Inst xrdp (1 Ubuntu)\n",
+    );
+    sys.reply("/usr/bin/apt-get", &["install", "-y", "xrdp"], 0, "");
+    let seen = Seen(&sys, std::cell::Cell::new(0), &[false, true]);
+    reinstall_package(&seen, "xrdp").unwrap();
+    assert!(called(&sys, "/usr/bin/apt-get install -y xrdp"));
+    assert_eq!(record_of(&sys), "anydesk\t10\n");
+}
+
+#[test]
+fn fedora_reinstalls_with_dnf_and_reads_it_back() {
+    let sys = fedora();
+    sys.file(RECORD_PATH, b"xrdp\t20\n");
+    sys.reply("/usr/bin/rpm", &["-q", "xrdp"], 1, "");
+    sys.reply(
+        "/usr/bin/dnf",
+        &["install", "--assumeno", "xrdp"],
+        1,
+        "Installing:\n xrdp x86_64 1-1 fedora 1 MiB\n\nTransaction Summary:\n",
+    );
+    sys.reply("/usr/bin/dnf", &["install", "-y", "xrdp"], 0, "");
+    // The package manager still does not list it afterwards: the install is not believed.
+    let error = reinstall_package(&sys, "xrdp").unwrap_err();
+    assert_eq!(error.to_string(), INSTALL_FAILED);
+    assert!(called(&sys, "/usr/bin/dnf install -y xrdp"));
+    assert_eq!(record_of(&sys), "xrdp\t20\n");
+}
+
+#[test]
+fn an_app_that_was_not_recorded_is_left_alone() {
+    let sys = ubuntu();
+    sys.file(RECORD_PATH, b"xrdp\t20\n");
+    for package in ["anydesk", "bash", "../xrdp"] {
+        let error = reinstall_package(&sys, package).unwrap_err();
+        assert_eq!(error.to_string(), NOT_RECORDED, "{package}");
+    }
+    assert!(!called(&sys, "/usr/bin/apt-get install -y anydesk"));
+}
+
+#[test]
+fn a_plan_that_would_remove_something_is_refused() {
+    let sys = ubuntu();
+    sys.file(RECORD_PATH, b"xrdp\t20\n");
+    status(&sys, "xrdp", false);
+    sys.reply(
+        "/usr/bin/apt-get",
+        &["-s", "install", "xrdp"],
+        0,
+        "Inst xrdp (1)\nRemv vino [3]\n",
+    );
+    let error = reinstall_package(&sys, "xrdp").unwrap_err();
+    assert_eq!(error.to_string(), INSTALL_REFUSED);
+    assert!(!called(&sys, "/usr/bin/apt-get install -y xrdp"));
+    assert_eq!(record_of(&sys), "xrdp\t20\n");
+
+    let sys = fedora();
+    sys.file(RECORD_PATH, b"xrdp\t20\n");
+    sys.reply("/usr/bin/rpm", &["-q", "xrdp"], 1, "");
+    sys.reply(
+        "/usr/bin/dnf",
+        &["install", "--assumeno", "xrdp"],
+        1,
+        "Installing:\n xrdp x86_64 1-1 f 1 MiB\nRemoving:\n vino x86_64 3-1 @System 1 MiB\n\nTransaction Summary:\n",
+    );
+    let error = reinstall_package(&sys, "xrdp").unwrap_err();
+    assert_eq!(error.to_string(), INSTALL_REFUSED);
+    assert!(!called(&sys, "/usr/bin/dnf install -y xrdp"));
+}
+
+#[test]
+fn an_app_that_is_already_back_only_clears_its_line() {
+    let sys = ubuntu();
+    sys.file(RECORD_PATH, b"xrdp\t20\n");
+    status(&sys, "xrdp", true);
+    reinstall_package(&sys, "xrdp").unwrap();
+    assert_eq!(record_of(&sys), "");
+    assert!(!called(&sys, "/usr/bin/apt-get install -y xrdp"));
+}
+
+#[test]
+fn a_failed_install_keeps_the_line_and_says_so_plainly() {
+    let sys = ubuntu();
+    sys.file(RECORD_PATH, b"xrdp\t20\n");
+    status(&sys, "xrdp", false);
+    sys.reply(
+        "/usr/bin/apt-get",
+        &["-s", "install", "xrdp"],
+        0,
+        "Inst xrdp (1)\n",
+    );
+    sys.reply("/usr/bin/apt-get", &["install", "-y", "xrdp"], 100, "");
+    let error = reinstall_package(&sys, "xrdp").unwrap_err();
+    assert_eq!(plain(&error.to_string()), Some(INSTALL_FAILED));
+    assert!(INSTALL_FAILED.contains("online"));
+    assert_eq!(record_of(&sys), "xrdp\t20\n");
+}

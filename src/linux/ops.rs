@@ -1,5 +1,5 @@
 //! What the root helper does for Free up space and Clean up apps. Each request names fixed items or catalog apps; nothing here runs a command a person typed.
-use crate::app::remote::{AppStep, AppWire, Event, Reply, Request};
+use crate::app::remote::{AppStep, AppWire, Event, RemovedWire, Reply, Request};
 use secblitz::debloat::linux as apps;
 use secblitz::linux::cmd::Sys;
 use secblitz::space::linux as space;
@@ -13,6 +13,8 @@ pub fn handles(request: &Request) -> bool {
             | Request::SpaceClean { .. }
             | Request::Apps
             | Request::RemoveApps { .. }
+            | Request::RemovedApps
+            | Request::ReinstallApp { .. }
     )
 }
 
@@ -89,7 +91,7 @@ pub fn run(sys: &dyn Sys, fs: &dyn Fs, now: u64, request: Request, emit: &mut dy
                     package: package.clone(),
                     step: AppStep::Started,
                 });
-                let step = match apps::remove_package(sys, &package) {
+                let step = match apps::remove_recorded(sys, &package, now) {
                     secblitz::debloat::PackageOutcome::Removed => AppStep::Removed,
                     secblitz::debloat::PackageOutcome::Protected => {
                         AppStep::Failed(apps::REFUSED.to_owned())
@@ -100,6 +102,35 @@ pub fn run(sys: &dyn Sys, fs: &dyn Fs, now: u64, request: Request, emit: &mut dy
             }
             Reply::Ok
         }
+        Request::RemovedApps => match apps::removed(sys) {
+            Ok(found) => Reply::RemovedApps(
+                found
+                    .into_iter()
+                    .map(|r| RemovedWire {
+                        index: r.index,
+                        package: r.package,
+                        t: r.t,
+                    })
+                    .collect(),
+            ),
+            Err(e) => Reply::Failed(match apps::plain(&e.to_string()) {
+                Some(sentence) => sentence.to_owned(),
+                None => {
+                    eprintln!("Could not list the removed apps: {e:#}");
+                    apps::LIST_FAILED.to_owned()
+                }
+            }),
+        },
+        Request::ReinstallApp { package } => match apps::reinstall_package(sys, &package) {
+            Ok(()) => Reply::Ok,
+            Err(e) => Reply::Failed(match apps::plain(&e.to_string()) {
+                Some(sentence) => sentence.to_owned(),
+                None => {
+                    eprintln!("Could not install {package} again: {e:#}");
+                    apps::INSTALL_FAILED.to_owned()
+                }
+            }),
+        },
         _ => Reply::Failed(apps::NOT_INSTALLED.to_owned()),
     };
     emit(Event::Done(reply));
@@ -120,6 +151,7 @@ pub(crate) mod tests_support {
         pub files: BTreeMap<PathBuf, Vec<u8>>,
         pub replies: BTreeMap<String, Output>,
         pub calls: Mutex<Vec<String>>,
+        pub written: Mutex<BTreeMap<PathBuf, Vec<u8>>>,
     }
 
     impl Machine {
@@ -152,9 +184,14 @@ pub(crate) mod tests_support {
                 .ok_or_else(|| anyhow::anyhow!("Unexpected program: {key}"))
         }
         fn read(&self, path: &Path) -> anyhow::Result<Option<Vec<u8>>> {
-            Ok(self.files.get(path).cloned())
+            let written = self.written.lock().unwrap();
+            Ok(written.get(path).or(self.files.get(path)).cloned())
         }
-        fn write_atomic(&self, _: &Path, _: &[u8], _: u32) -> anyhow::Result<()> {
+        fn write_atomic(&self, path: &Path, bytes: &[u8], _: u32) -> anyhow::Result<()> {
+            self.written
+                .lock()
+                .unwrap()
+                .insert(path.to_owned(), bytes.to_vec());
             Ok(())
         }
         fn remove(&self, _: &Path) -> anyhow::Result<()> {
@@ -393,8 +430,53 @@ mod tests {
     }
 
     #[test]
+    fn a_removed_app_is_listed_and_reinstalled_through_the_helper() {
+        let mut machine = ubuntu();
+        let status = ["-W", "-f=${db:Status-Abbrev}", "xrdp"];
+        machine.files.insert(
+            "/var/lib/secblitz/Linux/removed-apps.txt".into(),
+            b"xrdp\t77\n".to_vec(),
+        );
+        machine.reply("/usr/bin/dpkg-query", &status, 1, "");
+        let (_, reply) = collect(&machine, Request::RemovedApps);
+        let Reply::RemovedApps(found) = reply else {
+            panic!("expected removed apps")
+        };
+        assert_eq!(found.len(), 1);
+        assert_eq!((found[0].package.as_str(), found[0].t), ("xrdp", 77));
+
+        machine.reply(
+            "/usr/bin/apt-get",
+            &["-s", "install", "xrdp"],
+            0,
+            "Remv vino [1]\n",
+        );
+        let (_, reply) = collect(
+            &machine,
+            Request::ReinstallApp {
+                package: "xrdp".into(),
+            },
+        );
+        let Reply::Failed(text) = reply else {
+            panic!("expected a refusal")
+        };
+        assert_eq!(text, apps::INSTALL_REFUSED);
+        let (_, reply) = collect(
+            &machine,
+            Request::ReinstallApp {
+                package: "anydesk".into(),
+            },
+        );
+        assert!(matches!(reply, Reply::Failed(t) if t == apps::NOT_RECORDED));
+    }
+
+    #[test]
     fn this_module_only_takes_the_clean_up_requests() {
         assert!(handles(&Request::Apps));
+        assert!(handles(&Request::RemovedApps));
+        assert!(handles(&Request::ReinstallApp {
+            package: "xrdp".into()
+        }));
         assert!(!handles(&Request::Audit));
         assert!(!handles(&Request::Undo));
         let machine = Machine::default();

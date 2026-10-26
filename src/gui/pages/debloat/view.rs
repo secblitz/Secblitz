@@ -32,8 +32,10 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
         format!("{} ({})", ctx.t("Removed apps"), state.removed.len())
     };
     let mut tab_list = vec![(Tab::Apps, ctx.t("Apps to remove"))];
-    if cfg!(windows) {
+    if cfg!(any(windows, target_os = "linux")) {
         tab_list.push((Tab::Removed, removed_label));
+    }
+    if cfg!(windows) {
         tab_list.push((Tab::Ads, ctx.t("Ads and tips")));
     }
     tab_list.push((Tab::Space, ctx.t("Free up space")));
@@ -361,6 +363,9 @@ fn removed_tab<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
             None,
         );
     }
+    if cfg!(target_os = "linux") {
+        return linux_removed_rows(state, ctx);
+    }
     let mut rows: Vec<Element<'a, Message>> = Vec::new();
     for &(index, t) in &state.removed {
         let app = app_of(index);
@@ -440,6 +445,46 @@ fn removed_tab<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
         restore_all_view(state, ctx),
         rows,
     )
+}
+
+fn linux_removed_rows<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
+    let p = pal(ctx);
+    let enabled = state.restoring.is_none() && !ctx.busy;
+    let rows = state
+        .linux_removed
+        .iter()
+        .map(|removed| {
+            let app = app_of(removed.index);
+            let (subtitle, trailing): (String, Element<'a, Message>) =
+                if state.reinstalling.as_deref() == Some(removed.package.as_str()) {
+                    (
+                        ctx.t("Installing…"),
+                        anim::spinner(16.0, p.text_muted, state.spin.elapsed_at(state.now)),
+                    )
+                } else {
+                    (
+                        format!("{} · {}", ago(ctx, removed.t), removed.package),
+                        widgets::action(
+                            p,
+                            ButtonKind::Secondary,
+                            ctx.t("Install again"),
+                            None,
+                            enabled.then(|| wrap(Msg::Reinstall(removed.package.clone()))),
+                        ),
+                    )
+                };
+            widgets::row_item_lead(
+                p,
+                Some(app_glyph(p, state, removed.index, theme::ICON_ROW)),
+                ctx.t(app.name),
+                Some(subtitle),
+                trailing,
+                Vec::new(),
+                None,
+            )
+        })
+        .collect();
+    widgets::group(p, ctx.t("Removed apps"), None, None, rows)
 }
 
 fn restore_all_view<'a>(state: &'a State, ctx: &'a Ctx) -> Option<Element<'a, Message>> {
