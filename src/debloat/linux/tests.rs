@@ -501,11 +501,11 @@ impl Sys for Seen<'_> {
 #[test]
 fn a_removal_is_written_down_once_per_app() {
     let sys = ubuntu();
-    record_removal(&sys, "anydesk", 100).unwrap();
-    record_removal(&sys, "xrdp", 200).unwrap();
-    record_removal(&sys, "anydesk", 300).unwrap();
+    record_removal(&sys, "anydesk", &[], 100).unwrap();
+    record_removal(&sys, "xrdp", &[], 200).unwrap();
+    record_removal(&sys, "anydesk", &[], 300).unwrap();
     assert_eq!(record_of(&sys), "xrdp\t200\nanydesk\t300\n");
-    assert!(record_removal(&sys, "bash", 1).is_err());
+    assert!(record_removal(&sys, "bash", &[], 1).is_err());
 }
 
 #[test]
@@ -516,7 +516,7 @@ fn the_record_keeps_only_the_newest_lines_and_skips_bad_ones() {
         text.push_str(&format!("transmission-{n}\t{n}\n"));
     }
     sys.file(RECORD_PATH, text.as_bytes());
-    record_removal(&sys, "xrdp", 999).unwrap();
+    record_removal(&sys, "xrdp", &[], 999).unwrap();
     let written = record_of(&sys);
     assert_eq!(written.lines().count(), 64);
     assert!(written.ends_with("xrdp\t999\n"));
@@ -688,4 +688,61 @@ fn a_failed_install_keeps_the_line_and_says_so_plainly() {
     assert_eq!(plain(&error.to_string()), Some(INSTALL_FAILED));
     assert!(INSTALL_FAILED.contains("online"));
     assert_eq!(record_of(&sys), "xrdp\t20\n");
+}
+
+#[test]
+fn an_app_removed_with_its_other_packages_comes_back_whole() {
+    let sys = ubuntu();
+    sys.reply(
+        "/usr/bin/apt-get",
+        &["-s", "remove", "transmission-common"],
+        0,
+        "Remv transmission-gtk [4]\nRemv transmission-common [4]\n",
+    );
+    sys.reply(
+        "/usr/bin/apt-get",
+        &["remove", "-y", "transmission-common"],
+        0,
+        "",
+    );
+    let seen = Seen(&sys, std::cell::Cell::new(0), &[true, true, false]);
+    assert_eq!(
+        remove_recorded(&seen, "transmission-common", 70),
+        PackageOutcome::Removed
+    );
+    assert_eq!(
+        record_of(&sys),
+        "transmission-common\t70\ttransmission-gtk\n"
+    );
+
+    sys.reply(
+        "/usr/bin/apt-get",
+        &["-s", "install", "transmission-common", "transmission-gtk"],
+        0,
+        "Inst transmission-common (4)\nInst transmission-gtk (4)\n",
+    );
+    sys.reply(
+        "/usr/bin/apt-get",
+        &["install", "-y", "transmission-common", "transmission-gtk"],
+        0,
+        "",
+    );
+    let seen = Seen(&sys, std::cell::Cell::new(0), &[false, false, true]);
+    reinstall_package(&seen, "transmission-common").unwrap();
+    assert!(called(
+        &sys,
+        "/usr/bin/apt-get install -y transmission-common transmission-gtk"
+    ));
+    assert_eq!(record_of(&sys), "");
+}
+
+#[test]
+fn a_recorded_package_of_another_app_is_never_installed_with_it() {
+    let sys = ubuntu();
+    sys.file(
+        RECORD_PATH,
+        b"transmission-common\t5\ttransmission-gtk xrdp bash ../x\n",
+    );
+    let found = read_record(&sys).unwrap();
+    assert_eq!(found[0].also, vec!["transmission-gtk".to_owned()]);
 }

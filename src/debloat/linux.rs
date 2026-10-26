@@ -19,6 +19,26 @@ pub struct Removed {
     pub index: u16,
     pub package: String,
     pub t: u64,
+    /// The app's other packages that went with it, such as `transmission-gtk` with `transmission-common`.
+    pub also: Vec<String>,
+}
+
+const ALSO_LIMIT: usize = 16;
+
+/// The packages in `names` that belong to the same catalog app as the one at `index`, `package` itself left out.
+fn same_app(index: u16, package: &str, names: &[String]) -> Vec<String> {
+    let mut also: Vec<String> = Vec::new();
+    for name in names {
+        if name != package
+            && is_valid_package(name)
+            && owner(name) == Some(index)
+            && !also.contains(name)
+            && also.len() < ALSO_LIMIT
+        {
+            also.push(name.clone());
+        }
+    }
+    also
 }
 
 pub static CATALOG: &[App] = &[
@@ -278,11 +298,18 @@ fn read_record(sys: &dyn Sys) -> Result<Vec<Removed>> {
         let (Some(index), Ok(t)) = (owner(package), t.parse::<u64>()) else {
             continue;
         };
+        let others: Vec<String> = parts
+            .next()
+            .unwrap_or("")
+            .split(' ')
+            .map(str::to_owned)
+            .collect();
         seen.retain(|r| r.package != package);
         seen.push(Removed {
             index,
             package: package.to_owned(),
             t,
+            also: same_app(index, package, &others),
         });
     }
     let extra = seen.len().saturating_sub(RECORD_LIMIT);
@@ -296,13 +323,19 @@ fn write_record(sys: &dyn Sys, entries: &[Removed]) -> Result<()> {
     }
     let mut text = String::new();
     for entry in entries {
-        text.push_str(&format!("{}\t{}\n", entry.package, entry.t));
+        if entry.also.is_empty() {
+            text.push_str(&format!("{}\t{}\n", entry.package, entry.t));
+        } else {
+            let also = entry.also.join(" ");
+            text.push_str(&format!("{}\t{}\t{also}\n", entry.package, entry.t));
+        }
     }
     sys.write_atomic(Path::new(RECORD), text.as_bytes(), 0o600)
 }
 
-/// Writes down that `package` was removed, replacing an earlier line for it and keeping the newest lines.
-pub fn record_removal(sys: &dyn Sys, package: &str, now: u64) -> Result<()> {
+/// Writes down that `package` was removed together with the packages in `taken` that belong to the same app,
+/// replacing an earlier line for it and keeping the newest lines.
+pub fn record_removal(sys: &dyn Sys, package: &str, taken: &[String], now: u64) -> Result<()> {
     let Some(index) = owner(package) else {
         bail!(NOT_RECORDED);
     };
@@ -312,6 +345,7 @@ pub fn record_removal(sys: &dyn Sys, package: &str, now: u64) -> Result<()> {
         index,
         package: package.to_owned(),
         t: now,
+        also: same_app(index, package, taken),
     });
     let extra = entries.len().saturating_sub(RECORD_LIMIT);
     entries.drain(..extra);
@@ -320,12 +354,16 @@ pub fn record_removal(sys: &dyn Sys, package: &str, now: u64) -> Result<()> {
 
 /// Removes `package` like [`remove_package`] and, when it really was installed and is now gone, writes it down so it can be put back.
 pub fn remove_recorded(sys: &dyn Sys, package: &str, now: u64) -> PackageOutcome {
-    let was_installed = manager(sys)
-        .and_then(|m| installed(sys, m, package))
-        .unwrap_or(false);
+    let (was_installed, taken) = match manager(sys) {
+        Ok(m) => (
+            installed(sys, m, package).unwrap_or(false),
+            simulate(sys, m, package).unwrap_or_default(),
+        ),
+        Err(_) => (false, Vec::new()),
+    };
     let outcome = remove_package(sys, package);
     if was_installed && outcome == PackageOutcome::Removed {
-        if let Err(error) = record_removal(sys, package, now) {
+        if let Err(error) = record_removal(sys, package, &taken, now) {
             eprintln!("Could not write down the removal of {package}: {error:#}");
         }
     }
@@ -348,7 +386,12 @@ pub fn removed(sys: &dyn Sys) -> Result<Vec<Removed>> {
 pub fn reinstall_package(sys: &dyn Sys, package: &str) -> Result<()> {
     ensure!(owner(package).is_some(), NOT_RECORDED);
     let record = read_record(sys)?;
-    ensure!(record.iter().any(|r| r.package == package), NOT_RECORDED);
+    let Some(entry) = record.iter().find(|r| r.package == package) else {
+        bail!(NOT_RECORDED);
+    };
+    let names: Vec<&str> = std::iter::once(package)
+        .chain(entry.also.iter().map(String::as_str))
+        .collect();
     let manager = manager(sys)?;
     let drop_line = || {
         let rest: Vec<Removed> = record
@@ -358,17 +401,29 @@ pub fn reinstall_package(sys: &dyn Sys, package: &str) -> Result<()> {
             .collect();
         write_record(sys, &rest)
     };
-    if installed(sys, manager, package)? {
+    let mut missing = Vec::new();
+    for name in &names {
+        if !installed(sys, manager, name)? {
+            missing.push(*name);
+        }
+    }
+    if missing.is_empty() {
         return drop_line();
     }
+    let with = |head: &[&'static str]| -> Vec<&str> {
+        head.iter()
+            .copied()
+            .chain(missing.iter().copied())
+            .collect()
+    };
     let takes_something_away = match manager {
         Manager::Apt => {
-            let out = sys.run("/usr/bin/apt-get", &["-s", "install", package])?;
+            let out = sys.run("/usr/bin/apt-get", &with(&["-s", "install"]))?;
             ensure!(out.success(), INSTALL_FAILED);
             out.stdout.lines().any(|line| line.starts_with("Remv "))
         }
         Manager::Dnf => {
-            let out = sys.run("/usr/bin/dnf", &["install", "--assumeno", package])?;
+            let out = sys.run("/usr/bin/dnf", &with(&["install", "--assumeno"]))?;
             ensure!(
                 out.success() || out.stdout.contains("Transaction Summary"),
                 INSTALL_FAILED
@@ -378,11 +433,13 @@ pub fn reinstall_package(sys: &dyn Sys, package: &str) -> Result<()> {
     };
     ensure!(!takes_something_away, INSTALL_REFUSED);
     let out = match manager {
-        Manager::Apt => sys.run_long("/usr/bin/apt-get", &["install", "-y", package])?,
-        Manager::Dnf => sys.run_long("/usr/bin/dnf", &["install", "-y", package])?,
+        Manager::Apt => sys.run_long("/usr/bin/apt-get", &with(&["install", "-y"]))?,
+        Manager::Dnf => sys.run_long("/usr/bin/dnf", &with(&["install", "-y"]))?,
     };
     ensure!(out.success(), INSTALL_FAILED);
-    ensure!(installed(sys, manager, package)?, INSTALL_FAILED);
+    for name in &missing {
+        ensure!(installed(sys, manager, name)?, INSTALL_FAILED);
+    }
     drop_line()
 }
 

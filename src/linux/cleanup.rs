@@ -77,6 +77,7 @@ pub fn removed<T: Transport>(transport: &mut T) -> anyhow::Result<Vec<apps::Remo
                 index: r.index,
                 package: r.package,
                 t: r.t,
+                also: Vec::new(),
             })
             .collect()),
         _ => anyhow::bail!(apps::LIST_FAILED),
