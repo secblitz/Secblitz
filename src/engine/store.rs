@@ -10,6 +10,28 @@ use super::{Engine, LOCK_NAME, MAX_WAL, SCHEMA};
 use anyhow::{ensure, Context, Result};
 use std::{fs, fs::File, io::Write};
 
+/// On Linux and macOS the lock belongs to the open file, and a program another
+/// thread is starting holds a copy of every open file until it is running, so a
+/// lock released a moment ago can still look taken.
+#[cfg(unix)]
+fn try_lock_briefly(file: &File) -> std::io::Result<()> {
+    let contended = fs2::lock_contended_error().raw_os_error();
+    for _ in 0..50 {
+        match fs2::FileExt::try_lock_exclusive(file) {
+            Err(e) if e.raw_os_error() == contended => {
+                std::thread::sleep(std::time::Duration::from_millis(20))
+            }
+            done => return done,
+        }
+    }
+    fs2::FileExt::try_lock_exclusive(file)
+}
+
+#[cfg(not(unix))]
+fn try_lock_briefly(file: &File) -> std::io::Result<()> {
+    fs2::FileExt::try_lock_exclusive(file)
+}
+
 impl Engine {
     pub(super) fn lock(&self) -> Result<File> {
         ensure!(
@@ -32,8 +54,7 @@ impl Engine {
             },
             Err(e) => return Err(e.into()),
         };
-        fs2::FileExt::try_lock_exclusive(&file)
-            .context("Another Secblitz operation holds the journal lock")?;
+        try_lock_briefly(&file).context("Another Secblitz operation holds the journal lock")?;
         same_file(&file, &path)?;
         Ok(file)
     }
