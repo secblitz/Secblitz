@@ -401,16 +401,29 @@ pub const UPDATES: &str = "Updates";
 pub const LINUX_NOTES: &str = "Linux";
 
 pub fn app_dir() -> Result<PathBuf> {
-    let dir = state_dir()?.join("App");
+    let dir = app_root()?.join("App");
     match std::fs::symlink_metadata(&dir) {
         Ok(m) => anyhow::ensure!(
             m.is_dir() && !m.file_type().is_symlink(),
             "The app data folder is not a plain directory"
         ),
+        #[cfg(unix)]
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => unix::create_private_dir(&dir)?,
+        #[cfg(not(unix))]
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => std::fs::create_dir(&dir)?,
         Err(e) => return Err(e.into()),
     }
     Ok(dir)
+}
+
+/// On Linux the window runs as the person, who cannot open the root-only state folder, so the
+/// window's own data stays in their private folder at home.
+fn app_root() -> Result<PathBuf> {
+    #[cfg(target_os = "linux")]
+    if !unix::is_root() {
+        return crate::linux::person::own_state_dir();
+    }
+    state_dir()
 }
 
 pub fn state_dir() -> Result<PathBuf> {

@@ -521,6 +521,12 @@ mod session {
     }
 
     /// The engine for this person's settings, on their own journal.
+    /// The person's private Secblitz folder, created and checked like the one their undo history uses.
+    pub fn own_state_dir() -> Result<PathBuf> {
+        let home = env_path("HOME").filter(|h| h.is_absolute());
+        state_dir(&home.context(SESSION_UNUSUAL)?)
+    }
+
     pub fn open_engine() -> Result<Engine> {
         let (dir, backend) = parts()?;
         Engine::open(dir, backend)
@@ -534,7 +540,7 @@ mod session {
 }
 
 #[cfg(target_os = "linux")]
-pub use session::{open_engine, start_fresh};
+pub use session::{open_engine, own_state_dir, start_fresh};
 
 #[cfg(test)]
 mod tests {

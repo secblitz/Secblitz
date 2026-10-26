@@ -76,7 +76,7 @@ pub fn create_private_dir(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn is_root() -> bool {
+pub(crate) fn is_root() -> bool {
     // SAFETY: geteuid has no preconditions and cannot fail.
     unsafe { libc::geteuid() == 0 }
 }
