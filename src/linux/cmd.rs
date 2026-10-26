@@ -41,23 +41,45 @@ mod real {
     use std::os::unix::fs::OpenOptionsExt;
     use std::path::Path;
     use std::process::{Command, Stdio};
+    use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
 
     const PATH: &str = "/usr/sbin:/usr/bin:/sbin:/bin";
     const OUTPUT_CAP: u64 = 1 << 20;
     const READ_CAP: u64 = 4 << 20;
     const TIME_LIMIT: Duration = Duration::from_secs(60);
+    const OUTPUT_GRACE: Duration = Duration::from_secs(2);
 
     pub struct RealSys;
 
-    fn capture(mut pipe: impl Read + Send + 'static) -> std::thread::JoinHandle<String> {
-        std::thread::spawn(move || {
-            let mut kept = Vec::new();
-            let _ = (&mut pipe).take(OUTPUT_CAP).read_to_end(&mut kept);
-            // The program must never block on a full pipe, so the rest is read and dropped.
-            let _ = io::copy(&mut pipe, &mut io::sink());
-            String::from_utf8_lossy(&kept).into_owned()
-        })
+    type Captured = (std::thread::JoinHandle<()>, Arc<Mutex<Vec<u8>>>);
+
+    fn capture(mut pipe: impl Read + Send + 'static) -> Captured {
+        let kept = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&kept);
+        let handle = std::thread::spawn(move || {
+            let mut chunk = [0u8; 8192];
+            loop {
+                let Ok(n) = pipe.read(&mut chunk) else { break };
+                if n == 0 {
+                    break;
+                }
+                // The program must never block on a full pipe, so what is over the cap is read and dropped.
+                let Ok(mut held) = sink.lock() else { break };
+                let room = (OUTPUT_CAP as usize).saturating_sub(held.len());
+                held.extend_from_slice(&chunk[..n.min(room)]);
+            }
+        });
+        (handle, kept)
+    }
+
+    /// A program that left a background process holding its output open must not hold this call up with it.
+    fn collected((handle, kept): Captured, until: Instant) -> String {
+        while !handle.is_finished() && Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let bytes = kept.lock().map(|b| b.clone()).unwrap_or_default();
+        String::from_utf8_lossy(&bytes).into_owned()
     }
 
     fn unreadable(path: &Path) -> String {
@@ -94,10 +116,11 @@ mod real {
                 }
                 std::thread::sleep(Duration::from_millis(10));
             };
+            let until = Instant::now() + OUTPUT_GRACE;
             Ok(Output {
                 status: status.code().unwrap_or(-1),
-                stdout: out.join().unwrap_or_default(),
-                stderr: err.join().unwrap_or_default(),
+                stdout: collected(out, until),
+                stderr: collected(err, until),
             })
         }
 
@@ -241,6 +264,16 @@ mod real {
         fn standard_input_is_closed() {
             let out = RealSys.run("/bin/sh", &["-c", "cat; echo done"]).unwrap();
             assert_eq!(out.stdout, "done\n");
+        }
+
+        #[test]
+        fn a_program_that_leaves_a_background_process_does_not_hold_the_call_up() {
+            let started = Instant::now();
+            let out = RealSys
+                .run("/bin/sh", &["-c", "sleep 20 & echo hi"])
+                .unwrap();
+            assert_eq!(out.stdout, "hi\n");
+            assert!(started.elapsed() < Duration::from_secs(10));
         }
 
         #[test]

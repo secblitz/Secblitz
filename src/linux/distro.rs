@@ -25,9 +25,9 @@ pub struct Distro {
     pub desktop: Desktop,
 }
 
-/// The value of `key` in `KEY=value` lines. Values may be quoted with `"` or `'`; comments and blank lines are skipped.
+/// The value of `key` in `KEY=value` lines; the last assignment wins, as when the shell reads the file. Values may be quoted with `"` or `'`; comments and blank lines are skipped.
 fn field<'a>(os_release: &'a str, key: &str) -> Option<&'a str> {
-    os_release.lines().find_map(|line| {
+    os_release.lines().rev().find_map(|line| {
         let (name, value) = line.trim().split_once('=')?;
         if name != key {
             return None;
@@ -81,7 +81,8 @@ pub fn distro(os_release: &str, xdg_current_desktop: Option<&str>) -> Distro {
     }
 }
 
-/// Reads the running system. A missing or unreadable file reads as an unknown distribution.
+/// Reads the running system. `/etc/os-release` is usually a link to the vendor copy and a link is not read, so the
+/// vendor copy is used then. A missing or unreadable file reads as an unknown distribution.
 pub fn detect(sys: &dyn Sys, xdg_current_desktop: Option<&str>) -> Distro {
     let text = [
         Path::new("/etc/os-release"),
@@ -134,6 +135,11 @@ mod tests {
         assert_eq!(d.id, "arch");
         assert_eq!(d.version, "1.2");
         assert_eq!(d.family, Family::Other);
+    }
+
+    #[test]
+    fn the_last_assignment_wins() {
+        assert_eq!(distro("ID=a\nID=fedora\n", None).id, "fedora");
     }
 
     #[test]
