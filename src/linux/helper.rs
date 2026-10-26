@@ -281,6 +281,11 @@ fn run_job(shared: &Shared, id: u64, request: Request, open: &Opener, recover: &
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_or(0, |d| d.as_secs());
+            if matches!(request, Request::RemoveApps { .. }) {
+                if let Err(error) = LinuxBackend::notes_dir() {
+                    eprintln!("The notes folder is not ready: {error:#}");
+                }
+            }
             ops::run(&RealSys, &RealFs, now, request, &mut emit);
         }
         request => match open() {

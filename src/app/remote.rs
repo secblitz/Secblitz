@@ -62,6 +62,11 @@ pub enum Request {
     RemoveApps {
         packages: Vec<String>,
     },
+    /// The apps Secblitz removed that are not on this computer now.
+    RemovedApps,
+    ReinstallApp {
+        package: String,
+    },
 }
 
 /// The Free up space items that need the helper's rights.
@@ -103,6 +108,13 @@ pub struct AppWire {
     pub index: u16,
     pub package: String,
     pub version: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemovedWire {
+    pub index: u16,
+    pub package: String,
+    pub t: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -156,6 +168,7 @@ pub enum Reply {
         files: usize,
     },
     Apps(Vec<AppWire>),
+    RemovedApps(Vec<RemovedWire>),
 }
 
 /// The reply for an error. A damaged undo history keeps its type across the cut.
@@ -255,6 +268,13 @@ fn check_request(request: &Request) -> anyhow::Result<()> {
             );
             Ok(())
         }
+        Request::ReinstallApp { package } => {
+            anyhow::ensure!(
+                secblitz::debloat::linux::owner(package).is_some(),
+                "the request names an app that is not in the catalog"
+            );
+            Ok(())
+        }
         _ => Ok(()),
     }
 }
@@ -328,7 +348,9 @@ pub fn serve(session: &mut dyn Session, request: Request, emit: &mut dyn FnMut(E
         Request::SpaceMeasure { .. }
         | Request::SpaceClean { .. }
         | Request::Apps
-        | Request::RemoveApps { .. } => Reply::Failed(BAD_ANSWER.to_owned()),
+        | Request::RemoveApps { .. }
+        | Request::RemovedApps
+        | Request::ReinstallApp { .. } => Reply::Failed(BAD_ANSWER.to_owned()),
     };
     emit(Event::Done(reply));
 }
@@ -959,5 +981,29 @@ mod tests {
         let error = start_fresh(&mut Loopback { session: &mut fake }).unwrap_err();
         assert_eq!(format!("{error:#}"), NOT_DAMAGED);
         assert!(fake.log.is_empty());
+    }
+
+    #[test]
+    fn the_reinstall_requests_decode_and_refuse_bad_package_names() {
+        assert_eq!(
+            decode_request(&envelope(r#"{"op":"removed_apps"}"#)).unwrap(),
+            Request::RemovedApps
+        );
+        assert_eq!(
+            decode_request(&envelope(r#"{"op":"reinstall_app","package":"xrdp"}"#)).unwrap(),
+            Request::ReinstallApp {
+                package: "xrdp".into()
+            }
+        );
+        for bad in ["", "bash", "../xrdp", "XRDP", "xrdp --purge", "-xrdp"] {
+            let request = Request::ReinstallApp {
+                package: bad.into(),
+            };
+            assert!(encode_request(&request).is_err(), "{bad:?}");
+            let raw = format!(r#"{{"op":"reinstall_app","package":"{bad}"}}"#);
+            assert!(decode_request(&envelope(&raw)).is_err(), "{bad:?}");
+        }
+        assert!(decode_request(&envelope(r#"{"op":"reinstall_app"}"#)).is_err());
+        assert!(decode_request(&envelope(r#"{"op":"removed_apps","package":"xrdp"}"#)).is_err());
     }
 }

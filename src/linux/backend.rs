@@ -187,6 +187,11 @@ impl<S: Sys> LinuxBackend<S> {
 impl LinuxBackend<super::cmd::RealSys> {
     /// The backend on this computer, keeping its notes inside the protected state folder.
     pub fn installed() -> Result<Self> {
+        Ok(Self::new(super::cmd::RealSys, Self::notes_dir()?))
+    }
+
+    /// The protected folder for the helper's small notes, made if it is not there yet.
+    pub fn notes_dir() -> Result<std::path::PathBuf> {
         use crate::platform::{unix, LINUX_NOTES};
         use anyhow::Context;
         let notes = crate::platform::state_dir()?.join(LINUX_NOTES);
@@ -198,7 +203,7 @@ impl LinuxBackend<super::cmd::RealSys> {
         unix::check_private_dir(&notes, 0).context(
             "Secblitz cannot trust its data folder, so it will not change anything. Reinstall it from the software app.",
         )?;
-        Ok(Self::new(super::cmd::RealSys, notes))
+        Ok(notes)
     }
 }
 

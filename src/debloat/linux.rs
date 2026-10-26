@@ -8,6 +8,18 @@ use super::{App, Group, Installed, PackageOutcome};
 use crate::linux::cmd::Sys;
 use crate::linux::distro::{detect, Family};
 use anyhow::{bail, ensure, Result};
+use std::path::Path;
+
+const RECORD: &str = "/var/lib/secblitz/Linux/removed-apps.txt";
+const RECORD_LIMIT: usize = 64;
+
+/// An app Secblitz took off this computer, as the helper wrote it down.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Removed {
+    pub index: u16,
+    pub package: String,
+    pub t: u64,
+}
 
 pub static CATALOG: &[App] = &[
     app("teamviewer*", "TeamViewer"),
@@ -48,15 +60,23 @@ pub const RUN_FAILED: &str =
 pub const NOT_INSTALLED: &str =
     "Secblitz is not fully installed. Reinstall it from the software app.";
 pub const NOT_ALLOWED: &str = "Secblitz needs your password to change this.";
+pub const INSTALL_FAILED: &str =
+    "The app could not be installed again. Check that this computer is online, then try again.";
+pub const NOT_RECORDED: &str = "Secblitz has no record of removing this app, so it was left alone.";
+pub const INSTALL_REFUSED: &str =
+    "Installing this app again would remove other programs, so Secblitz left it alone.";
 
-/// The sentences a Linux removal can end with, so the page can show them as they are.
-pub const SENTENCES: [&str; 6] = [
+/// The sentences a Linux removal or reinstall can end with, so the page can show them as they are.
+pub const SENTENCES: [&str; 9] = [
     LIST_FAILED,
     REFUSED,
     FAILED,
     RUN_FAILED,
     NOT_INSTALLED,
     NOT_ALLOWED,
+    INSTALL_FAILED,
+    NOT_RECORDED,
+    INSTALL_REFUSED,
 ];
 
 pub fn plain(raw: &str) -> Option<&'static str> {
@@ -243,6 +263,127 @@ pub fn remove_package(sys: &dyn Sys, package: &str) -> PackageOutcome {
         Ok(()) => PackageOutcome::Removed,
         Err(e) => PackageOutcome::Failed(plain(&e.to_string()).unwrap_or(FAILED).to_owned()),
     }
+}
+
+fn read_record(sys: &dyn Sys) -> Result<Vec<Removed>> {
+    let Some(bytes) = sys.read(Path::new(RECORD))? else {
+        return Ok(Vec::new());
+    };
+    let mut seen: Vec<Removed> = Vec::new();
+    for line in String::from_utf8_lossy(&bytes).lines() {
+        let mut parts = line.split('\t');
+        let (Some(package), Some(t)) = (parts.next(), parts.next()) else {
+            continue;
+        };
+        let (Some(index), Ok(t)) = (owner(package), t.parse::<u64>()) else {
+            continue;
+        };
+        seen.retain(|r| r.package != package);
+        seen.push(Removed {
+            index,
+            package: package.to_owned(),
+            t,
+        });
+    }
+    let extra = seen.len().saturating_sub(RECORD_LIMIT);
+    seen.drain(..extra);
+    Ok(seen)
+}
+
+fn write_record(sys: &dyn Sys, entries: &[Removed]) -> Result<()> {
+    if entries.is_empty() {
+        return sys.remove(Path::new(RECORD));
+    }
+    let mut text = String::new();
+    for entry in entries {
+        text.push_str(&format!("{}\t{}\n", entry.package, entry.t));
+    }
+    sys.write_atomic(Path::new(RECORD), text.as_bytes(), 0o600)
+}
+
+/// Writes down that `package` was removed, replacing an earlier line for it and keeping the newest lines.
+pub fn record_removal(sys: &dyn Sys, package: &str, now: u64) -> Result<()> {
+    let Some(index) = owner(package) else {
+        bail!(NOT_RECORDED);
+    };
+    let mut entries = read_record(sys)?;
+    entries.retain(|r| r.package != package);
+    entries.push(Removed {
+        index,
+        package: package.to_owned(),
+        t: now,
+    });
+    let extra = entries.len().saturating_sub(RECORD_LIMIT);
+    entries.drain(..extra);
+    write_record(sys, &entries)
+}
+
+/// Removes `package` like [`remove_package`] and, when it really was installed and is now gone, writes it down so it can be put back.
+pub fn remove_recorded(sys: &dyn Sys, package: &str, now: u64) -> PackageOutcome {
+    let was_installed = manager(sys)
+        .and_then(|m| installed(sys, m, package))
+        .unwrap_or(false);
+    let outcome = remove_package(sys, package);
+    if was_installed && outcome == PackageOutcome::Removed {
+        if let Err(error) = record_removal(sys, package, now) {
+            eprintln!("Could not write down the removal of {package}: {error:#}");
+        }
+    }
+    outcome
+}
+
+/// The recorded apps that are not on this computer now, oldest first.
+pub fn removed(sys: &dyn Sys) -> Result<Vec<Removed>> {
+    let manager = manager(sys)?;
+    let mut gone = Vec::new();
+    for entry in read_record(sys)? {
+        if !installed(sys, manager, &entry.package)? {
+            gone.push(entry);
+        }
+    }
+    Ok(gone)
+}
+
+/// Installs a recorded catalog app again. The plan is simulated first and refused if it would take anything away.
+pub fn reinstall_package(sys: &dyn Sys, package: &str) -> Result<()> {
+    ensure!(owner(package).is_some(), NOT_RECORDED);
+    let record = read_record(sys)?;
+    ensure!(record.iter().any(|r| r.package == package), NOT_RECORDED);
+    let manager = manager(sys)?;
+    let drop_line = || {
+        let rest: Vec<Removed> = record
+            .iter()
+            .filter(|r| r.package != package)
+            .cloned()
+            .collect();
+        write_record(sys, &rest)
+    };
+    if installed(sys, manager, package)? {
+        return drop_line();
+    }
+    let takes_something_away = match manager {
+        Manager::Apt => {
+            let out = sys.run("/usr/bin/apt-get", &["-s", "install", package])?;
+            ensure!(out.success(), INSTALL_FAILED);
+            out.stdout.lines().any(|line| line.starts_with("Remv "))
+        }
+        Manager::Dnf => {
+            let out = sys.run("/usr/bin/dnf", &["install", "--assumeno", package])?;
+            ensure!(
+                out.success() || out.stdout.contains("Transaction Summary"),
+                INSTALL_FAILED
+            );
+            out.stdout.lines().any(|line| line.starts_with("Removing"))
+        }
+    };
+    ensure!(!takes_something_away, INSTALL_REFUSED);
+    let out = match manager {
+        Manager::Apt => sys.run_long("/usr/bin/apt-get", &["install", "-y", package])?,
+        Manager::Dnf => sys.run_long("/usr/bin/dnf", &["install", "-y", package])?,
+    };
+    ensure!(out.success(), INSTALL_FAILED);
+    ensure!(installed(sys, manager, package)?, INSTALL_FAILED);
+    drop_line()
 }
 
 #[cfg(test)]
