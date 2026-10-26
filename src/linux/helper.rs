@@ -554,7 +554,6 @@ mod tests {
         let all = SENTENCES
             .iter()
             .chain(&findings::SENTENCES)
-            .chain(&findings::TITLES)
             .copied()
             .chain(secblitz::linux::backend::texts());
         for text in all.filter(|t| !names.contains(t)) {

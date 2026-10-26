@@ -1012,12 +1012,23 @@ fn findings_report_what_cannot_be_fixed() {
     let mut b = backend(&sim);
     let found = b.findings().unwrap();
     let get = |title: &str| found.iter().find(|f| f.title == title).unwrap();
-    assert_eq!(get("Device encryption").status, CheckStatus::Attention);
-    assert_eq!(get("Secure Boot").status, CheckStatus::Ok);
-    assert_eq!(get("Updates waiting").status, CheckStatus::Attention);
-    assert_eq!(get("Restart needed").status, CheckStatus::Ok);
-    assert_eq!(get("AppArmor").status, CheckStatus::Ok);
-    assert!(found.iter().all(|f| f.title != "SELinux"));
+    assert_eq!(
+        get(crate::advice::DISK_ENCRYPTION).status,
+        CheckStatus::Attention
+    );
+    assert_eq!(
+        get(crate::advice::LINUX_SECURE_BOOT).status,
+        CheckStatus::Ok
+    );
+    assert_eq!(
+        get(crate::advice::UPDATES_WAITING).status,
+        CheckStatus::Attention
+    );
+    assert_eq!(get(crate::advice::RESTART_NEEDED).status, CheckStatus::Ok);
+    assert_eq!(get(crate::advice::PROGRAM_LIMITS).status, CheckStatus::Ok);
+    assert!(found
+        .iter()
+        .all(|f| f.detail != crate::linux::controls::findings::SELINUX_ON));
 
     sim.set("root.crypt", "1").set("apt.waiting", "0");
     sim.file("/run/reboot-required", "*** System restart required ***\n");
@@ -1028,11 +1039,20 @@ fn findings_report_what_cannot_be_fixed() {
     sim.file("/sys/module/apparmor/parameters/enabled", "N\n");
     let found = b.findings().unwrap();
     let get = |title: &str| found.iter().find(|f| f.title == title).unwrap();
-    assert_eq!(get("Device encryption").status, CheckStatus::Ok);
-    assert_eq!(get("Secure Boot").status, CheckStatus::Attention);
-    assert_eq!(get("Updates waiting").status, CheckStatus::Ok);
-    assert_eq!(get("Restart needed").status, CheckStatus::Attention);
-    assert_eq!(get("AppArmor").status, CheckStatus::Attention);
+    assert_eq!(get(crate::advice::DISK_ENCRYPTION).status, CheckStatus::Ok);
+    assert_eq!(
+        get(crate::advice::LINUX_SECURE_BOOT).status,
+        CheckStatus::Attention
+    );
+    assert_eq!(get(crate::advice::UPDATES_WAITING).status, CheckStatus::Ok);
+    assert_eq!(
+        get(crate::advice::RESTART_NEEDED).status,
+        CheckStatus::Attention
+    );
+    assert_eq!(
+        get(crate::advice::PROGRAM_LIMITS).status,
+        CheckStatus::Attention
+    );
 }
 
 #[test]
@@ -1040,7 +1060,11 @@ fn findings_that_cannot_be_told_are_unknown_not_a_problem() {
     let sim = ubuntu();
     let mut b = backend(&sim);
     let found = b.findings().unwrap();
-    for title in ["Device encryption", "Secure Boot", "Updates waiting"] {
+    for title in [
+        crate::advice::DISK_ENCRYPTION,
+        crate::advice::LINUX_SECURE_BOOT,
+        crate::advice::UPDATES_WAITING,
+    ] {
         let f = found.iter().find(|f| f.title == title).unwrap();
         assert_eq!(f.status, CheckStatus::Unknown, "{title}");
     }
@@ -1055,8 +1079,10 @@ fn fedora_findings_use_its_own_tools() {
     let found = b.findings().unwrap();
     assert!(found
         .iter()
-        .any(|f| f.title == "SELinux" && f.status == CheckStatus::Ok));
-    assert!(found.iter().all(|f| f.title != "AppArmor"));
+        .any(|f| f.title == crate::advice::PROGRAM_LIMITS && f.status == CheckStatus::Ok));
+    assert!(found
+        .iter()
+        .all(|f| f.detail != crate::linux::controls::findings::APPARMOR_ON));
 }
 
 #[test]
@@ -1071,21 +1097,27 @@ fn fedora_never_downloads_package_lists_and_an_empty_cache_is_not_a_restart() {
             .find(|f| f.title == title)
             .map(|f| f.status.clone())
     };
-    assert_eq!(status(&mut b, "Restart needed"), None);
+    assert_eq!(status(&mut b, crate::advice::RESTART_NEEDED), None);
     assert_eq!(
-        status(&mut b, "Updates waiting"),
+        status(&mut b, crate::advice::UPDATES_WAITING),
         Some(CheckStatus::Unknown)
     );
     sim.set("dnf.cache", "1");
-    assert_eq!(status(&mut b, "Restart needed"), Some(CheckStatus::Ok));
-    assert_eq!(status(&mut b, "Updates waiting"), Some(CheckStatus::Ok));
+    assert_eq!(
+        status(&mut b, crate::advice::RESTART_NEEDED),
+        Some(CheckStatus::Ok)
+    );
+    assert_eq!(
+        status(&mut b, crate::advice::UPDATES_WAITING),
+        Some(CheckStatus::Ok)
+    );
     sim.set("dnf.restart", "1").set("dnf.waiting", "1");
     assert_eq!(
-        status(&mut b, "Restart needed"),
+        status(&mut b, crate::advice::RESTART_NEEDED),
         Some(CheckStatus::Attention)
     );
     assert_eq!(
-        status(&mut b, "Updates waiting"),
+        status(&mut b, crate::advice::UPDATES_WAITING),
         Some(CheckStatus::Attention)
     );
     assert!(sim
@@ -1111,4 +1143,31 @@ fn the_notes_folder_is_not_mistaken_for_a_journal() {
         std::fs::read(notes.join("ssh-units.txt")).unwrap(),
         b"ssh.service 1 1\n"
     );
+}
+
+#[test]
+fn every_finding_title_the_linux_backend_can_emit_has_linux_advice_and_no_windows_words() {
+    use crate::advice::{finding_impact, for_finding, is_linux_finding, NextStep};
+    for title in findings::TITLES {
+        assert!(is_linux_finding(title), "{title} has no Linux advice");
+        let a = for_finding(title, &CheckStatus::Attention, "");
+        assert_ne!(a.label, "Protection check", "{title}");
+        assert_ne!(a.step, NextStep::Repair, "{title}");
+        let x = crate::explain::for_check(title)
+            .unwrap_or_else(|| panic!("no explanation for {title}"));
+        for line in [
+            a.label,
+            a.next,
+            a.impact,
+            finding_impact(title),
+            x.what,
+            x.risk,
+            x.change,
+        ] {
+            assert!(!line.is_empty(), "{title}");
+            for word in ["Windows", "Microsoft", "BitLocker", "BIOS"] {
+                assert!(!line.contains(word), "{title}: {line}");
+            }
+        }
+    }
 }

@@ -3,6 +3,9 @@
 //! as not known, never as a problem.
 
 use super::Cx;
+use crate::advice::{
+    DISK_ENCRYPTION, LINUX_SECURE_BOOT, PROGRAM_LIMITS, RESTART_NEEDED, UPDATES_WAITING,
+};
 use crate::linux::distro::Family;
 use crate::model::{CheckStatus, Finding};
 use std::path::Path;
@@ -41,13 +44,12 @@ pub const SENTENCES: [&str; 15] = [
     SELINUX_OFF,
 ];
 
-pub const TITLES: [&str; 6] = [
-    "Device encryption",
-    "Secure Boot",
-    "Updates waiting",
-    "Restart needed",
-    "AppArmor",
-    "SELinux",
+pub const TITLES: [&str; 5] = [
+    DISK_ENCRYPTION,
+    LINUX_SECURE_BOOT,
+    UPDATES_WAITING,
+    RESTART_NEEDED,
+    PROGRAM_LIMITS,
 ];
 
 const SECURE_BOOT_VARIABLE: &str =
@@ -176,7 +178,7 @@ pub fn collect(cx: &Cx) -> Vec<Finding> {
             .ok()
             .map(|b| b.is_some_and(|b| b.first() == Some(&b'1')));
         if enforcing.is_some() {
-            found.push(finding(TITLES[5], enforcing, SELINUX_ON, SELINUX_OFF, ""));
+            found.push(finding(TITLES[4], enforcing, SELINUX_ON, SELINUX_OFF, ""));
         }
     } else {
         let on = cx

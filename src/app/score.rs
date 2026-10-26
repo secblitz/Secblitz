@@ -395,6 +395,21 @@ mod tests {
     }
 
     #[test]
+    fn a_linux_finding_that_needs_attention_is_something_to_check_like_any_other() {
+        for title in secblitz::linux::controls::findings::TITLES {
+            let mut r = rep(vec![]);
+            r.findings.push(secblitz::model::Finding {
+                title: title.into(),
+                status: CheckStatus::Attention,
+                detail: String::new(),
+            });
+            assert_eq!(classify_finding(&r.findings[0]), Class::Review, "{title}");
+            assert_eq!(to_check_count(&r), 1, "{title}");
+            assert!(matches!(to_check(&r)[0], ToCheck::Finding(_)), "{title}");
+        }
+    }
+
+    #[test]
     fn a_finding_is_replaced_by_its_own_fix_row() {
         let finding = secblitz::model::Finding {
             title: "SMB1".into(),
