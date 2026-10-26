@@ -17,6 +17,9 @@ pub(crate) mod interlock;
 mod tray_cmd;
 pub use health::{health, MonitorHealth, TaskHealth, UpdateHealth};
 
+#[cfg(target_os = "linux")]
+#[path = "updater/linux.rs"]
+pub mod linux;
 #[cfg(windows)]
 #[path = "updater/windows.rs"]
 mod windows;
@@ -287,6 +290,7 @@ pub enum UpdateOutcome {
     DeferredRollout { version: String },
     WorkerStarted { version: String },
     Installed { version: String },
+    Available { version: String },
     Failed { reason: String },
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -337,6 +341,33 @@ fn origin(text: &str) -> Result<Option<reqwest::Url>> {
         "Invalid compiled update origin"
     );
     Ok(Some(url))
+}
+fn config() -> Result<Option<reqwest::Url>> {
+    origin(
+        option_env!("SECBLITZ_UPDATE_ORIGIN")
+            .unwrap_or(include_str!("../assets/update-origin.txt")),
+    )
+}
+fn key() -> Result<[u8; 32]> {
+    let bytes = hex::decode(include_str!("../assets/update-public-key.hex").trim())
+        .context("Invalid embedded update public key")?;
+    bytes.try_into().map_err(|v: Vec<u8>| {
+        eprintln!("{} bytes", v.len());
+        anyhow::anyhow!("Embedded update public key must be 32 bytes")
+    })
+}
+fn fetch_manifest(client: &reqwest::blocking::Client, url: reqwest::Url) -> Result<Vec<u8>> {
+    let response = client.get(url).send()?;
+    ensure!(
+        response.status() == reqwest::StatusCode::OK,
+        "Manifest HTTP request failed"
+    );
+    let mut bytes = Vec::new();
+    response
+        .take((MANIFEST_LIMIT + 1) as u64)
+        .read_to_end(&mut bytes)?;
+    ensure!(bytes.len() <= MANIFEST_LIMIT, "Manifest too large");
+    Ok(bytes)
 }
 fn stable(text: &str) -> Result<Version> {
     let v = Version::parse(text)?;
@@ -429,7 +460,11 @@ pub fn status() -> Result<UpdateStatus> {
     {
         windows::status()
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        linux::status(&crate::linux::cmd::RealSys)
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         Ok(UpdateStatus {
             checked_at: now()?,

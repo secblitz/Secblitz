@@ -31,7 +31,7 @@ pub fn update_view(status: &secblitz::updater::UpdateStatus) -> UpdateView {
     match &status.result {
         O::UpToDate | O::Installed { .. } | O::DeferredRollout { .. } => UpdateView::UpToDate,
         O::DeferredBusy if status.checked_at == 0 => UpdateView::Checking,
-        O::WorkerStarted { .. } | O::DeferredBusy => UpdateView::Ready,
+        O::WorkerStarted { .. } | O::Available { .. } | O::DeferredBusy => UpdateView::Ready,
         O::Failed { .. } => UpdateView::Unknown,
         O::NotConfigured if status.checked_at == 0 => UpdateView::NotChecked,
         O::NotConfigured => UpdateView::Off,
