@@ -170,11 +170,12 @@ fn client() -> Result<reqwest::blocking::Client> {
         .build()?)
 }
 
-/// The repository file is how the person's software app learns about new versions of Secblitz.
+/// The repository file is how the person's software app learns about new versions of Secblitz. A file that cannot be
+/// read (a link, say) counts as present, so Secblitz never installs on top of a setup it cannot see through.
 pub fn repository_configured(sys: &dyn Sys) -> bool {
     [APT_SOURCE, DNF_SOURCE]
         .iter()
-        .any(|path| matches!(sys.read(Path::new(path)), Ok(Some(_))))
+        .any(|path| !matches!(sys.read(Path::new(path)), Ok(None)))
 }
 
 /// Looks at the signed feed and records the result. Root only; this is what the daily timer runs.
@@ -503,6 +504,26 @@ mod tests {
         let sys = FakeSys::default();
         sys.file(DNF_SOURCE, b"[secblitz]");
         assert!(repository_configured(&sys));
+    }
+
+    #[test]
+    fn a_repository_file_that_cannot_be_read_counts_as_set_up() {
+        struct Unreadable;
+        impl Sys for Unreadable {
+            fn run(&self, _: &'static str, _: &[&str]) -> Result<crate::linux::cmd::Output> {
+                unreachable!()
+            }
+            fn read(&self, _: &Path) -> Result<Option<Vec<u8>>> {
+                bail!("is a link")
+            }
+            fn write_atomic(&self, _: &Path, _: &[u8], _: u32) -> Result<()> {
+                unreachable!()
+            }
+            fn remove(&self, _: &Path) -> Result<()> {
+                unreachable!()
+            }
+        }
+        assert!(repository_configured(&Unreadable));
     }
 
     #[test]
