@@ -4,7 +4,7 @@
   "description": "Pinned Cloudflare deploy tool for publish-website.yml. Not part of the app.",
   "engines": { "node": ">=20.19" },
   "devDependencies": {
-    "wrangler": "4.144.0"
+    "wrangler": "4.153.0"
   },
   "overrides": {
     "sharp": "0.35.5"
