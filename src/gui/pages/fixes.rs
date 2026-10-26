@@ -1630,7 +1630,7 @@ pub fn view<'a>(
         }
         body = body.push(tile::grid(p, tiles(ctx, rows, topic)));
         let part = shown.in_topic(topic);
-        let title = widgets::h2(p, ctx.t(topic.label()));
+        let title = widgets::h2(p, ctx.t(topic.display_label(secblitz::os::Os::CURRENT)));
         let head: Element<'_, Message> = if part.selectable().next().is_some() {
             let (count, buttons) = fix_controls(state, ctx, report, rows, &part, Some(topic));
             row![
@@ -1726,7 +1726,7 @@ fn tiles(ctx: &Ctx, rows: &Rows, on_show: Topic) -> Vec<Tile> {
             let line = rows.line(topic);
             Tile {
                 glyph: topic_icon(topic),
-                title: ctx.t(topic.label()),
+                title: ctx.t(topic.display_label(secblitz::os::Os::CURRENT)),
                 status: line_text(ctx, line),
                 tone: line_tone(line),
                 done: line == Line::AllSet,

@@ -4,6 +4,7 @@
 use anyhow::Result;
 use secblitz::engine::{Engine, Report};
 use secblitz::model::{Authority, Backend, Control, EffectiveFirewall, Finding, Observation};
+use secblitz::os::Os;
 use serde_json::{json, Value};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -52,7 +53,7 @@ fn open(dir: &std::path::Path, value: &Rc<RefCell<Value>>) -> Engine {
     let backend = Memory {
         value: value.clone(),
     };
-    Engine::open(dir.to_path_buf(), Box::new(backend)).unwrap()
+    Engine::open_for(Os::Windows, dir.to_path_buf(), Box::new(backend)).unwrap()
 }
 
 fn status_of(report: &Report) -> &str {

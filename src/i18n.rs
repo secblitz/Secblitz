@@ -301,6 +301,28 @@ mod tests {
     }
 
     #[test]
+    fn every_linux_and_macos_check_is_explained_and_translated() {
+        let known: std::collections::HashSet<_> = all_keys().collect();
+        for os in [secblitz::os::Os::Linux, secblitz::os::Os::Macos] {
+            for id in secblitz::engine::catalog::ids(os) {
+                let e = secblitz::explain::for_check(id)
+                    .unwrap_or_else(|| panic!("{id} has no explainer"));
+                for line in [e.what, e.risk, e.change] {
+                    assert!(known.contains(line), "{id}: not translated: {line}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_system_topic_name_is_translated() {
+        let row = maintenance_rows()
+            .find(|r| r[0] == "System")
+            .expect("System row");
+        assert!(row.iter().all(|t| !t.is_empty()));
+    }
+
+    #[test]
     fn the_ads_and_tips_switches_are_translated_in_all_six_languages() {
         let known: std::collections::HashSet<_> = all_keys().collect();
         for setting in secblitz::user_settings::Setting::ADS_AND_TIPS {

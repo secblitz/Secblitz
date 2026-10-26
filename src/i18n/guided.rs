@@ -585,6 +585,7 @@ pub(super) const ROWS: &[[&str; 6]] = &[
     ["Sign-in", "Inicio de sesión", "Connexion", "Anmeldung", "Início de sessão", "Accesso"],
     ["Network", "Red", "Réseau", "Netzwerk", "Rede", "Rete"],
     ["Windows", "Windows", "Windows", "Windows", "Windows", "Windows"],
+    ["System", "Sistema", "Système", "System", "Sistema", "Sistema"],
     ["Browsers", "Navegadores", "Navigateurs", "Browser", "Navegadores", "Browser"],
     ["{n} to fix", "{n} por corregir", "{n} à corriger", "{n} zu beheben", "{n} a corrigir", "{n} da correggere"],
     ["{n} switched back", "{n} cambiados otra vez", "{n} modifiés à nouveau", "{n} wieder umgestellt", "{n} alterados de novo", "{n} cambiati di nuovo"],

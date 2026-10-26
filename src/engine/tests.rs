@@ -2410,6 +2410,7 @@ fn progress_steps_keep_their_stable_text() {
     }
 }
 include!("selective_undo_tests.rs");
+include!("os_tests.rs");
 
 #[test]
 fn background_judgement_uses_the_value_even_when_the_account_cannot_change_it() {
