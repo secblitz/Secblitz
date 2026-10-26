@@ -41,6 +41,24 @@ enum Shape {
     OffByDefault,
     /// Recent files kept with no age limit: 0 not forever, 1 forever because the person set it, 2 forever by default.
     Age,
+    /// A wait in seconds that is safe from `min` to `max`: 0 when safe, otherwise the unsafe wait as 1 + 2 * seconds,
+    /// plus 1 when it is the default. A fix writes `fix` seconds.
+    Seconds { min: u32, max: u32, fix: u32 },
+}
+
+const SCREEN_OFF: Shape = Shape::Seconds {
+    min: 1,
+    max: 600,
+    fix: 300,
+};
+const LOCK_DELAY: Shape = Shape::Seconds {
+    min: 0,
+    max: 30,
+    fix: 0,
+};
+
+fn delay_code(seconds: u32, by_default: bool) -> u32 {
+    1 + 2 * seconds + u32::from(by_default)
 }
 
 struct Gs {
@@ -216,11 +234,62 @@ const GNOME_SOFTWARE: &[Gs] = &[gs(
 /// Controls whose settings belong to an app that may not be installed: they are offered only where its schema exists.
 const APP_CONTROLS: [&str; 2] = ["linux.mint_app_updates", "linux.app_store_updates"];
 
-/// The desktop settings behind a control on this desktop; empty when the control has none here.
-fn desktop_keys(id: &str, desktop: Desktop) -> &'static [Gs] {
+const GNOME_SCREEN_OFF: &[Gs] = &[gs(
+    "delay",
+    "org.gnome.desktop.session",
+    "idle-delay",
+    SCREEN_OFF,
+)];
+const CINNAMON_SCREEN_OFF: &[Gs] = &[gs(
+    "delay",
+    "org.cinnamon.desktop.session",
+    "idle-delay",
+    SCREEN_OFF,
+)];
+const GNOME_LOCK_DELAY: &[Gs] = &[gs(
+    "delay",
+    "org.gnome.desktop.screensaver",
+    "lock-delay",
+    LOCK_DELAY,
+)];
+const CINNAMON_LOCK_DELAY: &[Gs] = &[gs(
+    "delay",
+    "org.cinnamon.desktop.screensaver",
+    "lock-delay",
+    LOCK_DELAY,
+)];
+const UBUNTU_LOCK_ON_SUSPEND: &[Gs] = &[gs(
+    "lock_on_suspend",
+    "org.gnome.desktop.screensaver",
+    "ubuntu-lock-on-suspend",
+    Shape::Lock,
+)];
+const CINNAMON_LOCK_ON_SUSPEND: &[Gs] = &[gs(
+    "lock_on_suspend",
+    "org.cinnamon.settings-daemon.plugins.power",
+    "lock-on-suspend",
+    Shape::Lock,
+)];
+const GNOME_USAGE_STATS: &[Gs] = &[gs(
+    "send",
+    "org.gnome.desktop.privacy",
+    "send-software-usage-stats",
+    Shape::Plain,
+)];
+
+/// The desktop settings behind a control on this desktop; empty when the control has none here. GNOME locks on sleep by
+/// itself and has a setting for it only on Ubuntu.
+fn desktop_keys(id: &str, desktop: Desktop, distro: &str) -> &'static [Gs] {
     match (id, desktop) {
         ("linux.mint_app_updates", _) => MINT_UPDATES,
         ("linux.app_store_updates", _) => GNOME_SOFTWARE,
+        ("linux.screen_off_delay", Desktop::Gnome) => GNOME_SCREEN_OFF,
+        ("linux.screen_off_delay", Desktop::Cinnamon) => CINNAMON_SCREEN_OFF,
+        ("linux.lock_delay", Desktop::Gnome) => GNOME_LOCK_DELAY,
+        ("linux.lock_delay", Desktop::Cinnamon) => CINNAMON_LOCK_DELAY,
+        ("linux.lock_on_suspend", Desktop::Gnome) if distro == "ubuntu" => UBUNTU_LOCK_ON_SUSPEND,
+        ("linux.lock_on_suspend", Desktop::Cinnamon) => CINNAMON_LOCK_ON_SUSPEND,
+        ("linux.usage_stats", Desktop::Gnome) => GNOME_USAGE_STATS,
         ("linux.screen_lock", Desktop::Gnome) => GNOME_LOCK,
         ("linux.screen_lock", Desktop::Cinnamon) => CINNAMON_LOCK,
         ("linux.remote_desktop", Desktop::Gnome) => GNOME_REMOTE,
@@ -293,6 +362,7 @@ pub struct PersonBackend<S: Sys> {
     sys: S,
     config_dir: PathBuf,
     desktop: Desktop,
+    distro: String,
     uid: u32,
     controls: Vec<Control>,
 }
@@ -311,7 +381,7 @@ impl<S: Sys> PersonBackend<S> {
                 } else if s.id == HOME_CONTROL {
                     true
                 } else {
-                    let keys = desktop_keys(s.id, distro.desktop);
+                    let keys = desktop_keys(s.id, distro.desktop, &distro.id);
                     session_bus
                         && !keys.is_empty()
                         && (!APP_CONTROLS.contains(&s.id)
@@ -333,6 +403,7 @@ impl<S: Sys> PersonBackend<S> {
             sys,
             config_dir,
             desktop: distro.desktop,
+            distro: distro.id.clone(),
             uid,
             controls,
         }
@@ -399,6 +470,27 @@ impl<S: Sys> PersonBackend<S> {
                 ),
                 None => Reading::missing(),
             },
+            Shape::Seconds { min, max, .. } => {
+                let Some(text) = self.get(g.schema, g.key) else {
+                    return Reading::missing();
+                };
+                let Ok(seconds) = text.trim_start_matches("uint32").trim().parse::<u32>() else {
+                    return Reading::missing();
+                };
+                if (min..=max).contains(&seconds) {
+                    return Reading::of(0);
+                }
+                if seconds > catalog::DELAY_CAP {
+                    return Reading::missing();
+                }
+                match self.user_set(g.schema, g.key) {
+                    Some(set) => Reading::of(delay_code(seconds, !set)),
+                    None => Reading {
+                        value: Some(delay_code(seconds, false)),
+                        sure: false,
+                    },
+                }
+            }
             Shape::Age => {
                 let (Some(remember), Some(age)) = (
                     self.flag(g.schema, RECENT_REMEMBER_KEY),
@@ -491,7 +583,7 @@ impl<S: Sys> PersonBackend<S> {
                 .map(|s| (*s, self.read_consent(s)))
                 .collect();
         }
-        desktop_keys(id, self.desktop)
+        desktop_keys(id, self.desktop, &self.distro)
             .iter()
             .map(|g| (g.name, self.read_desktop(g)))
             .collect()
@@ -518,6 +610,14 @@ impl<S: Sys> PersonBackend<S> {
             }
             (Shape::Lock | Shape::OnByDefault | Shape::OffByDefault | Shape::Age, 2) => {
                 self.reset(g.schema, g.key)
+            }
+            (Shape::Seconds { fix, .. }, 0) => self.set(g.schema, g.key, &fix.to_string()),
+            (Shape::Seconds { .. }, code) => {
+                if (code - 1) % 2 == 1 {
+                    self.reset(g.schema, g.key)
+                } else {
+                    self.set(g.schema, g.key, &((code - 1) / 2).to_string())
+                }
             }
             (Shape::Idle, 0) => self.set(g.schema, g.key, "300"),
             (Shape::Idle, 1) => self.set(g.schema, g.key, "0"),
@@ -608,7 +708,7 @@ impl<S: Sys> Backend for PersonBackend<S> {
             } else if id == "linux.ubuntu_insights" {
                 self.write_consent(name, want == 1)?;
             } else {
-                let g = desktop_keys(id, self.desktop)
+                let g = desktop_keys(id, self.desktop, &self.distro)
                     .iter()
                     .find(|g| g.name == *name)
                     .context(NOT_CONFIRMED)?;
@@ -832,6 +932,10 @@ mod tests {
 
         fn fedora() -> Self {
             let mut desk = Self::stock();
+            desk.defaults.remove(&key(
+                "org.gnome.desktop.screensaver",
+                "ubuntu-lock-on-suspend",
+            ));
             desk.record(FEDORA_PERSON);
             desk.set_home(FEDORA_HOME);
             desk
@@ -1014,7 +1118,11 @@ mod tests {
                 "linux.problem_reports",
                 "linux.app_usage",
                 "linux.old_files",
-                "linux.home_private"
+                "linux.home_private",
+                "linux.screen_off_delay",
+                "linux.lock_delay",
+                "linux.lock_on_suspend",
+                "linux.usage_stats"
             ]
         );
         assert_eq!(
@@ -1052,6 +1160,13 @@ mod tests {
             json!({"trash": 2, "temp": 2})
         );
         assert_eq!(items(&mut b, "linux.home_private"), json!({"others": 0}));
+        assert_eq!(items(&mut b, "linux.screen_off_delay"), json!({"delay": 0}));
+        assert_eq!(items(&mut b, "linux.lock_delay"), json!({"delay": 0}));
+        assert_eq!(
+            items(&mut b, "linux.lock_on_suspend"),
+            json!({"lock_on_suspend": 2})
+        );
+        assert_eq!(items(&mut b, "linux.usage_stats"), json!({"send": 0}));
         assert_eq!(b.machine_id().unwrap(), "0123456789abcdef");
     }
 
@@ -1066,7 +1181,10 @@ mod tests {
                 "linux.lock_previews",
                 "linux.media_autorun",
                 "linux.old_files",
-                "linux.home_private"
+                "linux.home_private",
+                "linux.screen_off_delay",
+                "linux.lock_delay",
+                "linux.lock_on_suspend"
             ]
         );
         assert_eq!(
@@ -1081,7 +1199,10 @@ mod tests {
                 "linux.problem_reports",
                 "linux.app_usage",
                 "linux.old_files",
-                "linux.home_private"
+                "linux.home_private",
+                "linux.screen_off_delay",
+                "linux.lock_delay",
+                "linux.usage_stats"
             ]
         );
         assert_eq!(
@@ -1133,7 +1254,8 @@ mod tests {
                 "linux.recent_files",
                 "linux.lock_previews",
                 "linux.app_usage",
-                "linux.old_files"
+                "linux.old_files",
+                "linux.screen_off_delay"
             ]
         );
         assert_eq!(
@@ -1144,10 +1266,10 @@ mod tests {
 
         let all: Vec<String> = flagged.iter().map(|s| s.to_string()).collect();
         let applied = e.apply_selected(&all, |_| {}).unwrap();
-        assert!(applied
-            .results
-            .iter()
-            .all(|r| r.status.as_str() == "applied"));
+        assert!(applied.results.iter().all(|r| {
+            let overlap = r.id == "linux.screen_off_delay";
+            r.status.as_str() == if overlap { "unchanged" } else { "applied" }
+        }));
         let now = |s: &str, k: &str| desk.current(s, k).unwrap();
         assert_eq!(now("org.gnome.desktop.screensaver", "lock-enabled"), "true");
         assert_eq!(now("org.gnome.desktop.session", "idle-delay"), "uint32 300");
@@ -1171,7 +1293,7 @@ mod tests {
                 .iter()
                 .filter(|r| r.status.as_str() == "attention")
                 .count(),
-            6
+            7
         );
     }
 
@@ -1849,5 +1971,363 @@ mod tests {
             4242,
         );
         assert!(b.read_home().is_none());
+    }
+
+    const SESSION: &str = "org.gnome.desktop.session";
+    const GNOME_SAVER: &str = "org.gnome.desktop.screensaver";
+    const CINNAMON_SESSION: &str = "org.cinnamon.desktop.session";
+    const CINNAMON_SAVER: &str = "org.cinnamon.desktop.screensaver";
+    const CINNAMON_POWER: &str = "org.cinnamon.settings-daemon.plugins.power";
+
+    fn one(b: &mut PersonBackend<Rc<Desk>>, id: &str) -> Value {
+        let o = b.observe(id).unwrap();
+        assert!(o.eligible, "{id}: {}", o.reason);
+        o.value
+    }
+
+    fn apply_and_undo(
+        desk: &Rc<Desk>,
+        id: &str,
+        distro: &str,
+        desktop: Desktop,
+    ) -> (String, String) {
+        let state = tempfile::tempdir().unwrap();
+        let mut e = engine_on(desk, distro, desktop, state.path());
+        let before = desk.set.borrow().clone();
+        assert_eq!(status(&mut e, id), "attention");
+        assert_eq!(*desk.set.borrow(), before, "checking changed something");
+        e.apply_selected(&[id.to_owned()], |_| {}).unwrap();
+        assert_eq!(status(&mut e, id), "compliant");
+        let fixed = desk.set.borrow().clone();
+        assert_ne!(fixed, before);
+        desk.calls.borrow_mut().clear();
+        e.revert(|_| {}).unwrap();
+        assert_eq!(*desk.set.borrow(), before, "undo left a trace");
+        assert_eq!(status(&mut e, id), "attention");
+        (format!("{fixed:?}"), calls(desk))
+    }
+
+    #[test]
+    fn the_desktop_session_checks_read_what_each_real_distribution_shows() {
+        let ubuntu = Rc::new(Desk::stock());
+        let mut b = backend(&ubuntu, "ubuntu", Desktop::Gnome, true);
+        let state = tempfile::tempdir().unwrap();
+        let mut e = engine(&ubuntu, state.path());
+        for id in [
+            "linux.screen_off_delay",
+            "linux.lock_delay",
+            "linux.lock_on_suspend",
+            "linux.usage_stats",
+        ] {
+            assert_eq!(status(&mut e, id), "compliant", "{id}");
+        }
+        assert_eq!(
+            one(&mut b, "linux.lock_on_suspend"),
+            json!({"items": {"lock_on_suspend": 2}})
+        );
+
+        let fedora = Rc::new(Desk::fedora());
+        let listed = ids(&backend(&fedora, "fedora", Desktop::Gnome, true));
+        assert!(!listed.contains(&"linux.lock_on_suspend".to_owned()));
+        let mut b = backend(&fedora, "fedora", Desktop::Gnome, true);
+        assert_eq!(
+            one(&mut b, "linux.screen_off_delay"),
+            json!({"items": {"delay": 0}})
+        );
+        assert_eq!(
+            one(&mut b, "linux.usage_stats"),
+            json!({"items": {"send": 0}})
+        );
+
+        let mint = Rc::new(Desk::mint());
+        let mut b = backend(&mint, "linuxmint", Desktop::Cinnamon, true);
+        assert_eq!(
+            one(&mut b, "linux.screen_off_delay"),
+            json!({"items": {"delay": delay_code(900, true)}})
+        );
+        assert_eq!(
+            one(&mut b, "linux.lock_delay"),
+            json!({"items": {"delay": 0}})
+        );
+        assert_eq!(
+            one(&mut b, "linux.lock_on_suspend"),
+            json!({"items": {"lock_on_suspend": 2}})
+        );
+        assert!(!ids(&b).contains(&"linux.usage_stats".to_owned()));
+    }
+
+    #[test]
+    fn the_mint_screen_goes_dark_after_fifteen_minutes_and_that_is_fixed_by_a_reset_undo() {
+        let desk = Rc::new(Desk::mint());
+        let (fixed, undo_calls) = apply_and_undo(
+            &desk,
+            "linux.screen_off_delay",
+            "linuxmint",
+            Desktop::Cinnamon,
+        );
+        assert!(fixed.contains("uint32 300"), "{fixed}");
+        assert!(
+            undo_calls.contains(&format!("reset {CINNAMON_SESSION} idle-delay")),
+            "{undo_calls}"
+        );
+        assert!(!undo_calls.contains(" set "), "{undo_calls}");
+    }
+
+    #[test]
+    fn a_screen_wait_the_person_chose_comes_back_as_exactly_that_wait() {
+        for (seconds, desk, distro, desktop, schema) in [
+            (
+                "1800",
+                Desk::mint(),
+                "linuxmint",
+                Desktop::Cinnamon,
+                CINNAMON_SESSION,
+            ),
+            ("1800", Desk::stock(), "ubuntu", Desktop::Gnome, SESSION),
+            ("0", Desk::stock(), "ubuntu", Desktop::Gnome, SESSION),
+            ("601", Desk::fedora(), "fedora", Desktop::Gnome, SESSION),
+        ] {
+            let desk = Rc::new(desk);
+            desk.put(schema, "idle-delay", &format!("uint32 {seconds}"));
+            let (_, undo_calls) = apply_and_undo(&desk, "linux.screen_off_delay", distro, desktop);
+            assert!(
+                undo_calls.contains(&format!("set {schema} idle-delay {seconds}")),
+                "{undo_calls}"
+            );
+            assert!(!undo_calls.contains("reset"), "{undo_calls}");
+            assert_eq!(
+                desk.current(schema, "idle-delay").unwrap(),
+                format!("uint32 {seconds}")
+            );
+        }
+    }
+
+    #[test]
+    fn a_fix_sets_five_minutes_for_the_screen_and_nothing_for_the_lock_wait() {
+        let desk = Rc::new(Desk::stock());
+        desk.put(SESSION, "idle-delay", "uint32 0");
+        desk.put(GNOME_SAVER, "lock-delay", "uint32 3600");
+        let state = tempfile::tempdir().unwrap();
+        let mut e = engine(&desk, state.path());
+        e.apply_selected(
+            &["linux.screen_off_delay".into(), "linux.lock_delay".into()],
+            |_| {},
+        )
+        .unwrap();
+        assert_eq!(desk.current(SESSION, "idle-delay").unwrap(), "uint32 300");
+        assert_eq!(desk.current(GNOME_SAVER, "lock-delay").unwrap(), "uint32 0");
+        e.revert(|_| {}).unwrap();
+        assert_eq!(desk.current(SESSION, "idle-delay").unwrap(), "uint32 0");
+        assert_eq!(
+            desk.current(GNOME_SAVER, "lock-delay").unwrap(),
+            "uint32 3600"
+        );
+    }
+
+    #[test]
+    fn a_long_lock_wait_is_fixed_on_gnome_and_cinnamon_and_a_default_wait_is_reset_on_undo() {
+        for (desk, distro, desktop, schema) in [
+            (Desk::stock(), "ubuntu", Desktop::Gnome, GNOME_SAVER),
+            (Desk::fedora(), "fedora", Desktop::Gnome, GNOME_SAVER),
+            (Desk::mint(), "linuxmint", Desktop::Cinnamon, CINNAMON_SAVER),
+        ] {
+            let desk = Rc::new(desk);
+            desk.put(schema, "lock-delay", "uint32 31");
+            let (_, undo_calls) = apply_and_undo(&desk, "linux.lock_delay", distro, desktop);
+            assert!(
+                undo_calls.contains(&format!("set {schema} lock-delay 31")),
+                "{undo_calls}"
+            );
+        }
+        let mut stock = Desk::stock();
+        stock
+            .defaults
+            .insert(key(GNOME_SAVER, "lock-delay"), "uint32 120".into());
+        let desk = Rc::new(stock);
+        let (_, undo_calls) = apply_and_undo(&desk, "linux.lock_delay", "ubuntu", Desktop::Gnome);
+        assert!(
+            undo_calls.contains(&format!("reset {GNOME_SAVER} lock-delay")),
+            "{undo_calls}"
+        );
+        assert!(!undo_calls.contains(" set "), "{undo_calls}");
+    }
+
+    #[test]
+    fn a_screen_that_does_not_lock_on_sleep_is_fixed_and_the_choice_comes_back_on_undo() {
+        for (desk, distro, desktop, schema, k) in [
+            (
+                Desk::stock(),
+                "ubuntu",
+                Desktop::Gnome,
+                GNOME_SAVER,
+                "ubuntu-lock-on-suspend",
+            ),
+            (
+                Desk::mint(),
+                "linuxmint",
+                Desktop::Cinnamon,
+                CINNAMON_POWER,
+                "lock-on-suspend",
+            ),
+        ] {
+            let desk = Rc::new(desk);
+            desk.put(schema, k, "false");
+            let (fixed, undo_calls) =
+                apply_and_undo(&desk, "linux.lock_on_suspend", distro, desktop);
+            assert!(fixed.contains("true"), "{fixed}");
+            assert!(
+                undo_calls.contains(&format!("set {schema} {k} false")),
+                "{undo_calls}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_person_who_set_sleep_locking_on_keeps_that_exact_choice_after_a_fix_that_changes_nothing()
+    {
+        let desk = Rc::new(Desk::stock());
+        desk.put(GNOME_SAVER, "ubuntu-lock-on-suspend", "true");
+        let state = tempfile::tempdir().unwrap();
+        let mut e = engine(&desk, state.path());
+        assert_eq!(status(&mut e, "linux.lock_on_suspend"), "compliant");
+        let mut b = backend(&desk, "ubuntu", Desktop::Gnome, true);
+        assert_eq!(
+            one(&mut b, "linux.lock_on_suspend"),
+            json!({"items": {"lock_on_suspend": 1}})
+        );
+    }
+
+    #[test]
+    fn usage_statistics_that_are_sent_are_switched_off_and_undone_exactly() {
+        for (desk, distro) in [(Desk::stock(), "ubuntu"), (Desk::fedora(), "fedora")] {
+            let desk = Rc::new(desk);
+            desk.put(
+                "org.gnome.desktop.privacy",
+                "send-software-usage-stats",
+                "true",
+            );
+            let (fixed, undo_calls) =
+                apply_and_undo(&desk, "linux.usage_stats", distro, Desktop::Gnome);
+            assert!(fixed.contains("false"), "{fixed}");
+            assert!(
+                undo_calls.contains("set org.gnome.desktop.privacy send-software-usage-stats true"),
+                "{undo_calls}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_wait_that_cannot_be_read_exactly_is_never_changed() {
+        for text in ["uint32 soon", "uint32 -5", "uint32 4000000000", ""] {
+            let desk = Rc::new(Desk::mint());
+            desk.put(CINNAMON_SESSION, "idle-delay", text);
+            let mut b = backend(&desk, "linuxmint", Desktop::Cinnamon, true);
+            let o = b.observe("linux.screen_off_delay").unwrap();
+            assert!(!o.eligible, "{text}");
+            assert_eq!(o.reason, UNAVAILABLE);
+            let target = catalog::spec("linux.screen_off_delay")
+                .unwrap()
+                .catalog_target();
+            assert!(b.write("linux.screen_off_delay", &target).is_err());
+            assert!(!calls(&desk).contains(" set "), "{}", calls(&desk));
+        }
+        let mut mint = Desk::mint();
+        mint.dconf = false;
+        let desk = Rc::new(mint);
+        let mut b = backend(&desk, "linuxmint", Desktop::Cinnamon, true);
+        let o = b.observe("linux.screen_off_delay").unwrap();
+        assert!(!o.eligible);
+        let target = catalog::spec("linux.screen_off_delay")
+            .unwrap()
+            .catalog_target();
+        assert!(b.write("linux.screen_off_delay", &target).is_err());
+        assert!(desk.set.borrow().is_empty());
+        let mut b = backend(&desk, "linuxmint", Desktop::Cinnamon, true);
+        assert!(b
+            .write(
+                "linux.screen_off_delay",
+                &json!({"items": {"delay": 3_000_000}})
+            )
+            .is_err());
+        assert!(b
+            .write(
+                "linux.lock_delay",
+                &json!({"items": {"delay": 0, "extra": 0}})
+            )
+            .is_err());
+    }
+
+    #[test]
+    fn a_plain_gnome_desktop_is_not_offered_the_ubuntu_only_sleep_lock() {
+        let desk = Rc::new(Desk::stock());
+        let listed = ids(&backend(&desk, "debian", Desktop::Gnome, true));
+        assert!(!listed.contains(&"linux.lock_on_suspend".to_owned()));
+        for id in [
+            "linux.screen_off_delay",
+            "linux.lock_delay",
+            "linux.usage_stats",
+        ] {
+            assert!(listed.contains(&id.to_owned()), "{id}");
+        }
+    }
+
+    #[test]
+    fn a_missing_desktop_schema_makes_the_session_checks_unavailable() {
+        let mut stock = Desk::mint();
+        stock
+            .defaults
+            .retain(|(schema, _), _| schema != CINNAMON_POWER && schema != CINNAMON_SAVER);
+        let desk = Rc::new(stock);
+        let mut b = backend(&desk, "linuxmint", Desktop::Cinnamon, true);
+        for id in ["linux.lock_delay", "linux.lock_on_suspend"] {
+            let o = b.observe(id).unwrap();
+            assert!(!o.eligible, "{id}");
+            assert_eq!(o.reason, UNAVAILABLE);
+        }
+        let mut stock = Desk::stock();
+        stock
+            .defaults
+            .retain(|(_, k), _| k != "ubuntu-lock-on-suspend");
+        let desk = Rc::new(stock);
+        let mut b = backend(&desk, "ubuntu", Desktop::Gnome, true);
+        assert!(!b.observe("linux.lock_on_suspend").unwrap().eligible);
+    }
+
+    #[test]
+    fn a_stock_mint_desktop_reads_every_existing_check_from_its_own_schemas() {
+        let desk = Rc::new(Desk::mint());
+        let mut b = backend(&desk, "linuxmint", Desktop::Cinnamon, true);
+        assert_eq!(
+            items(&mut b, "linux.screen_lock"),
+            json!({"lock_enabled": 2, "idle_never": 0})
+        );
+        assert_eq!(
+            items(&mut b, "linux.recent_files"),
+            json!({"keep_forever": 0})
+        );
+        assert_eq!(
+            items(&mut b, "linux.lock_previews"),
+            json!({"show_on_lock": 0})
+        );
+        assert_eq!(items(&mut b, "linux.media_autorun"), json!({"never": 2}));
+        assert_eq!(
+            items(&mut b, "linux.old_files"),
+            json!({"trash": 2, "temp": 2})
+        );
+        let state = tempfile::tempdir().unwrap();
+        let mut e = engine_on(&desk, "linuxmint", Desktop::Cinnamon, state.path());
+        for (id, want) in [
+            ("linux.screen_lock", "compliant"),
+            ("linux.recent_files", "compliant"),
+            ("linux.lock_previews", "compliant"),
+            ("linux.media_autorun", "attention"),
+            ("linux.old_files", "attention"),
+            ("linux.screen_off_delay", "attention"),
+            ("linux.lock_delay", "compliant"),
+            ("linux.lock_on_suspend", "compliant"),
+        ] {
+            assert_eq!(status(&mut e, id), want, "{id}");
+        }
+        assert!(desk.set.borrow().is_empty());
     }
 }

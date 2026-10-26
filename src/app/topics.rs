@@ -84,7 +84,10 @@ impl Topic {
                 | "linux.screen_lock"
                 | "linux.media_autorun"
                 | "linux.home_private"
-                | "linux.root_account",
+                | "linux.root_account"
+                | "linux.screen_off_delay"
+                | "linux.lock_delay"
+                | "linux.lock_on_suspend",
             ) => Topic::SignIn,
             ("linux", "linux.browser_data_collection" | "linux.browser_https_only") => {
                 Topic::Browsers
@@ -105,7 +108,8 @@ impl Topic {
                 | "linux.problem_reports"
                 | "linux.app_usage"
                 | "linux.old_files"
-                | "linux.crash_files",
+                | "linux.crash_files"
+                | "linux.usage_stats",
             ) => Topic::Privacy,
             ("linux", "linux.printer_sharing" | "linux.printer_discovery") => Topic::Network,
             ("linux", "linux.ubuntu_news" | "linux.usage_survey") => Topic::Privacy,
@@ -378,6 +382,10 @@ mod tests {
             ("linux.app_usage", Privacy),
             ("linux.old_files", Privacy),
             ("linux.home_private", SignIn),
+            ("linux.screen_off_delay", SignIn),
+            ("linux.lock_delay", SignIn),
+            ("linux.lock_on_suspend", SignIn),
+            ("linux.usage_stats", Privacy),
             ("linux.browser_data_collection", Browsers),
             ("linux.browser_https_only", Browsers),
             ("linux.memory_shuffle", Windows),

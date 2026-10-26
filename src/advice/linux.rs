@@ -60,6 +60,10 @@ pub(super) fn label(id: &str) -> Option<&'static str> {
         "linux.app_usage" => "Most-used apps list",
         "linux.old_files" => "Automatic Trash cleanup",
         "linux.home_private" => "Privacy of your home folder",
+        "linux.screen_off_delay" => "Time before the screen goes dark",
+        "linux.lock_delay" => "Wait before the screen locks",
+        "linux.lock_on_suspend" => "Lock when the computer sleeps",
+        "linux.usage_stats" => "Software usage statistics",
         "linux.browser_data_collection" => "Browser usage data",
         "linux.browser_https_only" => "Secure connections only",
         "linux.memory_shuffle" => "Memory layout",
@@ -176,6 +180,10 @@ pub(super) fn impact(id: &str) -> Option<&'static str> {
             "Deleted files and leftovers staying on your computer for anyone to find"
         }
         "linux.home_private" => "Other people with an account on this computer reading your files",
+        "linux.screen_off_delay" => "Your screen staying readable for a long time after you walk away",
+        "linux.lock_delay" => "Anyone using your computer in the moments after the screen goes dark",
+        "linux.lock_on_suspend" => "Anyone who wakes your computer finding it already unlocked",
+        "linux.usage_stats" => "Details about how you use your software being sent to its makers",
         "linux.browser_data_collection" => {
             "Details about the sites you visit and how you browse being sent to the companies behind your browsers"
         }
@@ -278,6 +286,10 @@ pub(super) fn repair(id: &str) -> Option<&'static str> {
         "linux.home_private" => {
             "Other accounts on this computer will no longer be able to open your home folder."
         }
+        "linux.screen_off_delay" => "The screen will go dark after five minutes without use.",
+        "linux.lock_delay" => "The screen will lock the moment it goes dark.",
+        "linux.lock_on_suspend" => "The screen will lock whenever the computer goes to sleep.",
+        "linux.usage_stats" => "Sending software usage statistics will be switched off.",
         "linux.browser_data_collection" => {
             "Your browsers will stop sending usage data to the companies that make them."
         }

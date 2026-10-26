@@ -282,6 +282,26 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             "Files you deleted long ago, and leftovers from programs, stay on your computer where anyone using your account can find them.",
             "Files in the Trash for over 30 days, and old temporary files, are deleted for good. Turning this off again cannot bring them back.",
         ),
+        "linux.screen_off_delay" => e(
+            "Your screen goes dark and then locks when you stop using the computer for a while. This checks that it does not wait too long or never.",
+            "Someone who walks past while you are away can read your screen and use your accounts, because it stays on for a long time or forever.",
+            "The screen goes dark after five minutes without use, and you sign in again with your password. You can undo this.",
+        ),
+        "linux.lock_delay" => e(
+            "After the screen goes dark, your computer can wait a while before it locks. This checks that it does not wait long.",
+            "During that wait, anyone who touches the mouse can use your computer without a password.",
+            "The screen locks the moment it goes dark, and you sign in again with your password. You can undo this.",
+        ),
+        "linux.lock_on_suspend" => e(
+            "When you close the lid or send the computer to sleep, it can lock the screen so a password is needed on waking. This checks that this is on.",
+            "Whoever wakes the computer can use it without a password and see everything you left open.",
+            "Waking the computer shows the sign-in screen first. Your open work is kept, and you can undo this.",
+        ),
+        "linux.usage_stats" => e(
+            "Your desktop can send the makers of your software statistics about which programs you use and how often. This checks whether that is on.",
+            "The statistics describe how you use your computer, and can say more about you than you would expect.",
+            "No more statistics are sent. Everything works as before, and you can undo this.",
+        ),
         "linux.home_private" => e(
             "Your home folder holds your documents and settings. This checks whether other accounts on this computer are able to open it.",
             "Anyone else with an account here could read your files without needing your password.",
