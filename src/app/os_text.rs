@@ -10,7 +10,7 @@ pub const HELP_BRING_BACK: &str = "Open Clean up apps, then the Removed apps tab
 pub const HELP_VERSIONS: &str = "Your Secblitz and Windows versions and a few settings";
 
 /// (Windows sentence, Linux sentence, macOS sentence)
-pub const ROWS: [(&str, &str, &str); 6] = [
+pub const ROWS: [(&str, &str, &str); 7] = [
     (
         WORTH_A_LOOK_NOTE,
         "You do these in your computer's own settings. We show what to do.",
@@ -33,8 +33,13 @@ pub const ROWS: [(&str, &str, &str); 6] = [
     ),
     (
         HELP_BRING_BACK,
-        "Install it again from your software app, the way you did the first time. Secblitz does not keep copies of removed apps.",
+        "Open Clean up apps, then the Removed apps tab, and choose Install again next to the app. This needs an internet connection.",
         "Install it again from the App Store or the app's own website, the way you did the first time. Secblitz does not keep copies of removed apps.",
+    ),
+    (
+        crate::app::flow::REASON_BLOCKED,
+        "Your computer didn't allow this change. Restart your computer, then check again and try once more.",
+        "Your computer didn't allow this change. Restart your computer, then check again and try once more.",
     ),
     (
         HELP_VERSIONS,
@@ -58,6 +63,14 @@ pub fn text(os: Os, windows: &'static str) -> &'static str {
 /// The sentence for the system this build runs on.
 pub fn here(windows: &'static str) -> &'static str {
     text(Os::CURRENT, windows)
+}
+
+/// Like [`here`] for a sentence that was stored, such as a reason kept in a result.
+pub fn here_stored(windows: &str) -> &str {
+    match ROWS.iter().find(|row| row.0 == windows) {
+        Some(row) => text(Os::CURRENT, row.0),
+        None => windows,
+    }
 }
 
 #[cfg(test)]

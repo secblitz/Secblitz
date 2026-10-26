@@ -1445,7 +1445,7 @@ fn result_view<'a>(
                 .iter()
                 .map(|(id, reason)| {
                     let key = format!("fail:{id}");
-                    let reason = ctx.t(reason);
+                    let reason = ctx.t(crate::app::os_text::here_stored(reason));
                     let (first, rest) = point::first_sentence(&reason);
                     point::point(
                         p,
