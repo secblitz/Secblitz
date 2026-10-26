@@ -2,6 +2,8 @@
 use super::helper::{BUSY, INTERFACE, NAME, PATH};
 use crate::app::remote::{self, RemoteSession, Transport};
 use crate::launcher::NOT_INSTALLED;
+use secblitz::filter::config::Config;
+use secblitz::linux::web::{PauseFor, WebState};
 use zbus::{fdo, Connection};
 
 /// The helper runs one job at a time and turns away a second one, so this window sends one request at a time.
@@ -142,4 +144,34 @@ pub fn start_fresh() -> anyhow::Result<()> {
 /// Asks the helper to remove Secblitz's package. Returns once the removal has started.
 pub fn remove_self() -> anyhow::Result<()> {
     remote::remove_self(&mut DbusTransport::system())
+}
+
+/// Everything the web protection page shows. Needs no password.
+pub fn web_state() -> anyhow::Result<WebState> {
+    remote::web_state(&mut DbusTransport::system())
+}
+
+/// Saves the web protection switches. Turning them all off also stops the filter.
+pub fn web_apply(config: Config) -> anyhow::Result<()> {
+    remote::web_apply(&mut DbusTransport::system(), config)
+}
+
+pub fn web_pause(length: PauseFor) -> anyhow::Result<()> {
+    remote::web_pause(&mut DbusTransport::system(), length)
+}
+
+pub fn web_resume() -> anyhow::Result<()> {
+    remote::web_resume(&mut DbusTransport::system())
+}
+
+pub fn web_allow(site: &str) -> anyhow::Result<()> {
+    remote::web_allow(&mut DbusTransport::system(), site)
+}
+
+pub fn web_allow_once(site: &str) -> anyhow::Result<()> {
+    remote::web_allow_once(&mut DbusTransport::system(), site)
+}
+
+pub fn web_remove_allowed(site: &str) -> anyhow::Result<()> {
+    remote::web_remove_allowed(&mut DbusTransport::system(), site)
 }

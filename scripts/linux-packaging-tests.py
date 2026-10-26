@@ -106,6 +106,72 @@ class StaticFiles(unittest.TestCase):
         self.assertEqual(timer["Timer"]["OnCalendar"], "daily")
         self.assertEqual(timer["Install"]["WantedBy"], "timers.target")
 
+    def test_filter_unit(self):
+        text = (PKG / "systemd" / "secblitz-filter.service").read_text(encoding="utf-8")
+        unit = ini(PKG / "systemd" / "secblitz-filter.service")
+        service = unit["Service"]
+        self.assertEqual(service["Type"], "notify")
+        self.assertEqual(service["ExecStart"], "/usr/bin/secblitz filter run")
+        # Root steps outside the sandbox; their failure must not stop the filter or leave it half stopped.
+        self.assertEqual(service["ExecStartPost"], "-+/usr/bin/secblitz filter add-rule")
+        self.assertEqual(service["ExecStopPost"], "-+/usr/bin/secblitz filter remove-rule")
+        self.assertEqual(service["Restart"], "on-failure")
+        self.assertEqual(service["User"], "secblitz-filter")
+        self.assertEqual(service["StateDirectory"], "secblitz-filter")
+        self.assertEqual(service["StateDirectoryMode"], "0700")
+        self.assertEqual(service["AmbientCapabilities"], "CAP_NET_BIND_SERVICE")
+        self.assertEqual(service["CapabilityBoundingSet"], "CAP_NET_BIND_SERVICE")
+        for key, value in {"NoNewPrivileges": "yes", "ProtectSystem": "strict", "ProtectHome": "yes",
+                           "PrivateTmp": "yes", "PrivateDevices": "yes", "ProtectKernelTunables": "yes",
+                           "ProtectKernelModules": "yes", "ProtectControlGroups": "yes",
+                           "RestrictAddressFamilies": "AF_INET AF_INET6 AF_UNIX", "RestrictSUIDSGID": "yes",
+                           "LockPersonality": "yes", "SystemCallFilter": "@system-service"}.items():
+            self.assertEqual(service[key], value, key)
+        # The filter writes only its own folder; it never sees the engine's state or the helper's rights.
+        self.assertNotIn("ReadWritePaths", service)
+        self.assertNotIn("/var/lib/secblitz\n", text)
+        self.assertEqual(unit["Install"]["WantedBy"], "multi-user.target")
+        self.assertNotIn(EM_DASH, text)
+
+    def test_filter_listens_where_the_lookup_service_does_not(self):
+        web = (ROOT / "src" / "linux" / "web.rs").read_text(encoding="utf-8")
+        self.assertIn("Ipv4Addr::new(127, 0, 0, 153)", web)
+        self.assertNotIn("127.0.0.53", re.sub(r"(?m)^\s*//.*$", "", web.split("#[cfg(test)]")[0]).replace(
+            '"nameserver", "127.0.0.53"', ""))
+
+    def test_filter_account(self):
+        text = (PKG / "sysusers" / "secblitz.conf").read_text(encoding="utf-8")
+        self.assertEqual(text.split(), ["u", "secblitz-filter", "-", '"Secblitz', "web", 'protection"', "/var/empty"])
+
+    def test_the_lookup_setting_is_removed_by_every_removal_script_and_state_by_purge_only(self):
+        web = (ROOT / "src" / "linux" / "web.rs").read_text(encoding="utf-8")
+        dropin = re.search(r'pub const DROPIN: &str = "([^"]+)";', web).group(1)
+        self.assertEqual(dropin, "/run/systemd/resolved.conf.d/95-secblitz-web-protection.conf")
+        prerm = (PKG / "debian" / "prerm").read_text()
+        remove_case = prerm.split("remove|deconfigure)")[1]
+        self.assertIn("rm -f " + dropin, remove_case)
+        self.assertIn("disable --now secblitz-filter.service", remove_case)
+        self.assertLess(remove_case.index("rm -f " + dropin), remove_case.index("disable --now secblitz-filter.service"))
+        postrm = (PKG / "debian" / "postrm").read_text()
+        self.assertEqual(re.findall(r"rm -rf (\S+)", postrm), ["/var/lib/secblitz-filter"])
+        self.assertIn('if [ "$1" = "purge" ]', postrm.split("rm -rf")[0].rstrip().splitlines()[-1])
+        spec = (PKG / "rpm" / "secblitz.spec.in").read_text()
+        preun = spec.split("%preun")[1].split("%postun")[0]
+        self.assertIn("rm -f " + dropin, preun)
+        self.assertLess(preun.index("rm -f " + dropin), preun.index("disable --now secblitz-filter.service"))
+        postun = spec.split("%postun")[1].split("%changelog")[0]
+        self.assertEqual(re.findall(r"rm -rf (\S+)", spec), ["/var/lib/secblitz-filter"])
+        self.assertIn('[ "$1" -eq 0 ]', postun.split("rm -rf")[0].rstrip().splitlines()[-1])
+        for text in (prerm, postrm, spec):
+            self.assertNotIn("/run/systemd/resolved.conf.d/*", text)
+
+    def test_the_account_exists_before_the_unit_can_start(self):
+        postinst = (PKG / "debian" / "postinst").read_text()
+        self.assertIn("systemd-sysusers /usr/lib/sysusers.d/secblitz.conf", postinst)
+        self.assertLess(postinst.index("systemd-sysusers"), postinst.index("try-restart secblitz-filter.service"))
+        spec = (PKG / "rpm" / "secblitz.spec.in").read_text()
+        self.assertIn("systemd-sysusers /usr/lib/sysusers.d/secblitz.conf", spec)
+
     def test_rpm_recommends_dconf_for_the_person_settings(self):
         spec = (PKG / "rpm" / "secblitz.spec.in").read_text(encoding="utf-8")
         self.assertRegex(spec, r"(?m)^Recommends:\s+dconf$")
@@ -190,7 +256,7 @@ class StaticFiles(unittest.TestCase):
         for name in ("postinst", "prerm", "postrm"):
             text = (PKG / "debian" / name).read_text()
             self.assertTrue(text.startswith("#!/bin/sh\n"))
-            self.assertNotRegex(text, r"rm\s+-[a-z]*r[a-z]*\s+\S*/var/lib/secblitz")
+            self.assertNotRegex(text, r"rm\s+-[a-z]*r[a-z]*\s+\S*/var/lib/secblitz(?![-\w])")
             self.assertNotIn("restart", text.replace("try-restart", ""))
         self.assertNotIn("/var/lib/secblitz", (PKG / "rpm" / "secblitz.spec.in").read_text().split("%files")[1].split("%post")[0].replace("@FILES@", ""))
 
@@ -267,6 +333,8 @@ class DebStructure(unittest.TestCase):
         expect = {
             "/usr/bin/secblitz": "-rwxr-xr-x",
             "/usr/lib/systemd/system/secblitz-helper.service": "-rw-r--r--",
+            "/usr/lib/systemd/system/secblitz-filter.service": "-rw-r--r--",
+            "/usr/lib/sysusers.d/secblitz.conf": "-rw-r--r--",
             "/usr/lib/systemd/system/secblitz-monitor.service": "-rw-r--r--",
             "/usr/lib/systemd/system/secblitz-monitor.timer": "-rw-r--r--",
             "/usr/share/dbus-1/system-services/org.secblitz.Helper1.service": "-rw-r--r--",
@@ -286,6 +354,8 @@ class DebStructure(unittest.TestCase):
             self.assertEqual(owner, "root/root", path)
             self.assertFalse(mode.endswith("w-") or mode[8] == "w", "world writable: " + path)
         self.assertNotIn("/var/lib/secblitz", files)
+        self.assertNotIn("/var/lib/secblitz-filter", files)
+        self.assertNotIn("/run/systemd/resolved.conf.d/95-secblitz-web-protection.conf", files)
 
     def test_control(self):
         control = subprocess.run(["dpkg-deb", "-f", str(self.deb)], check=True, capture_output=True, text=True).stdout
@@ -343,9 +413,12 @@ test "$(rpm -q --qf '%{VERSION}' secblitz)" = 9.9.9
 check() { m=$(stat -c '%a %U:%G' "$1"); [ "$m" = "$2" ] || { echo "bad mode $1 $m"; exit 1; }; }
 check /usr/bin/secblitz "755 root:root"
 check /usr/lib/systemd/system/secblitz-helper.service "644 root:root"
+check /usr/lib/systemd/system/secblitz-filter.service "644 root:root"
+check /usr/lib/sysusers.d/secblitz.conf "644 root:root"
 check /usr/share/polkit-1/actions/org.secblitz.policy "644 root:root"
 check /etc/yum.repos.d/secblitz.repo "644 root:root"
-for u in secblitz-helper.service secblitz-monitor.service; do
+id secblitz-filter >/dev/null
+for u in secblitz-helper.service secblitz-filter.service secblitz-monitor.service; do
   systemd-analyze verify --man=no /usr/lib/systemd/system/$u
 done
 if command -v pkaction >/dev/null; then
@@ -358,11 +431,18 @@ if command -v pkaction >/dev/null; then
 fi
 rpm -ql secblitz > /tmp/files
 mkdir -p /var/lib/secblitz && echo state > /var/lib/secblitz/journal
+mkdir -p /run/systemd/resolved.conf.d /var/lib/secblitz-filter/Data
+echo "[Resolve]" > /run/systemd/resolved.conf.d/95-secblitz-web-protection.conf
+echo other > /run/systemd/resolved.conf.d/10-other.conf
+echo '{}' > /var/lib/secblitz-filter/config.json
 dnf -y -q remove secblitz >/dev/null 2>&1
 while read -r f; do
   if [ -f "$f" ] || [ -L "$f" ]; then echo "left behind: $f"; exit 1; fi
 done < /tmp/files
 test -f /var/lib/secblitz/journal
+test ! -e /run/systemd/resolved.conf.d/95-secblitz-web-protection.conf
+test -f /run/systemd/resolved.conf.d/10-other.conf
+test ! -e /var/lib/secblitz-filter
 echo OK
 """
 
@@ -376,10 +456,13 @@ test "$(dpkg-query -W -f='${Version}' secblitz)" = 9.9.9
 check() { m=$(stat -c '%a %U:%G' "$1"); [ "$m" = "$2" ] || { echo "bad mode $1 $m"; exit 1; }; }
 check /usr/bin/secblitz "755 root:root"
 check /usr/lib/systemd/system/secblitz-helper.service "644 root:root"
+check /usr/lib/systemd/system/secblitz-filter.service "644 root:root"
+check /usr/lib/sysusers.d/secblitz.conf "644 root:root"
 check /usr/share/polkit-1/actions/org.secblitz.policy "644 root:root"
 check /usr/share/keyrings/secblitz.gpg "644 root:root"
 check /etc/apt/sources.list.d/secblitz.sources "644 root:root"
-for u in secblitz-helper.service secblitz-monitor.service; do
+id secblitz-filter >/dev/null
+for u in secblitz-helper.service secblitz-filter.service secblitz-monitor.service; do
   systemd-analyze verify --man=no /usr/lib/systemd/system/$u
 done
 if command -v pkaction >/dev/null; then
@@ -392,14 +475,22 @@ if command -v pkaction >/dev/null; then
 fi
 dpkg -L secblitz | grep -v '/$' > /tmp/files
 mkdir -p /var/lib/secblitz && echo state > /var/lib/secblitz/journal
+mkdir -p /run/systemd/resolved.conf.d /var/lib/secblitz-filter/Data
+echo "[Resolve]" > /run/systemd/resolved.conf.d/95-secblitz-web-protection.conf
+echo other > /run/systemd/resolved.conf.d/10-other.conf
+echo '{}' > /var/lib/secblitz-filter/config.json
 apt-get remove -y -qq secblitz >/dev/null
 test ! -e /usr/share/keyrings/secblitz.gpg
 test ! -e /etc/apt/sources.list.d/secblitz.sources
+test ! -e /run/systemd/resolved.conf.d/95-secblitz-web-protection.conf
+test -f /run/systemd/resolved.conf.d/10-other.conf
+test -f /var/lib/secblitz-filter/config.json
 apt-get purge -y -qq secblitz >/dev/null
 while read -r f; do
   if [ -f "$f" ] || [ -L "$f" ]; then echo "left behind: $f"; exit 1; fi
 done < /tmp/files
 test -f /var/lib/secblitz/journal
+test ! -e /var/lib/secblitz-filter
 echo OK
 """
 

@@ -159,8 +159,10 @@ def stage(root, version, binary, key_armored, epoch, fmt):
     tree = Tree(root, epoch)
     date = datetime.datetime.fromtimestamp(epoch, datetime.timezone.utc).strftime("%Y-%m-%d")
     tree.add("usr/bin/secblitz", Path(binary), 0o755)
-    for unit in ("secblitz-helper.service", "secblitz-monitor.service", "secblitz-monitor.timer"):
+    for unit in ("secblitz-helper.service", "secblitz-filter.service", "secblitz-monitor.service",
+                 "secblitz-monitor.timer"):
         tree.add("usr/lib/systemd/system/" + unit, PKG / "systemd" / unit)
+    tree.add("usr/lib/sysusers.d/secblitz.conf", PKG / "sysusers" / "secblitz.conf")
     tree.add("usr/share/dbus-1/system-services/org.secblitz.Helper1.service", PKG / "dbus" / "org.secblitz.Helper1.service")
     tree.add("usr/share/dbus-1/system.d/org.secblitz.Helper1.conf", PKG / "dbus" / "org.secblitz.Helper1.conf")
     tree.add("usr/share/polkit-1/actions/org.secblitz.policy", PKG / "polkit" / "org.secblitz.policy")

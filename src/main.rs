@@ -109,6 +109,12 @@ fn command(lang: Lang) -> Command {
                         .arg(Arg::new("site").required(true).value_parser(clean_site)),
                 ),
         );
+    #[cfg(target_os = "linux")]
+    let cmd = cmd.mut_subcommand("filter", |filter| {
+        filter
+            .subcommand(Command::new("add-rule").hide(true))
+            .subcommand(Command::new("remove-rule").hide(true))
+    });
     fn localize(cmd: Command, lang: Lang, parent: &str) -> Command {
         let path = if parent.is_empty() {
             cmd.get_name().to_owned()
@@ -239,6 +245,10 @@ fn execute(matches: &ArgMatches, lang: Lang) -> Result<i32> {
         return execute_uninstall(command, matches.get_flag("json"), lang);
     }
     if let Some(filter) = matches.subcommand_matches("filter") {
+        #[cfg(target_os = "linux")]
+        if let Some(action) = filter_command(matches) {
+            return run_filter_linux(action);
+        }
         return match filter.subcommand_name() {
             Some("run") => {
                 secblitz::filter::service::run()?;
@@ -327,6 +337,10 @@ enum FilterCommand {
     Install,
     Uninstall,
     AllowOnce(String),
+    #[cfg(target_os = "linux")]
+    AddRule,
+    #[cfg(target_os = "linux")]
+    RemoveRule,
 }
 
 fn filter_command(matches: &ArgMatches) -> Option<FilterCommand> {
@@ -338,9 +352,35 @@ fn filter_command(matches: &ArgMatches) -> Option<FilterCommand> {
         ("allow-once", sub) => Some(FilterCommand::AllowOnce(
             sub.get_one::<String>("site")?.clone(),
         )),
+        #[cfg(target_os = "linux")]
+        ("add-rule", _) => Some(FilterCommand::AddRule),
+        #[cfg(target_os = "linux")]
+        ("remove-rule", _) => Some(FilterCommand::RemoveRule),
         ("run", _) => None,
         _ => unreachable!(),
     }
+}
+
+/// The unit's own steps and the package's. Only root runs them; anyone else gets exit code 2 and nothing happens.
+#[cfg(target_os = "linux")]
+fn run_filter_linux(action: FilterCommand) -> Result<i32> {
+    use secblitz::linux::cmd::RealSys;
+    use secblitz::linux::web;
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    if unsafe { libc::geteuid() } != 0 {
+        return Ok(2);
+    }
+    let sys = RealSys;
+    let now = secblitz::filter::server::unix_now();
+    match action {
+        FilterCommand::Reconcile => web::reconcile(&sys, web::service_state(&sys), now)?,
+        FilterCommand::Install => {}
+        FilterCommand::Uninstall => web::remove_everything(&sys)?,
+        FilterCommand::AllowOnce(site) => web::allow_site_once(&sys, &site, now)?,
+        FilterCommand::AddRule => web::add_rule_when_ready(&sys, now)?,
+        FilterCommand::RemoveRule => web::remove_rule_from_unit(&sys)?,
+    }
+    Ok(0)
 }
 
 /// Runs only for an administrator or SYSTEM; anyone else gets exit code 2
@@ -851,6 +891,34 @@ mod tests {
             &["--json"],
         ] {
             assert!(!opens_window(&words(other)), "{other:?}");
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_filter_units_steps_are_hidden_take_no_arguments_and_only_root_runs_them() {
+        let root = command(Lang::En);
+        let filter = root.find_subcommand("filter").unwrap();
+        for (word, expected) in [
+            ("add-rule", FilterCommand::AddRule),
+            ("remove-rule", FilterCommand::RemoveRule),
+        ] {
+            assert!(
+                filter.find_subcommand(word).unwrap().is_hide_set(),
+                "{word}"
+            );
+            let matches = command(Lang::En)
+                .try_get_matches_from(["secblitz", "filter", word])
+                .unwrap();
+            assert_eq!(filter_command(&matches), Some(expected.clone()));
+            assert!(!json_allowed(&matches));
+            assert!(command(Lang::En)
+                .try_get_matches_from(["secblitz", "filter", word, "extra"])
+                .is_err());
+            // SAFETY: geteuid has no preconditions and cannot fail.
+            if unsafe { libc::geteuid() } != 0 {
+                assert_eq!(run_filter_linux(expected).unwrap(), 2);
+            }
         }
     }
 

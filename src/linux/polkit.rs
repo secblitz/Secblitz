@@ -36,7 +36,8 @@ pub fn action_for(request: &Request) -> Action {
         | Request::CheckUpdate
         | Request::SpaceMeasure { .. }
         | Request::Apps
-        | Request::RemovedApps => Action::Check,
+        | Request::RemovedApps
+        | Request::WebState => Action::Check,
         Request::Apply { .. }
         | Request::Undo
         | Request::UndoSelected { .. }
@@ -44,7 +45,13 @@ pub fn action_for(request: &Request) -> Action {
         | Request::StartFresh
         | Request::MonitorTimer { .. }
         | Request::InstallUpdate
-        | Request::ReinstallApp { .. } => Action::Change,
+        | Request::ReinstallApp { .. }
+        | Request::WebApply { .. }
+        | Request::WebPause { .. }
+        | Request::WebResume
+        | Request::WebAllow { .. }
+        | Request::WebAllowOnce { .. }
+        | Request::WebRemoveAllowed { .. } => Action::Change,
         Request::RemoveSelf | Request::SpaceClean { .. } | Request::RemoveApps { .. } => {
             Action::Remove
         }
@@ -235,6 +242,33 @@ mod tests {
         assert_eq!(Action::Remove.id(), "org.secblitz.remove");
         assert_eq!(Action::Check.id(), "org.secblitz.check");
         assert_eq!(Action::Change.id(), "org.secblitz.change");
+    }
+
+    #[test]
+    fn reading_web_protection_is_light_and_every_change_to_it_asks_for_the_password() {
+        use secblitz::filter::config::Config;
+        use secblitz::linux::web::PauseFor;
+        assert_eq!(action_for(&Request::WebState), Action::Check);
+        for request in [
+            Request::WebApply {
+                config: Config::default(),
+            },
+            Request::WebPause {
+                length: PauseFor::Hour,
+            },
+            Request::WebResume,
+            Request::WebAllow {
+                site: "example.com".into(),
+            },
+            Request::WebAllowOnce {
+                site: "example.com".into(),
+            },
+            Request::WebRemoveAllowed {
+                site: "example.com".into(),
+            },
+        ] {
+            assert_eq!(action_for(&request), Action::Change, "{request:?}");
+        }
     }
 
     #[test]

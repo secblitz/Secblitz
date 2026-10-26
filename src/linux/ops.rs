@@ -2,6 +2,7 @@
 use crate::app::remote::{AppStep, AppWire, Event, RemovedWire, Reply, Request};
 use secblitz::debloat::linux as apps;
 use secblitz::linux::cmd::Sys;
+use secblitz::linux::web;
 use secblitz::space::linux as space;
 use secblitz::space::{Fs, CLEAN_BUDGET, MEASURE_BUDGET};
 use std::time::Instant;
@@ -15,7 +16,48 @@ pub fn handles(request: &Request) -> bool {
             | Request::RemoveApps { .. }
             | Request::RemovedApps
             | Request::ReinstallApp { .. }
+            | Request::WebState
+            | Request::WebApply { .. }
+            | Request::WebPause { .. }
+            | Request::WebResume
+            | Request::WebAllow { .. }
+            | Request::WebAllowOnce { .. }
+            | Request::WebRemoveAllowed { .. }
     )
+}
+
+fn clock() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+/// The sentences web protection writes pass through; anything else goes to the log and the person gets a plain one.
+fn web_reply(result: anyhow::Result<()>) -> Reply {
+    match result {
+        Ok(()) => Reply::Ok,
+        Err(error) => {
+            let text = error.to_string();
+            if web::SENTENCES.contains(&text.as_str()) {
+                return Reply::Failed(text);
+            }
+            eprintln!("A web protection step failed: {error:#}");
+            Reply::Failed(secblitz::linux::controls::CHANGE_FAILED.to_owned())
+        }
+    }
+}
+
+fn web_request(sys: &dyn Sys, now: u64, request: Request) -> Reply {
+    match request {
+        Request::WebState => Reply::Web(Box::new(web::state(sys, now))),
+        Request::WebApply { config } => web_reply(web::apply(sys, config, clock)),
+        Request::WebPause { length } => web_reply(web::pause_web(sys, length, now)),
+        Request::WebResume => web_reply(web::resume(sys, now)),
+        Request::WebAllow { site } => web_reply(web::allow_site(sys, &site, now)),
+        Request::WebAllowOnce { site } => web_reply(web::allow_site_once(sys, &site, now)),
+        Request::WebRemoveAllowed { site } => web_reply(web::remove_allowed(sys, &site, now)),
+        _ => Reply::Failed(apps::NOT_INSTALLED.to_owned()),
+    }
 }
 
 /// A sentence for the screen: the ones Secblitz wrote pass through, anything else goes to the log and the person gets a plain one.
@@ -131,7 +173,7 @@ pub fn run(sys: &dyn Sys, fs: &dyn Fs, now: u64, request: Request, emit: &mut dy
                 }
             }),
         },
-        _ => Reply::Failed(apps::NOT_INSTALLED.to_owned()),
+        request => web_request(sys, now, request),
     };
     emit(Event::Done(reply));
 }
@@ -279,6 +321,78 @@ mod tests {
             },
         );
         (lines, last.expect("a final reply"))
+    }
+
+    #[test]
+    fn web_protection_state_is_answered_even_where_nothing_is_set_up() {
+        let (lines, reply) = collect(&Machine::default(), Request::WebState);
+        assert!(lines.is_empty());
+        let Reply::Web(state) = reply else {
+            panic!("expected the web protection state");
+        };
+        assert!(!state.available && !state.routed);
+        assert_eq!(state.config, secblitz::filter::config::Config::default());
+        assert_eq!(state.now, 100 * 86_400);
+    }
+
+    #[test]
+    fn web_protection_sentences_reach_the_window_and_anything_else_becomes_a_plain_one() {
+        let on = secblitz::filter::config::Config {
+            ads: true,
+            ..Default::default()
+        };
+        let (_, reply) = collect(&Machine::default(), Request::WebApply { config: on });
+        assert!(
+            matches!(&reply, Reply::Failed(m) if m == web::NOT_AVAILABLE),
+            "{}",
+            describe(&reply)
+        );
+        let (_, reply) = collect(
+            &Machine::default(),
+            Request::WebAllow {
+                site: "not a site".into(),
+            },
+        );
+        assert!(
+            matches!(&reply, Reply::Failed(m) if m == secblitz::filter::control::NOT_A_SITE),
+            "{}",
+            describe(&reply)
+        );
+        let reply = web_reply(Err(anyhow::anyhow!("systemctl said something odd")));
+        assert!(
+            matches!(&reply, Reply::Failed(m) if m == secblitz::linux::controls::CHANGE_FAILED),
+            "{}",
+            describe(&reply)
+        );
+        assert!(matches!(web_reply(Ok(())), Reply::Ok));
+    }
+
+    fn describe(reply: &Reply) -> String {
+        match reply {
+            Reply::Failed(m) => m.clone(),
+            _ => "another reply".into(),
+        }
+    }
+
+    #[test]
+    fn the_helper_takes_every_web_protection_request() {
+        use secblitz::filter::config::Config;
+        use secblitz::linux::web::PauseFor;
+        for request in [
+            Request::WebState,
+            Request::WebApply {
+                config: Config::default(),
+            },
+            Request::WebPause {
+                length: PauseFor::Quarter,
+            },
+            Request::WebResume,
+            Request::WebAllow { site: "a.b".into() },
+            Request::WebAllowOnce { site: "a.b".into() },
+            Request::WebRemoveAllowed { site: "a.b".into() },
+        ] {
+            assert!(handles(&request), "{request:?}");
+        }
     }
 
     #[test]

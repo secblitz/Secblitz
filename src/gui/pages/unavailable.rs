@@ -14,7 +14,7 @@ const GO: &str = "Go to Protection";
 pub fn applies(os: Os, page: Page) -> bool {
     match os {
         Os::Windows => false,
-        Os::Linux => matches!(page, Page::Web | Page::Tools),
+        Os::Linux => matches!(page, Page::Tools),
         Os::Macos => matches!(page, Page::Web | Page::Tools | Page::Debloat),
     }
 }
@@ -52,16 +52,15 @@ mod tests {
     use crate::i18n::Lang;
 
     #[test]
-    fn linux_has_no_web_protection_or_tools_yet_and_windows_keeps_all() {
+    fn linux_has_no_tools_yet_and_windows_keeps_all() {
         for page in Page::ALL {
             assert!(!applies(Os::Windows, page), "{page:?}");
         }
-        for page in [Page::Web, Page::Tools] {
-            assert!(applies(Os::Linux, page), "{page:?}");
-        }
+        assert!(applies(Os::Linux, Page::Tools));
         for page in [
             Page::Home,
             Page::Fixes,
+            Page::Web,
             Page::Debloat,
             Page::History,
             Page::Settings,
@@ -79,6 +78,7 @@ mod tests {
                 Page::Home,
                 Page::Fixes,
                 Page::Debloat,
+                Page::Web,
                 Page::History,
                 Page::Settings
             ]
@@ -87,11 +87,10 @@ mod tests {
             assert_eq!(page.on(Os::Windows), page);
             assert_eq!(page.shown_on(Os::Linux), !applies(Os::Linux, page));
         }
-        for page in [Page::Web, Page::Tools] {
-            assert_eq!(page.on(Os::Linux), Page::Home);
-        }
+        assert_eq!(Page::Tools.on(Os::Linux), Page::Home);
+        assert_eq!(Page::Web.on(Os::Linux), Page::Web);
         assert_eq!(Page::Settings.on(Os::Linux), Page::Settings);
-        for word in ["web", "tools", "nonsense"] {
+        for word in ["tools", "nonsense"] {
             assert_eq!(Page::open_target(word).on(Os::Linux), Page::Home);
         }
     }

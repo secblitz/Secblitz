@@ -12,5 +12,10 @@ case "$1" in
         ;;
 esac
 
+# Web protection leaves nothing behind when the package is purged.
+if [ "$1" = "purge" ]; then
+    rm -rf /var/lib/secblitz-filter
+fi
+
 # /var/lib/secblitz is kept on purpose so a reinstall can still undo earlier changes.
 exit 0

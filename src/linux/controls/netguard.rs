@@ -20,6 +20,7 @@ use super::{
 };
 use crate::hardening::{item_is_safe, Item};
 use crate::linux::catalog::spec;
+use crate::linux::web;
 use crate::model::Observation;
 use anyhow::Result;
 
@@ -552,7 +553,23 @@ fn effective_dot(cx: &Cx) -> Result<Option<&'static str>> {
     }
 }
 
+/// Web protection answers this computer's website lookups while it is on, and its own switch sends them encrypted.
+fn web_protection_on(cx: &Cx) -> bool {
+    let set_up = cx
+        .text(&web::config_path().to_string_lossy())
+        .ok()
+        .flatten()
+        .is_some_and(|text| web::config_needs_service(&text));
+    set_up && units::probe(cx, web::UNIT).is_some_and(|u| u.on())
+}
+
 pub fn observe_encrypted_dns(cx: &Cx) -> Result<Observation> {
+    if web_protection_on(cx) {
+        return Ok(unavailable(
+            "linux.encrypted_dns",
+            web::ENCRYPTED_DNS_LEFT_TO_WEB,
+        ));
+    }
     if !resolver_active(cx) {
         return Ok(observation(vec![("dns_over_tls", Item::Absent)], true, ""));
     }
@@ -580,6 +597,9 @@ pub fn write_encrypted_dns(cx: &Cx, want: &Items) -> Result<()> {
     let wanted = dot_word(word).ok_or_else(|| plain(UNRECOGNISED))?;
     if !matches!(wanted, "opportunistic" | "no") {
         return Err(plain(UNRECOGNISED));
+    }
+    if wanted == "opportunistic" && web_protection_on(cx) {
+        return Err(plain(web::ENCRYPTED_DNS_LEFT_TO_WEB));
     }
     undo_dot_file(cx)?;
     let restart = |cx: &Cx| cx.run_ok(SYSTEMCTL, &["try-restart", RESOLVED_UNIT]);
