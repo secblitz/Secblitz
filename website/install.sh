@@ -108,7 +108,7 @@ lowercase() {
 
 os_field() {
   local value
-  value=$(sed -n "s/^$1=//p" "$OS_RELEASE_FILE" | head -n 1) || true
+  value=$(sed -n "s/^$1=//p" "$OS_RELEASE_FILE" | tail -n 1) || true
   value=${value%\"}
   value=${value#\"}
   value=${value%\'}
@@ -162,13 +162,13 @@ detect_system() {
   case "$KIND" in
     deb)
       if ! command -v apt-get >/dev/null 2>&1; then
-        printf 'This computer looks like Ubuntu or Debian, but the tool that installs programs (apt-get) is missing.\n' >"$WORK/why"
+        printf 'This computer looks like Ubuntu or Debian, but the tool that installs programs is missing.\n' >"$WORK/why"
         return 1
       fi
       ;;
     rpm)
       if ! command -v dnf >/dev/null 2>&1; then
-        printf 'This computer looks like Fedora, but the tool that installs programs (dnf) is missing.\n' >"$WORK/why"
+        printf 'This computer looks like Fedora, but the tool that installs programs is missing.\n' >"$WORK/why"
         return 1
       fi
       ;;
@@ -202,11 +202,33 @@ as_root() {
 }
 
 install_package() {
-  cd "$WORK"
-  case "$KIND" in
-    deb) as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y "./$PACKAGE_NAME" ;;
-    rpm) as_root dnf install -y "./$PACKAGE_NAME" ;;
-  esac
+  local safe rc=0 actual
+  safe=$(as_root mktemp -d /var/tmp/secblitz-install.XXXXXX) || return 1
+  as_root chmod 755 "$safe" || rc=1
+  # The administrator installs a copy that only the administrator can change,
+  # and checks it again, so nothing can swap the file after the first check.
+  if [ "$rc" -eq 0 ]; then
+    as_root install -m 644 "$PACKAGE_FILE" "$safe/$PACKAGE_NAME" || rc=1
+  fi
+  if [ "$rc" -eq 0 ]; then
+    actual=$(as_root sha256sum "$safe/$PACKAGE_NAME" | cut -d' ' -f1) || actual=""
+    if [ "$actual" != "$EXPECTED_SHA" ]; then
+      printf 'The downloaded file changed while it was being installed, so nothing was installed. Please run the command again.\n' >"$WORK/why"
+      rc=1
+    fi
+  fi
+  if [ "$rc" -eq 0 ]; then
+    cd "$safe" || rc=1
+  fi
+  if [ "$rc" -eq 0 ]; then
+    case "$KIND" in
+      deb) as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y "./$PACKAGE_NAME" || rc=1 ;;
+      rpm) as_root dnf install -y "./$PACKAGE_NAME" || rc=1 ;;
+    esac
+  fi
+  cd "$WORK" || true
+  as_root rm -rf -- "$safe" || true
+  return "$rc"
 }
 
 main() {
@@ -265,7 +287,7 @@ main() {
     IS_ROOT=1
   else
     if ! command -v sudo >/dev/null 2>&1; then
-      die "Installing needs administrator permission, and this computer has no sudo. Run the same command again as the administrator (root)."
+      die "Installing needs administrator permission, and this computer cannot ask for it. Run the same command again while signed in as the administrator."
     fi
     printf '\nInstalling a program changes system files, so your computer needs your password.\n'
     printf 'It is only used to install Secblitz.\n\n'

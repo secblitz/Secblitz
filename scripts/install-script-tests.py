@@ -204,7 +204,7 @@ class InstallScriptTests(unittest.TestCase):
     def test_debian_on_intel_downloads_checks_and_installs_with_sudo(self):
         done = self.run_script(self.script, "ubuntu-24.04", machine="x86_64")
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
-        calls = self.calls()
+        calls = [c for c in self.calls() if not c.startswith(("sudo mktemp", "sudo chmod", "sudo install", "sudo sha256sum", "sudo rm"))]
         self.assertEqual(calls[:3], [
             f"curl https://secblitz.lol/downloads/secblitz-{VERSION}-linux-x64.deb",
             "sudo -v",
@@ -221,11 +221,26 @@ class InstallScriptTests(unittest.TestCase):
         self.assertNotIn("\x1b", done.stdout + done.stderr)
         self.assertEqual(list(self.scratch.iterdir()), [])
 
+    def test_package_is_installed_from_a_copy_the_user_cannot_swap(self):
+        (self.bin / "apt-get").write_text('''#!/bin/bash
+echo "$PWD" >"$FAKE_PWD"
+file="${@: -1}"
+cmp -s "$file" "$FAKE_DOWNLOADS/${file#./}" && echo same >"$FAKE_PWD.same"
+''')
+        where = Path(self.tmp.name) / "pwd"
+        done = self.run_script(self.script, "ubuntu-24.04", machine="x86_64", FAKE_PWD=str(where))
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        folder = Path(where.read_text().strip())
+        self.assertFalse(str(folder).startswith(str(self.scratch)), "installed from the user's own temporary folder")
+        self.assertTrue(Path(str(where) + ".same").exists(), "the installed file differs from the one downloaded")
+        self.assertFalse(folder.exists(), "the copy was left behind")
+
     def test_fedora_on_arm_installs_as_root_without_sudo(self):
         done = self.run_script(self.script, "fedora-44", machine="aarch64", uid=0)
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         calls = self.calls()
         self.assertEqual(calls[0], f"curl https://secblitz.lol/downloads/secblitz-{VERSION}-linux-arm64.rpm")
+        self.assertFalse([c for c in calls if c.startswith("sudo")])
         self.assertRegex(calls[1], rf"^dnf install -y \./secblitz-{VERSION}-linux-arm64\.rpm \(in \S+\)$")
         self.assertEqual(len(calls), 2)
         self.assertNotIn("password", done.stdout)
@@ -235,6 +250,11 @@ class InstallScriptTests(unittest.TestCase):
         done = self.run_script(self.script, "mint-22.3", machine="arm64")
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         self.assertEqual(self.calls()[0], f"curl https://secblitz.lol/downloads/secblitz-{VERSION}-linux-arm64.deb")
+
+    def test_last_id_line_wins_like_the_app(self):
+        done = self.run_script(self.script, "ID=arch\nID=fedora\nPRETTY_NAME=Test\n", machine="x86_64", uid=0)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(self.calls()[0], f"curl https://secblitz.lol/downloads/secblitz-{VERSION}-linux-x64.rpm")
 
     def test_wrong_checksum_refuses_to_install(self):
         (self.downloads / f"secblitz-{VERSION}-linux-x64.deb").write_bytes(b"not the file we published")
