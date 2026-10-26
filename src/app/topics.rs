@@ -28,6 +28,18 @@ impl Topic {
         Topic::Clutter,
     ];
 
+    /// The topics that hold at least one check on `os`, in display order. Windows shows all of them.
+    pub fn shown_on(os: secblitz::os::Os) -> Vec<Topic> {
+        if os == secblitz::os::Os::Windows {
+            return Topic::ALL.to_vec();
+        }
+        let ids = secblitz::engine::catalog::ids(os);
+        Topic::ALL
+            .into_iter()
+            .filter(|t| ids.iter().any(|id| Topic::of(id) == *t))
+            .collect()
+    }
+
     /// The topic a setting belongs to. The first rule that fits wins; unknown settings are Windows settings.
     pub fn of(id: &str) -> Topic {
         let head = id.split_once('.').map_or(id, |(head, _)| head);
@@ -155,6 +167,28 @@ mod tests {
     use secblitz::engine::Outcome;
     use secblitz::model::CheckStatus;
     use Topic::*;
+
+    #[test]
+    fn windows_shows_every_topic() {
+        assert_eq!(
+            Topic::shown_on(secblitz::os::Os::Windows),
+            Topic::ALL.to_vec()
+        );
+    }
+
+    #[test]
+    fn linux_shows_only_topics_with_linux_checks() {
+        let shown = Topic::shown_on(secblitz::os::Os::Linux);
+        assert_eq!(shown, vec![SignIn, Network, Windows, Privacy]);
+        for gone in [Threats, Browsers, Ai, Clutter] {
+            assert!(!shown.contains(&gone));
+        }
+    }
+
+    #[test]
+    fn a_system_without_checks_shows_no_topics() {
+        assert!(Topic::shown_on(secblitz::os::Os::Macos).is_empty());
+    }
 
     #[test]
     fn every_hardening_setting_goes_where_the_design_says() {
