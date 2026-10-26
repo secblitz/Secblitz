@@ -267,6 +267,13 @@ fn run_job(shared: &Shared, id: u64, request: Request, open: &Opener, recover: &
             Err(error) => Reply::Failed(format!("{error:#}")),
         })),
         Request::UpdateStatus => emit(Event::Done(update_reply(updater::linux::status(&RealSys)))),
+        Request::CheckUpdate => {
+            // A failed check is written down as the status, so the person sees it the way the timer's would show.
+            if let Err(e) = updater::linux::check(&RealSys) {
+                eprintln!("The update check failed: {e:#}");
+            }
+            emit(Event::Done(update_reply(updater::linux::status(&RealSys))))
+        }
         Request::InstallUpdate => emit(Event::Done(update_reply(
             updater::linux::install(&RealSys).and_then(|_| updater::linux::status(&RealSys)),
         ))),

@@ -215,6 +215,9 @@ pub enum Msg {
     InstallUpdate,
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     UpdateInstalled(Result<UpdateView, String>),
+    CheckUpdate,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    UpdateChecked(Result<UpdateView, String>),
     PrefsSaved(bool),
     Remove(remove::Msg),
     Help(support::Msg),
@@ -262,6 +265,39 @@ pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
                 );
             }
             Task::none()
+        }
+        Msg::CheckUpdate => {
+            #[cfg(target_os = "linux")]
+            if !matches!(state.update, Remote::Ready(UpdateView::Checking)) {
+                state.generation = state.generation.wrapping_add(1);
+                state.clock.restart();
+                state.update = Remote::Ready(UpdateView::Checking);
+                return Task::perform(
+                    blocking(|| {
+                        prefs_store::check_update()
+                            .map(|s| linux_update_view(&s, prefs_store::updates_by_software_app()))
+                            .map_err(|e| format!("{e:#}"))
+                    }),
+                    |result| Message::Settings(Msg::UpdateChecked(result)),
+                );
+            }
+            #[cfg(not(target_os = "linux"))]
+            return update(state, Msg::Load, ctx);
+            #[cfg(target_os = "linux")]
+            Task::none()
+        }
+        Msg::UpdateChecked(result) => {
+            state.generation = state.generation.wrapping_add(1);
+            match result {
+                Ok(view) => {
+                    state.update = Remote::Ready(view);
+                    Task::none()
+                }
+                Err(message) => {
+                    state.update = Remote::Failed;
+                    toast(&message, Tone::Warn, ctx)
+                }
+            }
         }
         Msg::UpdateInstalled(result) => {
             state.working = false;
@@ -786,13 +822,21 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
                         (
                             Icon::Refresh,
                             t("Check now"),
-                            Message::Settings(Msg::Load),
+                            Message::Settings(Msg::CheckUpdate),
                             false,
                         ),
                     ],
                 )
             } else {
-                reload_menu(p, t("Check now"))
+                widgets::overflow_menu(
+                    p,
+                    vec![(
+                        Icon::Refresh,
+                        t("Check now"),
+                        Message::Settings(Msg::CheckUpdate),
+                        false,
+                    )],
+                )
             },
         );
     }

@@ -49,6 +49,8 @@ pub enum Request {
         on: bool,
     },
     UpdateStatus,
+    /// Looks at the signed feed now instead of waiting for the daily timer.
+    CheckUpdate,
     InstallUpdate,
     SpaceMeasure {
         items: Vec<SpaceWire>,
@@ -313,9 +315,10 @@ pub fn serve(session: &mut dyn Session, request: Request, emit: &mut dyn FnMut(E
         Request::ChooseItems { picked } => done(session.choose_items(picked)),
         Request::StartFresh => Reply::Failed(NOT_DAMAGED.to_owned()),
         Request::RemoveSelf => Reply::Failed(BAD_ANSWER.to_owned()),
-        Request::MonitorTimer { .. } | Request::UpdateStatus | Request::InstallUpdate => {
-            Reply::Failed(NOT_HERE.to_owned())
-        }
+        Request::MonitorTimer { .. }
+        | Request::UpdateStatus
+        | Request::CheckUpdate
+        | Request::InstallUpdate => Reply::Failed(NOT_HERE.to_owned()),
         Request::SpaceMeasure { .. }
         | Request::SpaceClean { .. }
         | Request::Apps
@@ -533,6 +536,14 @@ pub fn set_monitor_timer<T: Transport>(transport: &mut T, on: bool) -> anyhow::R
 /// What the last background check found.
 pub fn update_status<T: Transport>(transport: &mut T) -> anyhow::Result<UpdateStatus> {
     match ask_once(transport, &Request::UpdateStatus)? {
+        Reply::Update(status) => Ok(status),
+        _ => anyhow::bail!(BAD_ANSWER),
+    }
+}
+
+/// Looks for a new version now and returns what was found.
+pub fn check_update<T: Transport>(transport: &mut T) -> anyhow::Result<UpdateStatus> {
+    match ask_once(transport, &Request::CheckUpdate)? {
         Reply::Update(status) => Ok(status),
         _ => anyhow::bail!(BAD_ANSWER),
     }
@@ -902,6 +913,7 @@ mod tests {
                 Request::MonitorTimer { on: false },
             ),
             (r#"{"op":"update_status"}"#, Request::UpdateStatus),
+            (r#"{"op":"check_update"}"#, Request::CheckUpdate),
             (r#"{"op":"install_update"}"#, Request::InstallUpdate),
         ] {
             assert_eq!(decode_request(&envelope(text)).unwrap(), want);

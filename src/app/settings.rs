@@ -412,6 +412,11 @@ pub fn update_status() -> anyhow::Result<secblitz::updater::UpdateStatus> {
 }
 
 #[cfg(target_os = "linux")]
+pub fn check_update() -> anyhow::Result<secblitz::updater::UpdateStatus> {
+    super::remote::check_update(&mut crate::linux_bus::client::DbusTransport::system())
+}
+
+#[cfg(target_os = "linux")]
 pub fn install_update() -> anyhow::Result<secblitz::updater::UpdateStatus> {
     super::remote::install_update(&mut crate::linux_bus::client::DbusTransport::system())
 }

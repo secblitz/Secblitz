@@ -33,6 +33,7 @@ pub fn action_for(request: &Request) -> Action {
         | Request::History
         | Request::CanStart { .. }
         | Request::UpdateStatus
+        | Request::CheckUpdate
         | Request::SpaceMeasure { .. }
         | Request::Apps => Action::Check,
         Request::Apply { .. }
@@ -210,6 +211,7 @@ mod tests {
             Request::History,
             Request::CanStart { undo: true },
             Request::UpdateStatus,
+            Request::CheckUpdate,
         ] {
             assert_eq!(action_for(&request), Action::Check, "{request:?}");
         }
