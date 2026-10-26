@@ -19,4 +19,4 @@ Icon=org.secblitz.Secblitz
 Terminal=false
 Categories=System;Security;Settings;
 Keywords=security;privacy;firewall;
-StartupWMClass=secblitz
+StartupWMClass=org.secblitz.Secblitz

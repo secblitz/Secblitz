@@ -1727,6 +1727,11 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             )),
             exit_on_close_request: false,
             icon: window_icon(),
+            #[cfg(target_os = "linux")]
+            platform_specific: iced::window::settings::PlatformSpecific {
+                application_id: "org.secblitz.Secblitz".into(),
+                ..Default::default()
+            },
             ..Default::default()
         })
         .run()
