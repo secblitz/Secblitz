@@ -19,7 +19,7 @@
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preload" href="assets/fonts/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/ibm-plex-sans-600.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="styles.css?v=0706">
+  <link rel="stylesheet" href="styles.css?v=0707">
   <script src="theme.js?v=0703"></script>
   <script src="app.js?v=0706" defer></script>
 </head>
@@ -311,6 +311,17 @@
         </a>
         <p class="meta choice"><a href="downloads/secblitz-1.1.0-windows-x64-setup.exe" data-arch="x64" download>For most PCs</a> · <a href="downloads/secblitz-1.1.0-windows-arm64-setup.exe" data-arch="arm64" download>For PCs with an ARM processor, like Snapdragon laptops</a></p>
         <p class="meta">Free and open source · Windows 10 and 11, 64-bit · <a href="privacy.html">Privacy</a> · <a href="code-signing.html">Code signing policy</a> · <a href="https://github.com/secblitz/Secblitz/blob/main/docs/ACCESSIBILITY.md">Accessibility</a></p>
+        <div class="linux" id="linux">
+          <h3>Using Linux?</h3>
+          <p>Open a terminal and run this. It works on Ubuntu, Debian, Linux Mint and Fedora. Running it again updates Secblitz.</p>
+          <div class="command">
+            <code id="linux-command">curl -fsSL https://secblitz.lol/install.sh | bash</code>
+            <button type="button" class="button button-quiet button-small" id="copy-linux-command" data-copy="linux-command">Copy</button>
+          </div>
+          <p>Prefer to download the package yourself?</p>
+          <p>Ubuntu, Debian and Linux Mint (.deb): <a href="downloads/secblitz-1.1.0-linux-x64.deb" download>Intel or AMD</a> · <a href="downloads/secblitz-1.1.0-linux-arm64.deb" download>ARM</a></p>
+          <p>Fedora (.rpm): <a href="downloads/secblitz-1.1.0-linux-x64.rpm" download>Intel or AMD</a> · <a href="downloads/secblitz-1.1.0-linux-arm64.rpm" download>ARM</a></p>
+        </div>
         <details class="download-details">
           <summary>Download details<svg class="icon chevron" aria-hidden="true"><use href="#i-chevron-down"/></svg></summary>
           <div class="details-body">

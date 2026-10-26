@@ -130,7 +130,7 @@ def site_text_files(root):
 
 def site_patterns(old, new):
     return [
-        (r"secblitz-" + re.escape(old) + r"-windows-(x64|arm64)", r"secblitz-" + new + r"-windows-\g<1>"),
+        (r"secblitz-" + re.escape(old) + r"-(windows|linux)-(x64|arm64)", r"secblitz-" + new + r"-\g<1>-\g<2>"),
         (r"Version " + re.escape(old) + r"\b", "Version " + new),
         (r"version-" + re.escape(old) + r"-", "version-" + new + "-"),
         (r'("softwareVersion"\s*:\s*")' + re.escape(old) + '"', r'\g<1>' + new + '"'),
@@ -158,7 +158,7 @@ def check_site(root, version):
     for rel in site_text_files(root):
         text = read(root, rel)
         found = []
-        for pat in (r"secblitz-(" + VERSION.pattern + r")-windows-(?:x64|arm64)", r"Version (" + VERSION.pattern + r")\b",
+        for pat in (r"secblitz-(" + VERSION.pattern + r")-(?:windows|linux)-(?:x64|arm64)", r"Version (" + VERSION.pattern + r")\b",
                     r"version-(" + VERSION.pattern + r")-", r'"softwareVersion"\s*:\s*"(' + VERSION.pattern + r')"'):
             found += [m.group(1) for m in re.finditer(pat, text)]
         seen_download = seen_download or bool(re.search(r"downloads/secblitz-" + VERSION.pattern + r"-windows-(?:x64|arm64)-setup\.exe", text))

@@ -362,6 +362,22 @@ details[open] > summary .chevron { transform: rotate(180deg); }
 .download-inner > p { margin-top: var(--s3); color: var(--muted); font-size: 18px; }
 .download-inner > .button { margin-top: var(--s8); }
 .download-inner > .meta { margin-top: var(--s3); font-size: 14px; }
+.linux {
+  margin-top: var(--s10); padding: var(--s5); width: 100%; max-width: 560px;
+  border-radius: var(--r-large); background: var(--bg); text-align: left;
+}
+.linux h3 { font-size: 16px; font-weight: 600; }
+.linux p { margin-top: var(--s2); color: var(--muted); font-size: 14px; }
+.linux a { color: var(--text); text-underline-offset: 3px; }
+.command {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s3); align-items: center;
+  margin-top: var(--s3); padding: var(--s3) var(--s3) var(--s3) var(--s4);
+  border-radius: var(--r); background: var(--surface-alt);
+}
+.command code {
+  overflow-wrap: anywhere; font: 13px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color: var(--text); user-select: all;
+}
 .download-details { margin-top: var(--s8); width: 100%; max-width: 560px; text-align: left; }
 .download-details summary {
   display: inline-flex; align-items: center; gap: var(--s1);

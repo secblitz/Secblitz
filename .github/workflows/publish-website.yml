@@ -111,6 +111,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "sha=$head" >> "$GITHUB_OUTPUT"
       - name: Download the release files
+        id: release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -126,10 +127,18 @@ jobs:
           # The release must carry exactly the nine expected files: the setup and
           # the portable exe for each architecture, the parts list of each
           # architecture, SHA256SUMS and the owner's two signed update feeds.
+          # From 1.5.0 it also carries the four Linux packages and their four
+          # signed feeds (seventeen files). Older releases have no Linux files.
           gh release view "$TAG" --json assets --jq '.assets[].name' | LC_ALL=C sort > assets.list
-          printf '%s\n' "secblitz-$VERSION-windows-x64-setup.exe" "secblitz-$VERSION-windows-x64.exe" "secblitz-$VERSION-windows-arm64-setup.exe" "secblitz-$VERSION-windows-arm64.exe" "secblitz-$VERSION-windows-x64.cdx.json" "secblitz-$VERSION-windows-arm64.cdx.json" SHA256SUMS stable.json stable-arm64.json | LC_ALL=C sort > assets.expected
+          printf '%s\n' "secblitz-$VERSION-windows-x64-setup.exe" "secblitz-$VERSION-windows-x64.exe" "secblitz-$VERSION-windows-arm64-setup.exe" "secblitz-$VERSION-windows-arm64.exe" "secblitz-$VERSION-windows-x64.cdx.json" "secblitz-$VERSION-windows-arm64.cdx.json" SHA256SUMS stable.json stable-arm64.json > assets.expected
+          if [ "$(printf '%s\n' 1.5.0 "$VERSION" | sort -V | head -n 1)" = "1.5.0" ]; then
+            printf '%s\n' "secblitz-$VERSION-linux-x64.deb" "secblitz-$VERSION-linux-x64.rpm" "secblitz-$VERSION-linux-arm64.deb" "secblitz-$VERSION-linux-arm64.rpm" \
+              stable-linux-x64-deb.json stable-linux-x64-rpm.json stable-linux-arm64-deb.json stable-linux-arm64-rpm.json >> assets.expected
+            echo "linux=true" >> "$GITHUB_OUTPUT"
+          fi
+          LC_ALL=C sort -o assets.expected assets.expected
           if ! diff assets.expected assets.list; then
-            echo "::error::The release files are not exactly the expected nine (see the diff above). The build attaches seven files; attach the two signed feeds, stable.json and stable-arm64.json, and nothing else."; exit 1
+            echo "::error::The release files are not exactly the expected set (see the diff above). The build attaches the installers, the parts lists, SHA256SUMS and, from 1.5.0, the Linux packages; attach the signed feeds (stable.json, stable-arm64.json and from 1.5.0 the four stable-linux-*.json) and nothing else."; exit 1
           fi
           mkdir release-assets
           gh release download "$TAG" --dir release-assets
@@ -137,14 +146,22 @@ jobs:
       - name: Check SHA256SUMS against the files
         env:
           VERSION: ${{ steps.tag.outputs.version }}
+          LINUX: ${{ steps.release.outputs.linux }}
         working-directory: release-assets
         run: |
           set -euo pipefail
-          # Exactly the four files, nothing else listed, and every hash must match.
+          # The four Windows files must be listed. From 1.5.0 the four Linux packages may be
+          # listed too. Nothing else, no repeats, and every hash must match.
           expected=$(printf '%s\n' "secblitz-$VERSION-windows-x64-setup.exe" "secblitz-$VERSION-windows-x64.exe" "secblitz-$VERSION-windows-arm64-setup.exe" "secblitz-$VERSION-windows-arm64.exe" | LC_ALL=C sort)
+          allowed="$expected"
+          if [ "${LINUX:-}" = "true" ]; then
+            allowed=$(printf '%s\n' "$expected" "secblitz-$VERSION-linux-x64.deb" "secblitz-$VERSION-linux-x64.rpm" "secblitz-$VERSION-linux-arm64.deb" "secblitz-$VERSION-linux-arm64.rpm" | LC_ALL=C sort)
+          fi
           listed=$(awk '{print $2}' SHA256SUMS | LC_ALL=C sort)
-          if [ "$expected" != "$listed" ] || [ "$(wc -l < SHA256SUMS)" -ne 4 ]; then
-            echo "::error::SHA256SUMS must list exactly the setup and the portable exe of each architecture."; exit 1
+          if [ -n "$(LC_ALL=C comm -23 <(printf '%s\n' "$expected") <(printf '%s\n' "$listed"))" ] \
+             || [ -n "$(LC_ALL=C comm -13 <(printf '%s\n' "$allowed") <(printf '%s\n' "$listed"))" ] \
+             || [ -n "$(printf '%s\n' "$listed" | uniq -d)" ]; then
+            echo "::error::SHA256SUMS must list the setup and the portable exe of each architecture, and from 1.5.0 may list the Linux packages, each once."; exit 1
           fi
           sha256sum --check --strict SHA256SUMS
       - name: Verify the build attestations (this repository, release.yml, this tag and commit)
@@ -154,11 +171,17 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
           VERSION: ${{ steps.tag.outputs.version }}
           SHA: ${{ steps.tag.outputs.sha }}
+          LINUX: ${{ steps.release.outputs.linux }}
         working-directory: release-assets
         run: |
           set -euo pipefail
-          for file in "secblitz-$VERSION-windows-x64-setup.exe" "secblitz-$VERSION-windows-x64.exe" \
-                      "secblitz-$VERSION-windows-arm64-setup.exe" "secblitz-$VERSION-windows-arm64.exe"; do
+          files=("secblitz-$VERSION-windows-x64-setup.exe" "secblitz-$VERSION-windows-x64.exe" \
+                 "secblitz-$VERSION-windows-arm64-setup.exe" "secblitz-$VERSION-windows-arm64.exe")
+          if [ "${LINUX:-}" = "true" ]; then
+            files+=("secblitz-$VERSION-linux-x64.deb" "secblitz-$VERSION-linux-x64.rpm" \
+                    "secblitz-$VERSION-linux-arm64.deb" "secblitz-$VERSION-linux-arm64.rpm")
+          fi
+          for file in "${files[@]}"; do
             gh attestation verify "$file" \
               --repo "$REPO" \
               --signer-workflow "$REPO/.github/workflows/release.yml" \
@@ -194,6 +217,7 @@ jobs:
       - name: Verify the owner-signed update feed (pinned public key, version, setup hash)
         env:
           VERSION: ${{ steps.tag.outputs.version }}
+          LINUX: ${{ steps.release.outputs.linux }}
         run: |
           set -euo pipefail
           # Checks, for both architectures: signature against assets/update-public-key.hex, schema and
@@ -201,6 +225,14 @@ jobs:
           # released setup, and the feed is neither future-dated nor expired.
           python3 scripts/prepare-pages.py --verify-feed release-assets/stable.json --installer-directory release-assets --expected-version "$VERSION"
           python3 scripts/prepare-pages.py --verify-feed release-assets/stable-arm64.json --installer-directory release-assets --expected-version "$VERSION" --arch arm64
+          # From 1.5.0, the same checks for the four Linux feeds against the four Linux packages.
+          if [ "${LINUX:-}" = "true" ]; then
+            for arch in x64 arm64; do
+              for kind in deb rpm; do
+                python3 scripts/prepare-pages.py --verify-feed "release-assets/stable-linux-$arch-$kind.json" --installer-directory release-assets --expected-version "$VERSION" --arch "linux-$arch" --package "$kind"
+              done
+            done
+          fi
       - name: Fetch the older downloads and check their pinned hashes
         run: python3 scripts/historical-downloads.py fetch --dest historical
       - name: Build the site to deploy
