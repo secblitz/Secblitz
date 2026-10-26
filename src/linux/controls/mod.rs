@@ -46,13 +46,14 @@ pub const REMOTE_SIGN_IN_OFF: &str =
     "Remote sign-in is switched off, so these settings do not matter right now.";
 pub const REMOTE_SIGN_IN_UNREADABLE: &str =
     "Secblitz could not read the remote sign-in settings, so it leaves them alone.";
+pub const NO_SIGN_IN_KEY: &str = "Secblitz did not turn off password sign-in, because no sign-in key is set up on this computer and you could be locked out. Set up a key first.";
 pub const NO_NETWORK_MANAGER: &str =
     "The network settings program is not installed on this computer, so Secblitz leaves this alone.";
 pub const MACHINE_ID_MISSING: &str =
     "Secblitz is not fully installed. Reinstall it from the software app.";
 
 /// Every sentence a person can be shown by this folder's controls, for the translation tests.
-pub const SENTENCES: [&str; 14] = [
+pub const SENTENCES: [&str; 15] = [
     READ_FAILED,
     CHANGE_FAILED,
     NO_RECORD,
@@ -64,6 +65,7 @@ pub const SENTENCES: [&str; 14] = [
     NO_REMOTE_SIGN_IN,
     REMOTE_SIGN_IN_OFF,
     REMOTE_SIGN_IN_UNREADABLE,
+    NO_SIGN_IN_KEY,
     NO_NETWORK_MANAGER,
     MACHINE_ID_MISSING,
     ELIGIBLE,

@@ -7,11 +7,12 @@
 use super::units::{self, Unit};
 use super::{
     flag, num_of, observation, plain, text_item, text_of, unavailable, Cx, Items,
-    NO_REMOTE_SIGN_IN, REMOTE_SIGN_IN_OFF, REMOTE_SIGN_IN_UNREADABLE, UNRECOGNISED,
+    NO_REMOTE_SIGN_IN, NO_SIGN_IN_KEY, REMOTE_SIGN_IN_OFF, REMOTE_SIGN_IN_UNREADABLE, UNRECOGNISED,
 };
 use crate::hardening::Item;
 use crate::model::Observation;
 use anyhow::Result;
+use std::path::Path;
 
 /// Sockets come first so switching them off does not start the service again.
 const SSH_UNITS: [&str; 4] = ["ssh.socket", "sshd.socket", "ssh.service", "sshd.service"];
@@ -135,6 +136,25 @@ pub fn observe_ssh_password(cx: &Cx) -> Result<Observation> {
     }
 }
 
+/// Whether anyone can sign in over SSH with a key, in the places the server looks by default.
+fn sign_in_key_exists(cx: &Cx) -> bool {
+    let mut homes = vec!["/root".to_string()];
+    homes.extend(cx.list("/home").into_iter().map(|n| format!("/home/{n}")));
+    homes.iter().any(|home| {
+        let file = format!("{home}/.ssh/authorized_keys");
+        cx.sys
+            .read(Path::new(&file))
+            .ok()
+            .flatten()
+            .is_some_and(|bytes| {
+                String::from_utf8_lossy(&bytes).lines().any(|l| {
+                    let l = l.trim();
+                    !l.is_empty() && !l.starts_with('#')
+                })
+            })
+    })
+}
+
 /// The server's own drop-in is taken away first, so an undo returns to what the other files say; lines are added only for
 /// what they do not already give. The result is read back and the drop-in removed again if it did not take effect.
 pub fn write_ssh_password(cx: &Cx, want: &Items) -> Result<()> {
@@ -150,8 +170,15 @@ pub fn write_ssh_password(cx: &Cx, want: &Items) -> Result<()> {
     {
         return Err(plain(UNRECOGNISED));
     }
+    let previous = cx.text(SSH_DROPIN)?;
     cx.remove(SSH_DROPIN)?;
     let (now_password, now_root) = sshd_settings(cx)?;
+    if password == Some(0) && now_password == 1 && !sign_in_key_exists(cx) {
+        if let Some(text) = previous {
+            cx.write_text(SSH_DROPIN, &text, 0o644)?;
+        }
+        return Err(plain(NO_SIGN_IN_KEY));
+    }
     let mut text = String::from(SSH_NOTE);
     let mut changed = false;
     if let Some(p) = password.filter(|p| *p != now_password) {

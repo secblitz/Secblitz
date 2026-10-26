@@ -436,6 +436,10 @@ fn ssh_passwords_are_switched_off_with_a_file_that_comes_first() {
         "/etc/ssh/sshd_config.d/50-cloud-init.conf",
         "PasswordAuthentication yes\n",
     );
+    sim.file(
+        "/home/sam/.ssh/authorized_keys",
+        "# mine\nssh-ed25519 AAAA sam\n",
+    );
     let mut b = backend(&sim);
     let before = value(&mut b, "linux.ssh_password");
     assert_eq!(
@@ -453,8 +457,31 @@ fn ssh_passwords_are_switched_off_with_a_file_that_comes_first() {
 }
 
 #[test]
+fn passwords_are_not_switched_off_while_nobody_has_a_key() {
+    let sim = debian();
+    sim.file("/home/sam/.ssh/authorized_keys", "# nothing yet\n\n");
+    let mut b = backend(&sim);
+    let before = value(&mut b, "linux.ssh_password");
+    assert_eq!(before["items"]["password"], 1);
+    let fixed = json!({"items": {"password": 0, "root_login": "prohibit-password"}});
+    let e = b.write("linux.ssh_password", &fixed).unwrap_err();
+    assert_eq!(e.to_string(), NO_SIGN_IN_KEY);
+    assert!(!sim.has("/etc/ssh/sshd_config.d/00-secblitz.conf"));
+    assert_eq!(value(&mut b, "linux.ssh_password"), before);
+    sim.file("/root/.ssh/authorized_keys", "ssh-ed25519 AAAA admin\n");
+    b.write("linux.ssh_password", &fixed).unwrap();
+    assert_eq!(value(&mut b, "linux.ssh_password")["items"]["password"], 0);
+    sim.files
+        .borrow_mut()
+        .remove(std::path::Path::new("/root/.ssh/authorized_keys"));
+    b.write("linux.ssh_password", &before).unwrap();
+    assert_eq!(value(&mut b, "linux.ssh_password"), before);
+}
+
+#[test]
 fn a_root_login_that_is_allowed_is_closed_and_a_bad_file_is_taken_away_again() {
     let sim = debian();
+    sim.file("/home/sam/.ssh/authorized_keys", "ssh-ed25519 AAAA sam\n");
     set_file(&sim, "/etc/ssh/sshd_config", |t| {
         t.replace("#PermitRootLogin prohibit-password", "PermitRootLogin yes")
     });
