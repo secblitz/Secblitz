@@ -410,5 +410,46 @@ class PolicyTests(unittest.TestCase):
         self.assertLess(script.index("Get-FileHash"), script.index("Start-Process"))
 
 
+class ReleaseFilesTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("release_files", Path(__file__).with_name("release-files.py"))
+        cls.files = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.files)
+
+    def test_linux_packages_exist_from_1_5_0_on(self):
+        self.assertEqual(self.files.linux_packages("1.4.9"), [])
+        self.assertEqual(self.files.linux_packages("1.5.0"), [
+            "secblitz-1.5.0-linux-x64.deb", "secblitz-1.5.0-linux-x64.rpm",
+            "secblitz-1.5.0-linux-arm64.deb", "secblitz-1.5.0-linux-arm64.rpm"])
+        self.assertEqual(len(self.files.linux_packages("2.0.0")), 4)
+        self.assertEqual(len(self.files.linux_packages("1.10.0")), 4)
+
+    def test_checksums_list_only_the_windows_programs(self):
+        self.assertEqual(len(self.files.programs("1.5.0")), 4)
+        self.assertTrue(all("linux" not in name for name in self.files.programs("1.5.0")))
+
+    def test_check_names_what_is_missing_or_extra(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in self.files.release_files("1.5.0"):
+                (Path(tmp) / name).write_bytes(b"x")
+            self.assertEqual(self.files.main(["1.5.0", "--check", tmp]), 0)
+            (Path(tmp) / "secblitz-1.5.0-linux-arm64.rpm").unlink()
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(self.files.main(["1.5.0", "--check", tmp]), 1)
+            (Path(tmp) / "secblitz-1.5.0-linux-arm64.rpm").write_bytes(b"x")
+            (Path(tmp) / "extra.txt").write_bytes(b"x")
+            self.assertEqual(self.files.main(["1.5.0", "--check", tmp]), 1)
+
+    def test_release_workflow_attests_and_drafts_every_linux_package(self):
+        workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        for kind in ("x64.deb", "x64.rpm", "arm64.deb", "arm64.rpm"):
+            self.assertIn("release/secblitz-*-linux-" + kind, workflow)
+            self.assertIn('release/secblitz-"$VERSION"-linux-' + kind, workflow)
+        self.assertIn("--without-repository", workflow)
+        self.assertIn("needs.build-linux.result == 'success'", workflow)
+        self.assertNotIn("--key", workflow.split("build-linux:")[1].split("attest:")[0])
+
+
 if __name__ == "__main__":
     unittest.main()
