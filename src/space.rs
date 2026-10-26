@@ -13,6 +13,8 @@ pub use windows::{
     clean_machine, clean_user, machine_roots, measure_machine, measure_user, user_roots,
 };
 
+pub mod linux;
+
 #[cfg(test)]
 mod tests;
 
@@ -22,15 +24,49 @@ pub enum Item {
     UpdateLeftovers,
     CrashDumps,
     Thumbnails,
+    PackageCaches,
+    CrashReports,
+    ThumbnailCache,
+    FlatpakRuntimes,
+    Trash,
 }
 
 impl Item {
+    /// The Windows set.
     pub const ALL: [Item; 4] = [
         Item::Temp,
         Item::UpdateLeftovers,
         Item::CrashDumps,
         Item::Thumbnails,
     ];
+    pub const LINUX: [Item; 5] = [
+        Item::PackageCaches,
+        Item::CrashReports,
+        Item::ThumbnailCache,
+        Item::FlatpakRuntimes,
+        Item::Trash,
+    ];
+    /// Every item of every system, for state that is indexed by item.
+    pub const EVERY: [Item; 9] = [
+        Item::Temp,
+        Item::UpdateLeftovers,
+        Item::CrashDumps,
+        Item::Thumbnails,
+        Item::PackageCaches,
+        Item::CrashReports,
+        Item::ThumbnailCache,
+        Item::FlatpakRuntimes,
+        Item::Trash,
+    ];
+
+    /// The items this system offers, in the order they are shown.
+    pub fn here() -> &'static [Item] {
+        match crate::os::Os::CURRENT {
+            crate::os::Os::Windows => &Item::ALL,
+            crate::os::Os::Linux => &Item::LINUX,
+            crate::os::Os::Macos => &[],
+        }
+    }
 
     pub fn id(self) -> &'static str {
         match self {
@@ -38,6 +74,11 @@ impl Item {
             Item::UpdateLeftovers => "space.update_leftovers",
             Item::CrashDumps => "space.crash_dumps",
             Item::Thumbnails => "space.thumbnails",
+            Item::PackageCaches => "space.package_caches",
+            Item::CrashReports => "space.crash_reports",
+            Item::ThumbnailCache => "space.thumbnail_cache",
+            Item::FlatpakRuntimes => "space.flatpak_runtimes",
+            Item::Trash => "space.trash",
         }
     }
 }
@@ -48,6 +89,9 @@ pub enum UserArea {
     Temp,
     CrashDumps,
     Thumbnails,
+    ThumbnailCache,
+    FlatpakUser,
+    Trash,
 }
 
 impl UserArea {
@@ -56,6 +100,9 @@ impl UserArea {
             UserArea::Temp => 0,
             UserArea::CrashDumps => 1,
             UserArea::Thumbnails => 2,
+            UserArea::ThumbnailCache => 16,
+            UserArea::FlatpakUser => 17,
+            UserArea::Trash => 18,
         }
     }
 
@@ -64,12 +111,15 @@ impl UserArea {
             0 => Some(UserArea::Temp),
             1 => Some(UserArea::CrashDumps),
             2 => Some(UserArea::Thumbnails),
+            16 => Some(UserArea::ThumbnailCache),
+            17 => Some(UserArea::FlatpakUser),
+            18 => Some(UserArea::Trash),
             _ => None,
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub struct Tally {
     pub bytes: u64,
     pub files: u64,

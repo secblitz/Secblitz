@@ -355,6 +355,7 @@ fn user_rule(area: UserArea) -> &'static Rule {
         UserArea::Temp => &TEMP_RULE,
         UserArea::CrashDumps => &DUMP_RULE,
         UserArea::Thumbnails => &THUMB_RULE,
+        UserArea::ThumbnailCache | UserArea::FlatpakUser | UserArea::Trash => &TEMP_RULE,
     }
 }
 
@@ -368,6 +369,7 @@ pub fn user_roots(area: UserArea) -> Vec<PathBuf> {
         UserArea::Temp => local.join("Temp"),
         UserArea::CrashDumps => local.join("CrashDumps"),
         UserArea::Thumbnails => local.join("Microsoft").join("Windows").join("Explorer"),
+        UserArea::ThumbnailCache | UserArea::FlatpakUser | UserArea::Trash => return Vec::new(),
     };
     canonical_root(&folder).into_iter().collect()
 }
@@ -390,7 +392,7 @@ pub fn machine_roots(item: Item) -> Vec<(PathBuf, &'static Rule)> {
             }
             v
         }
-        Item::UpdateLeftovers | Item::Thumbnails => Vec::new(),
+        _ => Vec::new(),
     };
     folders
         .into_iter()
