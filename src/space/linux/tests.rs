@@ -221,7 +221,7 @@ Proceed with these changes to the system installation? [Y/n]: n
 const RUNTIMES: &str = "\
 org.freedesktop.Platform\t25.08\t670.7 MB
 org.freedesktop.Platform.GL.default\t23.08\t462.3 MB
-org.gnome.Platform.Locale\t46\t163.8 kB
+org.gnome.Platform.Locale\t46\t163.8?kB
 org.gnome.Platform\t46\t1.2 GB
 ";
 
@@ -266,7 +266,10 @@ fn flatpak_lists_are_read_and_sizes_use_decimal_units() {
     assert_eq!(parse_size("163.8 kB"), Some(163_800));
     assert_eq!(parse_size("1.2 GB"), Some(1_200_000_000));
     assert_eq!(parse_size("512 bytes"), Some(512));
+    assert_eq!(parse_size("46.9?MB"), Some(46_900_000));
+    assert_eq!(parse_size("1.6\u{a0}GB"), Some(1_600_000_000));
     assert_eq!(parse_size("many"), None);
+    assert_eq!(parse_size("12 parsecs"), None);
 }
 
 #[test]
@@ -408,6 +411,20 @@ fn emptying_the_trash_uses_the_desktops_tool_and_reports_the_difference() {
     let t = clean_person(&sys, &mem, &dirs, UserArea::Trash, NOW).unwrap();
     assert_eq!(t.bytes, 9100);
     sys.reply("/usr/bin/gio", &["trash", "--empty"], 1, "");
+    let e = clean_person(&sys, &mem, &dirs, UserArea::Trash, NOW).unwrap_err();
+    assert_eq!(e.to_string(), TRASH_NOT_EMPTIED);
+}
+
+#[test]
+fn a_trash_that_is_still_full_after_the_tool_succeeds_is_not_reported_as_emptied() {
+    let dirs = PersonDirs::new(Path::new("/home/a"), None, None).unwrap();
+    let x = "/home/a/.local/share/Trash/files/x";
+    let mem = Mem::with(
+        "/home/a/.local/share/Trash/files",
+        vec![vec![file(x, 9000, 40)], vec![file(x, 9000, 40)]],
+    );
+    let sys = FakeSys::default();
+    sys.reply("/usr/bin/gio", &["trash", "--empty"], 0, "");
     let e = clean_person(&sys, &mem, &dirs, UserArea::Trash, NOW).unwrap_err();
     assert_eq!(e.to_string(), TRASH_NOT_EMPTIED);
 }

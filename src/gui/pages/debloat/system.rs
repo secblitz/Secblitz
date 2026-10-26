@@ -16,7 +16,8 @@ mod real {
     use super::*;
     use crate::gui::blocking_stream;
     use crate::linux_bus::{cleanup, client::DbusTransport};
-    use secblitz::linux::cmd::RealSys;
+    use secblitz::linux::cmd::{RealSys, SessionSys, Sys};
+    use secblitz::linux::person::session_bus;
     use secblitz::space::linux::{self as space, PersonDirs, RealFs};
 
     fn now() -> u64 {
@@ -31,6 +32,7 @@ mod real {
             space::CANNOT_CLEAN,
             space::NOT_ON_THIS_SYSTEM,
             space::TRASH_NOT_EMPTIED,
+            crate::linux_bus::polkit::NOT_ALLOWED,
         ]
         .contains(&text.as_str())
         {
@@ -43,12 +45,34 @@ mod real {
 
     pub fn person(area: UserArea, delete: bool) -> Outcome {
         let dirs = PersonDirs::from_env().ok_or_else(|| space::CANNOT_CLEAN.to_owned())?;
-        let result = if delete {
-            space::clean_person(&RealSys, &RealFs, &dirs, area, now())
-        } else {
-            space::measure_person(&RealSys, &RealFs, &dirs, area, now())
+        // SAFETY: getuid has no preconditions and cannot fail.
+        let uid = unsafe { libc::getuid() };
+        let bus_env = std::env::var("DBUS_SESSION_BUS_ADDRESS").ok();
+        let bus = session_bus(uid, bus_env.as_deref(), |p| p.exists());
+        // The desktop's Trash tool does nothing, yet succeeds, without the person's message bus.
+        let sys = match bus.as_deref().map(|b| SessionSys::new(b, uid)) {
+            Some(Ok(sys)) => Some(sys),
+            _ => None,
+        };
+        let result = match (&sys, area) {
+            (None, UserArea::Trash) if delete => Err(anyhow::anyhow!(space::TRASH_NOT_EMPTIED)),
+            (Some(sys), _) => run_person(sys, &dirs, area, delete),
+            (None, _) => run_person(&RealSys, &dirs, area, delete),
         };
         result.map_err(|e| plain(&e))
+    }
+
+    fn run_person(
+        sys: &dyn Sys,
+        dirs: &PersonDirs,
+        area: UserArea,
+        delete: bool,
+    ) -> anyhow::Result<Tally> {
+        if delete {
+            space::clean_person(sys, &RealFs, dirs, area, now())
+        } else {
+            space::measure_person(sys, &RealFs, dirs, area, now())
+        }
     }
 
     /// One answer per item, as the helper gives them. If the helper cannot be reached, every item that got no answer gets the reason.

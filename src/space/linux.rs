@@ -249,6 +249,10 @@ pub fn clean_person(
             let out = sys.run_long(GIO, &["trash", "--empty"])?;
             ensure!(out.success(), TRASH_NOT_EMPTIED);
             let after = tree(fs, &dirs.trash(), &TRASH_RULE, now, deadline, false);
+            ensure!(
+                before.files == 0 || after.files < before.files,
+                TRASH_NOT_EMPTIED
+            );
             Ok(gone(before, after))
         }
         UserArea::FlatpakUser => remove_unused_runtimes(sys, Scope::User),
@@ -317,11 +321,17 @@ fn parse_unused(text: &str) -> Option<Vec<(String, String)>> {
     (!rows.is_empty()).then_some(rows)
 }
 
-/// "670.7 MB" as Flatpak prints sizes: decimal units.
+/// "670.7 MB" as Flatpak prints sizes: decimal units. With `LC_ALL=C` it writes a `?` between the number and the unit, so one separator of any kind is accepted.
 fn parse_size(text: &str) -> Option<u64> {
-    let (number, unit) = text.trim().split_once(' ')?;
+    let text = text.trim();
+    let split = text.find(|c: char| !(c.is_ascii_digit() || c == '.'))?;
+    let (number, rest) = text.split_at(split);
+    let unit = rest.trim_start_matches(|c: char| !c.is_ascii_alphabetic());
+    if rest.len() - unit.len() > 4 {
+        return None;
+    }
     let value: f64 = number.parse().ok()?;
-    let scale = match unit.trim().to_ascii_lowercase().as_str() {
+    let scale = match unit.to_ascii_lowercase().as_str() {
         "byte" | "bytes" | "b" => 1.0,
         "kb" => 1e3,
         "mb" => 1e6,

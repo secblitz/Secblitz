@@ -308,6 +308,10 @@ mod real {
             run_program(program, args, Some(&self.bus), TIME_LIMIT, None)
         }
 
+        fn run_long(&self, program: &'static str, args: &[&str]) -> Result<Output> {
+            run_program(program, args, Some(&self.bus), LONG_TIME_LIMIT, None)
+        }
+
         fn read(&self, path: &Path) -> Result<Option<Vec<u8>>> {
             RealSys.read(path)
         }
