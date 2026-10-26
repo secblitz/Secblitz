@@ -2,6 +2,7 @@
 //! The routing rule only exists while the filter is really answering, so a stopped
 //! or crashed filter never leaves the PC without working lookups.
 
+use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::time::Duration;
 
@@ -9,13 +10,17 @@ use super::config::{
     fresh, normalized_site, AllowOnce, Config, Status, ALLOW_ONCE_SECONDS, MAX_ALLOWED,
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum ServiceState {
     NotInstalled,
     Stopped,
     Running,
     Other,
 }
+
+pub const NOT_A_SITE: &str = "That is not a website name. Type it the way it appears in the address bar, for example example.com.";
+pub const ALLOWED_FULL: &str =
+    "The list of allowed sites is full. Remove a site you no longer need and try again.";
 
 const FALLBACK: [IpAddr; 2] = [
     IpAddr::V4(Ipv4Addr::new(9, 9, 9, 9)),
@@ -134,17 +139,12 @@ pub fn resumed_config(mut config: Config) -> Config {
 
 pub fn allowed_config(mut config: Config, site: &str) -> anyhow::Result<Config> {
     let Some(name) = normalized_site(site) else {
-        anyhow::bail!(
-            "That is not a website name. Type it the way it appears in the address bar, for example example.com."
-        );
+        anyhow::bail!(NOT_A_SITE);
     };
     if config.allow.contains(&name) {
         return Ok(config);
     }
-    anyhow::ensure!(
-        config.allow.len() < MAX_ALLOWED,
-        "The list of allowed sites is full. Remove a site you no longer need and try again."
-    );
+    anyhow::ensure!(config.allow.len() < MAX_ALLOWED, ALLOWED_FULL);
     config.allow.push(name);
     Ok(config)
 }
@@ -152,9 +152,7 @@ pub fn allowed_config(mut config: Config, site: &str) -> anyhow::Result<Config> 
 /// Lets a site through for ten minutes. Running out of room drops the entry that would end first.
 pub fn allowed_once_config(mut config: Config, site: &str, now: u64) -> anyhow::Result<Config> {
     let Some(name) = normalized_site(site) else {
-        anyhow::bail!(
-            "That is not a website name. Type it the way it appears in the address bar, for example example.com."
-        );
+        anyhow::bail!(NOT_A_SITE);
     };
     config
         .allow_once

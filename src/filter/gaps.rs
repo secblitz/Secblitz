@@ -405,7 +405,14 @@ mod imp {
     use super::*;
 
     pub fn check() -> Option<Vec<Gap>> {
-        None
+        #[cfg(target_os = "linux")]
+        {
+            crate::linux::web_gaps::check()
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            None
+        }
     }
 }
 

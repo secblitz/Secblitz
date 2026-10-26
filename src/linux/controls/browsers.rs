@@ -101,6 +101,25 @@ const CHROMIUM: [Chromium; 5] = [
     },
 ];
 
+/// A Chrome-family browser's program files and policy folders, for the check of lookups that go around web protection.
+pub struct ChromiumSite {
+    pub programs: &'static [&'static str],
+    pub policies: &'static str,
+    pub managed: &'static str,
+}
+
+pub fn chromium_sites() -> impl Iterator<Item = ChromiumSite> {
+    CHROMIUM.iter().map(|b| ChromiumSite {
+        programs: b.programs,
+        policies: b.folders[1],
+        managed: b.folders[2],
+    })
+}
+
+pub fn firefox_programs() -> &'static [&'static str] {
+    &FIREFOX_PRESENT
+}
+
 fn exists(cx: &Cx, flag: &str, path: &str) -> bool {
     cx.run(TEST, &[flag, path]).is_ok_and(|o| o.success())
 }

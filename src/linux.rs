@@ -7,3 +7,7 @@ pub mod controls;
 pub mod distro;
 pub mod person;
 pub mod remove;
+pub mod web;
+pub mod web_gaps;
+#[cfg(target_os = "linux")]
+pub mod web_service;
