@@ -441,6 +441,22 @@ fn the_resolver_folder_is_made_when_missing_and_taken_away_again_only_then() {
 }
 
 #[test]
+fn an_undo_that_stopped_after_taking_our_file_away_finishes_on_the_next_try() {
+    let sim = resolved(fedora());
+    sim.set("resolved.built", "resolve");
+    let mut b = backend(&sim);
+    let before = value(&mut b, "linux.llmnr");
+    assert_eq!(before["items"]["llmnr"], json!("resolve"));
+    let fixed = spec("linux.llmnr").unwrap().derive_target(&before).unwrap();
+    b.write("linux.llmnr", &fixed).unwrap();
+    // The earlier try took the file away, then stopped before the resolver was restarted.
+    sim.files.borrow_mut().remove(&PathBuf::from(LLMNR_FILE));
+    assert_eq!(value(&mut b, "linux.llmnr")["items"]["llmnr"], json!("no"));
+    b.write("linux.llmnr", &before).unwrap();
+    assert_eq!(value(&mut b, "linux.llmnr"), before);
+}
+
+#[test]
 fn the_value_is_read_the_way_the_resolver_reads_it() {
     let sim = resolved(ubuntu());
     let mut b = backend(&sim);

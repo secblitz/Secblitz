@@ -248,6 +248,14 @@ fn running_llmnr(cx: &Cx) -> Result<Option<&'static str>> {
 /// What systemd-resolved is told to do: the main file, then the files of the three folders by name, where a file in a
 /// later folder replaces one of the same name and a later name wins. With nothing said, it does what it was built to.
 fn effective_llmnr(cx: &Cx) -> Result<Option<&'static str>> {
+    match filed_llmnr(cx)? {
+        Some(word) => Ok(word),
+        None => running_llmnr(cx),
+    }
+}
+
+/// The value the files give, or `None` when no file sets one.
+fn filed_llmnr(cx: &Cx) -> Result<Option<Option<&'static str>>> {
     let mut by_name = std::collections::BTreeMap::new();
     for dir in RESOLVED_DIRS {
         for name in cx.list(dir) {
@@ -271,10 +279,7 @@ fn effective_llmnr(cx: &Cx) -> Result<Option<&'static str>> {
             word = Some(llmnr_word(&value));
         }
     }
-    match word {
-        Some(word) => Ok(word),
-        None => running_llmnr(cx),
-    }
+    Ok(word)
 }
 
 fn resolver_active(cx: &Cx) -> bool {
@@ -316,9 +321,14 @@ pub fn write_llmnr(cx: &Cx, want: &Items) -> Result<()> {
     let Some(word) = text_of(want, "llmnr")? else {
         return Ok(());
     };
+    let wanted = llmnr_word(word).ok_or_else(|| plain(UNRECOGNISED))?;
     cx.remove(LLMNR_DROPIN)?;
     remove_llmnr_folder(cx)?;
-    if effective_llmnr(cx)? != Some(llmnr_word(word).ok_or_else(|| plain(UNRECOGNISED))?) {
+    // With no file setting it, the value comes from the running resolver, which keeps what our file said until it restarts.
+    if wanted != "no" && filed_llmnr(cx)?.is_none() && running_llmnr(cx)? != Some(wanted) {
+        cx.run_ok(SYSTEMCTL, &["try-restart", RESOLVED_UNIT])?;
+    }
+    if effective_llmnr(cx)? != Some(wanted) {
         if word != "no" {
             return Err(plain(CHANGE_FAILED));
         }

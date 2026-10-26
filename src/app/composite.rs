@@ -37,6 +37,18 @@ fn failed(id: &str, error: &anyhow::Error) -> Outcome {
     }
 }
 
+/// The settings an undo that failed left waiting, read from a fresh check of that half. Only when that check fails too
+/// is every setting of the half named.
+fn left_to_undo(session: &mut dyn Session, result: &Result<Report>) -> Vec<String> {
+    if result.is_ok() {
+        return Vec::new();
+    }
+    match session.audit(&mut |_| {}) {
+        Ok(report) => report.undo_next,
+        Err(_) => session.available(),
+    }
+}
+
 /// System results first. A half that failed is reported as an error on each of its ids, so the other half's results
 /// still show; only when every half that ran failed is the first error returned.
 fn join(parts: [Part; 2]) -> Result<Report> {
@@ -104,10 +116,10 @@ impl Session for Composite {
     }
 
     fn undo(&mut self, progress: &mut dyn FnMut(Progress<'_>)) -> Result<Report> {
-        let person_ids = self.person.available();
         let person = self.person.undo(&mut *progress);
-        let system_ids = self.system.available();
+        let person_ids = left_to_undo(self.person.as_mut(), &person);
         let system = self.system.undo(&mut *progress);
+        let system_ids = left_to_undo(self.system.as_mut(), &system);
         join([Some((system_ids, system)), Some((person_ids, person))])
     }
 
@@ -173,6 +185,7 @@ mod tests {
         fail: bool,
         log: Rc<Log>,
         undo_next: Vec<String>,
+        undo_breaks: bool,
     }
 
     impl Half {
@@ -222,6 +235,9 @@ mod tests {
         }
         fn undo(&mut self, _: &mut dyn FnMut(Progress<'_>)) -> Result<Report> {
             self.note("undo");
+            if self.undo_breaks {
+                bail!("{} stopped halfway", self.name);
+            }
             self.report(&self.available())
         }
         fn undo_selected(
@@ -257,6 +273,7 @@ mod tests {
                 fail,
                 log: Rc::clone(&log),
                 undo_next: undo_next.iter().map(|s| s.to_string()).collect(),
+                undo_breaks: false,
             })
         };
         (
@@ -385,6 +402,35 @@ mod tests {
         assert_eq!(*log.0.borrow(), ["person undo", "system undo"]);
         assert_eq!(report.results.len(), 4);
         assert_eq!(report.results[0].id, "linux.firewall");
+    }
+
+    #[test]
+    fn an_undo_that_stops_halfway_names_only_what_is_still_waiting_to_be_put_back() {
+        let log = Rc::new(Log::default());
+        let mut c = Composite {
+            system: Box::new(Half {
+                name: "system",
+                ids: vec!["linux.firewall", "linux.guest", "linux.llmnr"],
+                fail: false,
+                log: Rc::clone(&log),
+                undo_next: vec!["linux.llmnr".into()],
+                undo_breaks: true,
+            }),
+            person: Box::new(Half {
+                name: "person",
+                ids: vec!["linux.screen_lock"],
+                fail: false,
+                log: Rc::clone(&log),
+                undo_next: Vec::new(),
+                undo_breaks: false,
+            }),
+        };
+        let report = c.undo(&mut |_| {}).unwrap();
+        assert_eq!(
+            ids(&report),
+            [("linux.llmnr", "error"), ("linux.screen_lock", "applied")]
+        );
+        assert_eq!(report.results[0].detail, "system stopped halfway");
     }
 
     #[test]

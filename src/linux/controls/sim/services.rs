@@ -138,7 +138,12 @@ pub(super) fn dispatch(sim: &Sim, program: &str, args: &[&str]) -> Option<Result
         "/usr/bin/pro" => pro(sim, args),
         "/usr/bin/snap" => snap(sim, args),
         "/usr/bin/date" if args.last() == Some(&"+%s") => out(0, &format!("{}\n", sim.now())),
-        "/usr/bin/systemctl" if args.first() == Some(&"try-restart") => out(0, ""),
+        "/usr/bin/systemctl"
+            if args.first() == Some(&"try-restart")
+                && args.get(1) != Some(&"systemd-resolved.service") =>
+        {
+            out(0, "")
+        }
         _ => return None,
     })
 }

@@ -105,6 +105,33 @@ impl Sim {
         self.kv.borrow().get(key).cloned().unwrap_or_default()
     }
 
+    /// What the resolver reads when it starts: the main file, then the drop-ins by name; "built" when none says.
+    fn resolved_from_files(&self) -> String {
+        let files = self.files.borrow();
+        let mut paths: Vec<&PathBuf> = files
+            .keys()
+            .filter(|p| {
+                ["/etc/", "/run/", "/usr/lib/"]
+                    .iter()
+                    .any(|root| p.starts_with(format!("{root}systemd/resolved.conf.d")))
+            })
+            .collect();
+        paths.sort_by_key(|p| p.file_name().map(|n| n.to_owned()));
+        let main = PathBuf::from("/etc/systemd/resolved.conf");
+        let mut word = "built".to_string();
+        for path in std::iter::once(&main).chain(paths) {
+            let text = files
+                .get(path)
+                .map(|b| String::from_utf8_lossy(b).into_owned());
+            for line in text.iter().flat_map(|t| t.lines()) {
+                if let Some(value) = line.trim().strip_prefix("LLMNR=") {
+                    word = value.trim().to_string();
+                }
+            }
+        }
+        word
+    }
+
     pub fn file(&self, path: &str, text: &str) -> &Self {
         self.files.borrow_mut().insert(path.into(), text.into());
         self
@@ -182,7 +209,12 @@ impl Sim {
                 Some((_, true)) => out(0, "active\n"),
                 _ => out(3, "inactive\n"),
             },
-            "try-restart" => out(i32::from(!units.contains_key(&name)) * 5, ""),
+            "try-restart" => {
+                if name == "systemd-resolved.service" && units.get(&name).is_some_and(|u| u.1) {
+                    self.set("resolved.running", &self.resolved_from_files());
+                }
+                out(i32::from(!units.contains_key(&name)) * 5, "")
+            }
             "enable" | "disable" | "start" | "stop" | "reload" => {
                 let Some(unit) = units.get_mut(&name) else {
                     return out(5, "");
@@ -551,7 +583,12 @@ impl Sim {
             ),
             "/usr/bin/resolvectl" if args == ["llmnr"] => {
                 let built = self.get("resolved.built");
-                let word = if built.is_empty() { "yes" } else { &built };
+                let running = self.get("resolved.running");
+                let word = match (running.as_str(), built.is_empty()) {
+                    ("" | "built", true) => "yes",
+                    ("" | "built", false) => &built,
+                    (word, _) => word,
+                };
                 out(0, &format!("Global: {word}\nLink 2 (enp1s0): {word}\n"))
             }
             "/usr/bin/mokutil" => match self.get("sb.support").as_str() {
