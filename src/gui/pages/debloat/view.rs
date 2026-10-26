@@ -231,6 +231,11 @@ fn group_text(group: Group) -> (&'static str, &'static str, Icon) {
             "Apps that let someone control this computer from far away. Remove the ones you did not set up yourself.",
             Icon::Desktop,
         ),
+        Group::Sharing => (
+            "Sharing apps",
+            "Apps that share files with the internet or with others on your network. Remove the ones you do not use.",
+            Icon::Desktop,
+        ),
     }
 }
 

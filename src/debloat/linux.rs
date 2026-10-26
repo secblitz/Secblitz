@@ -13,6 +13,11 @@ pub static CATALOG: &[App] = &[
     app("teamviewer*", "TeamViewer"),
     app("anydesk", "AnyDesk"),
     app("rustdesk", "RustDesk"),
+    app("xrdp", "xrdp"),
+    app("x11vnc", "x11vnc"),
+    app("vino", "Vino"),
+    sharing("transmission-*", "Transmission"),
+    sharing("warpinator", "Warpinator"),
 ];
 
 const fn app(family: &'static str, name: &'static str) -> App {
@@ -20,6 +25,15 @@ const fn app(family: &'static str, name: &'static str) -> App {
         family,
         name,
         group: Group::RemoteAccess,
+        store_id: None,
+    }
+}
+
+const fn sharing(family: &'static str, name: &'static str) -> App {
+    App {
+        family,
+        name,
+        group: Group::Sharing,
         store_id: None,
     }
 }

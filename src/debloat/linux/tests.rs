@@ -36,6 +36,12 @@ fn linux_apps_come_after_the_windows_apps_and_never_match_a_windows_package() {
     assert_eq!(owner("teamviewer-host"), Some(windows as u16));
     assert_eq!(owner("anydesk"), Some(windows as u16 + 1));
     assert_eq!(owner("rustdesk"), Some(windows as u16 + 2));
+    assert_eq!(owner("xrdp"), Some(windows as u16 + 3));
+    assert_eq!(owner("x11vnc"), Some(windows as u16 + 4));
+    assert_eq!(owner("vino"), Some(windows as u16 + 5));
+    assert_eq!(owner("transmission-gtk"), Some(windows as u16 + 6));
+    assert_eq!(owner("transmission-common"), Some(windows as u16 + 6));
+    assert_eq!(owner("warpinator"), Some(windows as u16 + 7));
     assert_eq!(owner("Microsoft.BingWeather"), None);
 }
 
@@ -55,7 +61,40 @@ fn only_remote_control_apps_are_in_the_catalog_and_none_is_a_system_package() {
     ] {
         assert_eq!(owner(name), None, "{name}");
     }
-    assert!(CATALOG.iter().all(|a| a.group == Group::RemoteAccess));
+    assert!(CATALOG
+        .iter()
+        .all(|a| matches!(a.group, Group::RemoteAccess | Group::Sharing)));
+}
+
+#[test]
+fn remote_control_servers_and_sharing_apps_have_their_own_groups() {
+    let group = |name: &str| CATALOG.iter().find(|a| a.name == name).unwrap().group;
+    for name in [
+        "TeamViewer",
+        "AnyDesk",
+        "RustDesk",
+        "xrdp",
+        "x11vnc",
+        "Vino",
+    ] {
+        assert_eq!(group(name), Group::RemoteAccess, "{name}");
+    }
+    for name in ["Transmission", "Warpinator"] {
+        assert_eq!(group(name), Group::Sharing, "{name}");
+    }
+    for name in [
+        "xrdp-sesman",
+        "vino-extras",
+        "x11vnc-data",
+        "warpinator-nemo",
+        "transmissionbt",
+    ] {
+        assert_eq!(
+            owner(name).is_some(),
+            name.starts_with("transmission-"),
+            "{name}"
+        );
+    }
 }
 
 #[test]
@@ -193,6 +232,80 @@ fn the_gate_lets_through_only_the_apps_own_packages() {
         );
     }
     assert!(gate("ubuntu-desktop", &plan(&["ubuntu-desktop"])).is_err());
+}
+
+const MINT_DPKG: &str = "bash\t5.3-2\tii \ntransmission-common\t4.0.5-1build5mint2+mint22\tii \ntransmission-gtk\t4.0.5-1build5mint2+mint22\tii \nwarpinator\t1.8.9\tii \nvino\t3.22.0-8\trc \n";
+
+#[test]
+fn transmission_is_listed_when_its_removal_takes_only_transmission_packages() {
+    let sys = ubuntu();
+    sys.reply("/usr/bin/dpkg-query", &DPKG, 0, MINT_DPKG);
+    sys.reply(
+        "/usr/bin/apt-get",
+        &["-s", "remove", "transmission-gtk"],
+        0,
+        "Reading package lists...\nThe following packages will be REMOVED:\n  transmission-common transmission-gtk\nRemv transmission-gtk [4.0.5-1build5mint2+mint22]\nRemv transmission-common [4.0.5-1build5mint2+mint22]\n",
+    );
+    sys.reply(
+        "/usr/bin/apt-get",
+        &["-s", "remove", "transmission-common"],
+        0,
+        "Remv transmission-gtk [4.0.5-1build5mint2+mint22]\nRemv transmission-common [4.0.5-1build5mint2+mint22]\n",
+    );
+    sys.reply(
+        "/usr/bin/apt-get",
+        &["-s", "remove", "warpinator"],
+        0,
+        "Remv mint-meta-cinnamon [1.0]\nRemv warpinator [1.8.9]\n",
+    );
+    let names: Vec<_> = listable(&sys)
+        .unwrap()
+        .into_iter()
+        .map(|i| i.package)
+        .collect();
+    assert_eq!(names, ["transmission-common", "transmission-gtk"]);
+    assert_eq!(
+        gate(
+            "warpinator",
+            &["mint-meta-cinnamon".to_owned(), "warpinator".to_owned()]
+        )
+        .unwrap_err()
+        .to_string(),
+        REFUSED
+    );
+}
+
+#[test]
+fn removing_transmission_takes_its_shared_files_and_nothing_else() {
+    let sys = ubuntu();
+    sys.reply(
+        "/usr/bin/apt-get",
+        &["-s", "remove", "transmission-gtk"],
+        0,
+        "Remv transmission-gtk [4.0.5-1build5mint2+mint22]\nRemv transmission-common [4.0.5-1build5mint2+mint22]\n",
+    );
+    sys.reply(
+        "/usr/bin/dpkg-query",
+        &["-W", "-f=${db:Status-Abbrev}", "transmission-gtk"],
+        1,
+        "",
+    );
+    assert_eq!(
+        remove_package(&sys, "transmission-gtk"),
+        PackageOutcome::Removed
+    );
+    let sys = ubuntu();
+    sys.reply(
+        "/usr/bin/apt-get",
+        &["-s", "remove", "transmission-gtk"],
+        0,
+        "Remv transmission-gtk [4]\nRemv mint-meta-cinnamon [1]\n",
+    );
+    assert_eq!(
+        remove_package(&sys, "transmission-gtk"),
+        PackageOutcome::Failed(REFUSED.into())
+    );
+    assert!(!called(&sys, "/usr/bin/apt-get remove -y transmission-gtk"));
 }
 
 #[test]

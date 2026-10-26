@@ -202,6 +202,8 @@ mod tests {
             Item::Trash,
             Item::CrashReports,
             Item::FlatpakRuntimes,
+            Item::OldSnaps,
+            Item::OldKernels,
             Item::Temp,
         ];
         assert_eq!(
@@ -209,7 +211,9 @@ mod tests {
             [
                 SpaceWire::PackageCaches,
                 SpaceWire::CrashReports,
-                SpaceWire::FlatpakRuntimes
+                SpaceWire::FlatpakRuntimes,
+                SpaceWire::OldSnaps,
+                SpaceWire::OldKernels
             ]
         );
     }

@@ -29,6 +29,8 @@ pub enum Item {
     ThumbnailCache,
     FlatpakRuntimes,
     Trash,
+    OldSnaps,
+    OldKernels,
 }
 
 impl Item {
@@ -39,15 +41,17 @@ impl Item {
         Item::CrashDumps,
         Item::Thumbnails,
     ];
-    pub const LINUX: [Item; 5] = [
+    pub const LINUX: [Item; 7] = [
         Item::PackageCaches,
+        Item::OldKernels,
+        Item::OldSnaps,
         Item::CrashReports,
         Item::ThumbnailCache,
         Item::FlatpakRuntimes,
         Item::Trash,
     ];
     /// Every item of every system, for state that is indexed by item.
-    pub const EVERY: [Item; 9] = [
+    pub const EVERY: [Item; 11] = [
         Item::Temp,
         Item::UpdateLeftovers,
         Item::CrashDumps,
@@ -57,6 +61,8 @@ impl Item {
         Item::ThumbnailCache,
         Item::FlatpakRuntimes,
         Item::Trash,
+        Item::OldSnaps,
+        Item::OldKernels,
     ];
 
     /// The items this system offers, in the order they are shown.
@@ -65,6 +71,25 @@ impl Item {
             crate::os::Os::Windows => &Item::ALL,
             crate::os::Os::Linux => &Item::LINUX,
             crate::os::Os::Macos => &[],
+        }
+    }
+
+    /// The items of [`Item::here`] that make sense on this computer, so a row is never shown for something it does not have.
+    pub fn offered() -> Vec<Item> {
+        let exists = |path: &str| std::path::Path::new(path).exists();
+        Item::here()
+            .iter()
+            .copied()
+            .filter(|item| item.applies(&exists))
+            .collect()
+    }
+
+    /// Whether the programs this item works through are on the computer, as `exists` tells.
+    pub fn applies(self, exists: &dyn Fn(&str) -> bool) -> bool {
+        match self {
+            Item::OldSnaps => exists(linux::SNAP),
+            Item::OldKernels => exists(linux::APT_GET) && exists(linux::DPKG_QUERY),
+            _ => true,
         }
     }
 
@@ -79,6 +104,8 @@ impl Item {
             Item::ThumbnailCache => "space.thumbnail_cache",
             Item::FlatpakRuntimes => "space.flatpak_runtimes",
             Item::Trash => "space.trash",
+            Item::OldSnaps => "space.old_snaps",
+            Item::OldKernels => "space.old_kernels",
         }
     }
 }
