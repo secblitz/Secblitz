@@ -21,6 +21,12 @@ ARCHES = {
     "x64": dict(target="windows-x86_64", tag="windows-x64", feed="releases/stable.json", sha="sha"),
     "arm64": dict(target="windows-aarch64", tag="windows-arm64", feed="releases/stable-arm64.json", sha="sha-arm64"),
 }
+# Linux and macOS feeds, apart from ARCHES so the Windows download checks never see them.
+PACKAGES = {
+    "linux-x64": dict(target="linux-x86_64", tag="linux-x64", suffixes=(".deb", ".rpm"), feed="releases/stable-linux-x64.json"),
+    "linux-arm64": dict(target="linux-aarch64", tag="linux-arm64", suffixes=(".deb", ".rpm"), feed="releases/stable-linux-arm64.json"),
+    "macos": dict(target="macos-universal", tag="macos-universal", suffixes=(".dmg",), feed="releases/stable-macos.json"),
+}
 SECRET_MARKERS = re.compile(
     rb"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----|[\"']?(?:CLOUDFLARE_API_TOKEN|CLOUDFLARE_API_KEY|CF_API_KEY|CF_API_TOKEN|X-Auth-Key|X-Auth-Email|CLOUDFLARE_EMAIL|CF_API_EMAIL)[\"']?\s*[:=]|Authorization\s*:\s*Bearer\s+",
     re.IGNORECASE,
@@ -63,7 +69,7 @@ def unique_object(pairs):
 
 def verify_feed(site, expected_version=None, feed_path=None, installer_directory=None, arch="x64"):
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-    info = ARCHES[arch]
+    info = ARCHES[arch] if arch in ARCHES else PACKAGES[arch]
     feed_bytes = (feed_path or site / info["feed"]).read_bytes()
     if len(feed_bytes) > 16384:
         raise ValueError("feed exceeds 16 KiB")
@@ -85,7 +91,8 @@ def verify_feed(site, expected_version=None, feed_path=None, installer_directory
         raise ValueError("invalid stable version")
     if expected_version and payload["version"] != expected_version:
         raise ValueError("signed feed version does not match expected release version")
-    if payload["filename"] != f"secblitz-{payload['version']}-{info['tag']}-setup.exe":
+    suffixes = info.get("suffixes", ("-setup.exe",))
+    if payload["filename"] not in {f"secblitz-{payload['version']}-{info['tag']}{suffix}" for suffix in suffixes}:
         raise ValueError("invalid installer filename")
     if any(type(payload[k]) is not int for k in ("size", "published_at", "expires_at")):
         raise ValueError("size and timestamps must be integers")
@@ -269,7 +276,7 @@ def main():
     parser.add_argument("--site", type=Path, default=ROOT / "website", help="static directory to validate (default: website; production: dist/pages)")
     parser.add_argument("--require-feed", action="store_true", help="require a verified signed stable feed")
     parser.add_argument("--expected-version", help="require this exact release version (release gate defaults to Cargo.toml)")
-    parser.add_argument("--arch", choices=sorted(ARCHES), default="x64", help="architecture of the feed given to --verify-feed")
+    parser.add_argument("--arch", choices=sorted({**ARCHES, **PACKAGES}), default="x64", help="architecture of the feed given to --verify-feed")
     parser.add_argument("--verify-feed", type=Path, help="verify a separately downloaded feed locally, without modifying files")
     parser.add_argument("--installer-directory", type=Path, help="directory containing the downloaded installer for --verify-feed")
     args = parser.parse_args()

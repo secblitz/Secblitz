@@ -35,7 +35,7 @@ def validate_authorization(a, origin):
         if type(a[field]) is not int or not 0 <= a[field] <= 2**64 - 1:
             raise ValueError("invalid integer")
     if (a["schema"] != 1 or a["role"] != "secblitz-delivery" or a["sequence"] == 0
-            or a["origin"] != origin or a["target"] not in {i["target"] for i in sign.ARCHES.values()}
+            or a["origin"] != origin or a["target"] not in {i["target"] for i in sign.TARGETS.values()}
             or not 0 < a["expires_at"] - a["published_at"] <= 7 * 86400
             or a["health"] != "update_health_v1"):
         raise ValueError("invalid authorization scope")
