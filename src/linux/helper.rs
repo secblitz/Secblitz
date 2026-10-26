@@ -574,6 +574,7 @@ mod tests {
             .chain(&browsers::SENTENCES)
             .chain(&hardening::SENTENCES)
             .copied()
+            .chain(secblitz::linux::web::SENTENCES)
             .chain(secblitz::linux::backend::texts());
         for text in all.filter(|t| !names.contains(t)) {
             for lang in ["es", "fr", "de", "pt", "it"] {

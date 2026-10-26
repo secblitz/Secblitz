@@ -23,6 +23,7 @@ mod linux_person;
 mod linux_services;
 mod linux_space;
 mod linux_updates;
+mod linux_web;
 mod maintenance;
 mod results;
 
@@ -167,6 +168,7 @@ const MAINTENANCE_PARTS: &[&[[&str; 6]]] = &[
     linux_findings::ROWS,
     linux_space::ROWS,
     linux_feeds::ROWS,
+    linux_web::ROWS,
 ];
 
 const TEXT_PARTS: &[&[[&str; 5]]] = &[

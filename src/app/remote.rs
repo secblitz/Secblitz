@@ -4,6 +4,8 @@
 use super::worker::Session;
 use secblitz::engine::recover::{DamageKind, JournalDamaged};
 use secblitz::engine::{ItemChoice, Progress, ProgressStep, Report};
+use secblitz::filter::config::Config;
+use secblitz::linux::web::{self, PauseFor, WebState};
 use secblitz::model::CheckStatus;
 use secblitz::space::{Item, Tally};
 use secblitz::updater::UpdateStatus;
@@ -66,6 +68,26 @@ pub enum Request {
     RemovedApps,
     ReinstallApp {
         package: String,
+    },
+    /// Everything the web protection page shows. Changes nothing.
+    WebState,
+    /// Saves the web protection switches, starting or stopping the filter to match.
+    WebApply {
+        config: Config,
+    },
+    WebPause {
+        #[serde(rename = "for")]
+        length: PauseFor,
+    },
+    WebResume,
+    WebAllow {
+        site: String,
+    },
+    WebAllowOnce {
+        site: String,
+    },
+    WebRemoveAllowed {
+        site: String,
     },
 }
 
@@ -169,6 +191,7 @@ pub enum Reply {
     },
     Apps(Vec<AppWire>),
     RemovedApps(Vec<RemovedWire>),
+    Web(Box<WebState>),
 }
 
 /// The reply for an error. A damaged undo history keeps its type across the cut.
@@ -275,6 +298,10 @@ fn check_request(request: &Request) -> anyhow::Result<()> {
             );
             Ok(())
         }
+        Request::WebApply { config } => web::check_config(config),
+        Request::WebAllow { site }
+        | Request::WebAllowOnce { site }
+        | Request::WebRemoveAllowed { site } => web::check_site(site),
         _ => Ok(()),
     }
 }
@@ -350,7 +377,14 @@ pub fn serve(session: &mut dyn Session, request: Request, emit: &mut dyn FnMut(E
         | Request::Apps
         | Request::RemoveApps { .. }
         | Request::RemovedApps
-        | Request::ReinstallApp { .. } => Reply::Failed(BAD_ANSWER.to_owned()),
+        | Request::ReinstallApp { .. }
+        | Request::WebState
+        | Request::WebApply { .. }
+        | Request::WebPause { .. }
+        | Request::WebResume
+        | Request::WebAllow { .. }
+        | Request::WebAllowOnce { .. }
+        | Request::WebRemoveAllowed { .. } => Reply::Failed(BAD_ANSWER.to_owned()),
     };
     emit(Event::Done(reply));
 }
@@ -583,6 +617,62 @@ pub fn install_update<T: Transport>(transport: &mut T) -> anyhow::Result<UpdateS
         Reply::Update(status) => Ok(status),
         _ => anyhow::bail!(BAD_ANSWER),
     }
+}
+
+/// Everything the web protection page shows: the switches, the filter's status, recent blocks, the history and whether
+/// lookups are going through the filter.
+pub fn web_state<T: Transport>(transport: &mut T) -> anyhow::Result<WebState> {
+    match ask_once(transport, &Request::WebState)? {
+        Reply::Web(state) => Ok(*state),
+        _ => anyhow::bail!(BAD_ANSWER),
+    }
+}
+
+fn web_change<T: Transport>(transport: &mut T, request: &Request) -> anyhow::Result<()> {
+    match ask_once(transport, request)? {
+        Reply::Ok => Ok(()),
+        _ => anyhow::bail!(BAD_ANSWER),
+    }
+}
+
+/// Saves the switches. Turning them all off also stops the filter.
+pub fn web_apply<T: Transport>(transport: &mut T, config: Config) -> anyhow::Result<()> {
+    web_change(transport, &Request::WebApply { config })
+}
+
+pub fn web_pause<T: Transport>(transport: &mut T, length: PauseFor) -> anyhow::Result<()> {
+    web_change(transport, &Request::WebPause { length })
+}
+
+pub fn web_resume<T: Transport>(transport: &mut T) -> anyhow::Result<()> {
+    web_change(transport, &Request::WebResume)
+}
+
+pub fn web_allow<T: Transport>(transport: &mut T, site: &str) -> anyhow::Result<()> {
+    web_change(
+        transport,
+        &Request::WebAllow {
+            site: site.to_owned(),
+        },
+    )
+}
+
+pub fn web_allow_once<T: Transport>(transport: &mut T, site: &str) -> anyhow::Result<()> {
+    web_change(
+        transport,
+        &Request::WebAllowOnce {
+            site: site.to_owned(),
+        },
+    )
+}
+
+pub fn web_remove_allowed<T: Transport>(transport: &mut T, site: &str) -> anyhow::Result<()> {
+    web_change(
+        transport,
+        &Request::WebRemoveAllowed {
+            site: site.to_owned(),
+        },
+    )
 }
 
 /// An in-process transport: the helper side runs in the same process.
@@ -959,6 +1049,161 @@ mod tests {
         ] {
             assert!(decode_request(&envelope(text)).is_err(), "{text}");
         }
+    }
+
+    fn full_config() -> Config {
+        Config {
+            ads: true,
+            private_lookups: true,
+            allow: vec!["example.com".into()],
+            ..Config::default()
+        }
+    }
+
+    #[test]
+    fn the_web_protection_requests_round_trip_with_the_names_the_page_uses() {
+        for (text, want) in [
+            (r#"{"op":"web_state"}"#, Request::WebState),
+            (r#"{"op":"web_resume"}"#, Request::WebResume),
+            (
+                r#"{"op":"web_pause","for":"quarter"}"#,
+                Request::WebPause {
+                    length: PauseFor::Quarter,
+                },
+            ),
+            (
+                r#"{"op":"web_pause","for":"hour"}"#,
+                Request::WebPause {
+                    length: PauseFor::Hour,
+                },
+            ),
+            (
+                r#"{"op":"web_pause","for":"until_restart"}"#,
+                Request::WebPause {
+                    length: PauseFor::UntilRestart,
+                },
+            ),
+            (
+                r#"{"op":"web_allow","site":"example.com"}"#,
+                Request::WebAllow {
+                    site: "example.com".into(),
+                },
+            ),
+            (
+                r#"{"op":"web_allow_once","site":"shop.example"}"#,
+                Request::WebAllowOnce {
+                    site: "shop.example".into(),
+                },
+            ),
+            (
+                r#"{"op":"web_remove_allowed","site":"example.com"}"#,
+                Request::WebRemoveAllowed {
+                    site: "example.com".into(),
+                },
+            ),
+            (
+                &serde_json::json!({"op": "web_apply", "config": full_config()}).to_string(),
+                Request::WebApply {
+                    config: full_config(),
+                },
+            ),
+        ] {
+            assert_eq!(decode_request(&envelope(text)).unwrap(), want, "{text}");
+            assert_eq!(
+                decode_request(&encode_request(&want).unwrap()).unwrap(),
+                want
+            );
+        }
+    }
+
+    #[test]
+    fn the_web_protection_requests_refuse_what_is_not_a_site_or_is_too_big_or_has_extras() {
+        let mut too_many = full_config();
+        too_many.allow = (0..=secblitz::filter::config::MAX_ALLOWED)
+            .map(|i| format!("site{i}.example"))
+            .collect();
+        let mut odd = full_config();
+        odd.allow = vec!["Not A Site".into()];
+        for text in [
+            r#"{"op":"web_state","path":"/etc/shadow"}"#.to_owned(),
+            r#"{"op":"web_resume","now":true}"#.to_owned(),
+            r#"{"op":"web_pause","for":"forever"}"#.to_owned(),
+            r#"{"op":"web_pause","for":"hour","seconds":5}"#.to_owned(),
+            r#"{"op":"web_pause"}"#.to_owned(),
+            r#"{"op":"web_allow","site":"not a site"}"#.to_owned(),
+            r#"{"op":"web_allow","site":"../../etc"}"#.to_owned(),
+            r#"{"op":"web_allow","site":"Example.com"}"#.to_owned(),
+            r#"{"op":"web_allow_once","site":""}"#.to_owned(),
+            r#"{"op":"web_remove_allowed","site":"a;b"}"#.to_owned(),
+            r#"{"op":"web_allow","site":"example.com","extra":1}"#.to_owned(),
+            serde_json::json!({"op": "web_apply", "config": too_many}).to_string(),
+            serde_json::json!({"op": "web_apply", "config": odd}).to_string(),
+            r#"{"op":"web_apply","config":{"ads":true,"tracking":false,"dangerous":false,"service":"x"}}"#.to_owned(),
+        ] {
+            assert!(decode_request(&envelope(&text)).is_err(), "{text}");
+        }
+        assert!(encode_request(&Request::WebAllow {
+            site: "no spaces".into()
+        })
+        .is_err());
+    }
+
+    struct Canned(Vec<u8>);
+
+    impl Transport for Canned {
+        fn call(
+            &mut self,
+            request: &[u8],
+            on_event: &mut dyn FnMut(&[u8]) -> anyhow::Result<()>,
+        ) -> anyhow::Result<()> {
+            decode_request(request)?;
+            on_event(&self.0)
+        }
+    }
+
+    fn answer(reply: Reply) -> Canned {
+        Canned(serde_json::to_vec(&Event::Done(reply)).unwrap())
+    }
+
+    #[test]
+    fn the_web_protection_client_functions_read_the_state_and_pass_changes_through() {
+        let state = WebState {
+            available: true,
+            config: full_config(),
+            status: None,
+            service: secblitz::filter::control::ServiceState::Running,
+            routed: true,
+            now: 5,
+            recent: Vec::new(),
+            stats: None,
+        };
+        let mut transport = answer(Reply::Web(Box::new(state.clone())));
+        assert_eq!(web_state(&mut transport).unwrap(), state);
+        assert!(web_apply(&mut transport, Config::default()).is_err());
+        let mut ok = answer(Reply::Ok);
+        web_apply(&mut ok, full_config()).unwrap();
+        web_pause(&mut ok, PauseFor::Hour).unwrap();
+        web_resume(&mut ok).unwrap();
+        web_allow(&mut ok, "example.com").unwrap();
+        web_allow_once(&mut ok, "example.com").unwrap();
+        web_remove_allowed(&mut ok, "example.com").unwrap();
+        assert!(web_state(&mut ok).is_err());
+        assert!(web_allow(&mut ok, "no spaces").is_err());
+        let mut failed = answer(Reply::Failed(web::NOT_AVAILABLE.to_owned()));
+        assert_eq!(
+            web_apply(&mut failed, full_config())
+                .unwrap_err()
+                .to_string(),
+            web::NOT_AVAILABLE
+        );
+    }
+
+    #[test]
+    fn a_session_alone_does_not_answer_the_web_protection_requests() {
+        let mut fake = Fake::default();
+        let error = web_resume(&mut Loopback { session: &mut fake }).unwrap_err();
+        assert_eq!(format!("{error:#}"), BAD_ANSWER);
+        assert!(fake.log.is_empty());
     }
 
     #[test]
