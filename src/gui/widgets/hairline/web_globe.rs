@@ -101,7 +101,7 @@ impl Labels {
             tracker: t("Tracker"),
             scam: t("Scam website"),
             page: t("Web page"),
-            pc: t("Your PC"),
+            pc: t("Your computer"),
             internet: t("The internet"),
             on: t("Web protection is on"),
             starting: t("Getting block lists ready"),
@@ -1276,7 +1276,7 @@ mod tests {
 
         let p = prog(Guard::On, Instant::now());
         assert_eq!(p.label(&st, Part::Globe), "<The internet>");
-        assert_eq!(p.label(&st, Part::Pc), "<Your PC>");
+        assert_eq!(p.label(&st, Part::Pc), "<Your computer>");
         assert_eq!(p.label(&st, Part::Dome), "<Web protection is on>");
         assert_eq!(p.label(&st, Part::Item(ad.id)), "<Ad>");
         let tracker = st.items.iter().find(|i| i.kind == Kind::Tracker).unwrap();

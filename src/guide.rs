@@ -28,10 +28,11 @@ pub enum Page {
     Storage,
     InstalledApps,
     Taskbar,
+    PrivacySettings,
 }
 
 impl Page {
-    pub const ALL: [Page; 24] = [
+    pub const ALL: [Page; 25] = [
         Page::CoreIsolation,
         Page::Firewall,
         Page::DeviceSecurity,
@@ -56,6 +57,7 @@ impl Page {
         Page::Storage,
         Page::InstalledApps,
         Page::Taskbar,
+        Page::PrivacySettings,
     ];
 
     pub fn name(self) -> &'static str {
@@ -84,6 +86,7 @@ impl Page {
             Page::Storage => "Storage",
             Page::InstalledApps => "Installed apps",
             Page::Taskbar => "Taskbar settings",
+            Page::PrivacySettings => "Privacy settings",
         }
     }
 
@@ -113,6 +116,7 @@ impl Page {
             Page::Storage => "Open Storage",
             Page::InstalledApps => "Open Installed apps",
             Page::Taskbar => "Open Taskbar settings",
+            Page::PrivacySettings => "Open Privacy settings",
         }
     }
 
@@ -142,6 +146,7 @@ impl Page {
             Page::Storage => Action::OpenStorage,
             Page::InstalledApps => Action::OpenInstalledApps,
             Page::Taskbar => Action::OpenTaskbar,
+            Page::PrivacySettings => Action::OpenDesktopPrivacy,
         }
     }
 
@@ -171,6 +176,7 @@ impl Page {
             Page::Storage => Request::OpenStorage,
             Page::InstalledApps => Request::OpenInstalledApps,
             Page::Taskbar => Request::OpenTaskbar,
+            Page::PrivacySettings => Request::OpenDesktopPrivacy,
         }
     }
 
@@ -227,7 +233,7 @@ static MEMORY_INTEGRITY: Guide = g(
     &[
         "Find Memory integrity under Core isolation and turn it on.",
         "If Windows names a driver that blocks it, update that driver or its app, then try again.",
-        "Restart your PC when Windows asks.",
+        "Restart your computer when Windows asks.",
     ],
 );
 static KERNEL_STACK: Guide = g(
@@ -235,8 +241,8 @@ static KERNEL_STACK: Guide = g(
     &[
         "Turn on Memory integrity first. The next option appears below it.",
         "Turn on Kernel-mode Hardware-enforced Stack Protection.",
-        "If you don't see it, your PC doesn't support it and nothing is wrong.",
-        "Restart your PC when Windows asks.",
+        "If you don't see it, your computer doesn't support it and nothing is wrong.",
+        "Restart your computer when Windows asks.",
     ],
 );
 static ENCRYPTION: Guide = Guide {
@@ -254,16 +260,16 @@ static ENCRYPTION_HOME: Guide = g(
     &[
         "Save your recovery key somewhere safe first. Microsoft accounts keep it at account.microsoft.com/devices/recoverykey.",
         "Turn on Device encryption.",
-        "No Device encryption page? Then this PC can't encrypt its drive with Windows Home.",
+        "No Device encryption page? Then this computer can't encrypt its drive with Windows Home.",
     ],
 );
 static SECURE_BOOT: Guide = g(
     Page::Recovery,
     &[
-        "Encrypted PC? Find your recovery key first at aka.ms/myrecoverykey, as Windows may ask for it after this.",
+        "Encrypted computer? Find your recovery key first at aka.ms/myrecoverykey, as Windows may ask for it after this.",
         "Save your work, then select Restart now next to Advanced startup.",
         "Choose Troubleshoot, Advanced options, UEFI Firmware Settings, then Restart. No such option? Stop here.",
-        "Turn on Secure Boot, often under Boot or Security. Menus differ by PC maker. Save and exit.",
+        "Turn on Secure Boot, often under Boot or Security. Menus differ by computer maker. Save and exit.",
     ],
 );
 static AUTOLOGON: Guide = g(
@@ -277,7 +283,7 @@ static AUTOLOGON: Guide = g(
 static REMOTE_DESKTOP: Guide = g(
     Page::RemoteDesktop,
     &[
-        "Using this PC from another device right now? Stop here. Turning this off ends that connection.",
+        "Using this computer from another device right now? Stop here. Turning this off ends that connection.",
         "Turn off Remote Desktop.",
         "Select Confirm if Windows asks.",
     ],
@@ -288,7 +294,7 @@ static SMB1: Guide = g(
         "If an old printer or shared drive needs it, leave it on.",
         "Scroll down and select More Windows features.",
         "Untick SMB 1.0/CIFS File Sharing Support, then select OK.",
-        "Restart your PC when Windows asks.",
+        "Restart your computer when Windows asks.",
     ],
 );
 static LIFECYCLE: Guide = g(
@@ -296,7 +302,7 @@ static LIFECYCLE: Guide = g(
     &[
         "Select Check for updates.",
         "If a newer version of Windows is offered, choose Download and install.",
-        "If none is offered, look on this page for Extended Security Updates (Enroll now), or plan for a PC that runs Windows 11.",
+        "If none is offered, look on this page for Extended Security Updates (Enroll now), or plan for a computer that runs Windows 11.",
     ],
 );
 static SECURE_BOOT_CERTS: Guide = g(
@@ -304,15 +310,15 @@ static SECURE_BOOT_CERTS: Guide = g(
     &[
         "Select Check for updates and install everything offered.",
         "Restart when Windows asks. You may need to do this more than once.",
-        "Then look for a startup (BIOS) update on your PC maker's website.",
-        "Your PC maker may need to release one before the renewal can finish.",
+        "Then look for a startup (BIOS) update on your computer maker's website.",
+        "Your computer maker may need to release one before the renewal can finish.",
     ],
 );
 static RUN_HISTORY: Guide = g(
     Page::WindowsSecurity,
     &[
         "Run a full scan first. Choose Scan options, then Full scan, then Scan now.",
-        "Then use another phone or PC to change your passwords. Start with your email, then your bank.",
+        "Then use another phone or computer to change your passwords. Start with your email, then your bank.",
         "Turn on two-step sign-in wherever it is offered.",
         "Watch your bank and card statements for anything you don't know.",
     ],
@@ -335,7 +341,7 @@ static REBOOT: Guide = g(
 static WORK: Guide = g(
     Page::WorkAccounts,
     &[
-        "Look at the accounts listed. A work or school account means someone else may manage this PC.",
+        "Look at the accounts listed. A work or school account means someone else may manage this computer.",
         "If you don't recognise one, ask the person or company named there. Don't disconnect an account you use to sign in to Windows.",
     ],
 );
@@ -344,7 +350,7 @@ static HELLO: Guide = g(
     &[
         "Select PIN (Windows Hello).",
         "Choose Set up and follow the steps.",
-        "Face or fingerprint appear here too if your PC has the hardware.",
+        "Face or fingerprint appear here too if your computer has the hardware.",
     ],
 );
 static FIND_MY_DEVICE: Guide = g(
@@ -400,7 +406,7 @@ static WIDGETS: Guide = g(
     Page::Taskbar,
     &[
         "Turn off Widgets under Taskbar items.",
-        "This hides Widgets for your account. Anyone else who uses this PC can do the same.",
+        "This hides Widgets for your account. Anyone else who uses this computer can do the same.",
     ],
 );
 /// Hidden background tasks (WMI): nothing is removed by hand, since some work
@@ -410,8 +416,23 @@ static HIDDEN_TASKS: Guide = g(
     &[
         "Don't remove anything yourself. Some work or hardware tools set these up on purpose.",
         "Save your work. Choose Scan options, then Microsoft Defender Offline scan, then Scan now.",
-        "Your PC restarts and scans for about 15 minutes. Windows removes what it finds.",
-        "Still listed after that? Ask someone you trust who knows PCs to look at it with you.",
+        "Your computer restarts and scans for about 15 minutes. Windows removes what it finds.",
+        "Still listed after that? Ask someone you trust who knows computers to look at it with you.",
+    ],
+);
+
+static RECENT_FILES: Guide = g(
+    Page::PrivacySettings,
+    &[
+        "Find the switch for remembering recent files, or file history.",
+        "Turn it off, or choose how long files are remembered.",
+    ],
+);
+static LOCK_PREVIEWS: Guide = g(
+    Page::PrivacySettings,
+    &[
+        "Find the settings for notifications on the lock screen.",
+        "Turn off showing the text of messages while the screen is locked.",
     ],
 );
 
@@ -452,12 +473,23 @@ pub fn guide_not_offered(key: &str, detail: &str) -> Option<&'static Guide> {
         vbs::MEMORY_INTEGRITY if vbs::is_driver_reason(detail) => Some(&MEMORY_INTEGRITY),
         vbs::STACK_PROTECTION if detail == vbs::NEEDS_MEMORY_INTEGRITY => Some(&KERNEL_STACK),
         "debloat.widgets_policy" if detail == WIDGETS_YOURSELF => Some(&WIDGETS),
+        "linux.recent_files" if detail == secblitz::linux::person::UNAVAILABLE => {
+            Some(&RECENT_FILES)
+        }
+        "linux.lock_previews" if detail == secblitz::linux::person::UNAVAILABLE => {
+            Some(&LOCK_PREVIEWS)
+        }
         _ => None,
     }
 }
 
 /// how to reach it by hand.
 pub fn failure_text(lang: crate::i18n::Lang, page: Page) -> String {
+    if page == Page::PrivacySettings {
+        return lang
+            .t("We couldn't open {page}. Open your computer's Settings app and look for {page}.")
+            .replace("{page}", &lang.t(page.name()));
+    }
     lang.t("We couldn't open {page}. Press the Windows key, type {page} and press Enter.")
         .replace("{page}", &lang.t(page.name()))
 }
@@ -547,12 +579,53 @@ mod tests {
             keys.push(page.button());
         }
         keys.push("We couldn't open {page}. Press the Windows key, type {page} and press Enter.");
+        keys.push(
+            "We couldn't open {page}. Open your computer's Settings app and look for {page}.",
+        );
+        keys.extend(RECENT_FILES.steps);
+        keys.extend(LOCK_PREVIEWS.steps);
         // Product names stay as Microsoft spells them in every language.
         keys.retain(|k| !matches!(*k, "Windows Security" | "Windows Update" | "BitLocker"));
         for lang in [Lang::Es, Lang::Fr, Lang::De, Lang::Pt, Lang::It] {
             for key in &keys {
                 assert_ne!(lang.t(key), *key, "{}: {key}", lang.code());
             }
+        }
+    }
+
+    #[test]
+    fn the_privacy_steps_are_short_and_only_given_when_the_desktop_cannot_be_changed() {
+        let unavailable = secblitz::linux::person::UNAVAILABLE;
+        for (id, steps) in [
+            ("linux.recent_files", &RECENT_FILES),
+            ("linux.lock_previews", &LOCK_PREVIEWS),
+        ] {
+            let g = guide_not_offered(id, unavailable).unwrap();
+            assert_eq!(g, steps);
+            assert_eq!(g.page, Page::PrivacySettings);
+            assert!((2..=4).contains(&g.steps.len()));
+            for step in g.steps {
+                assert!(step.len() <= 130 && step.ends_with('.'), "{step}");
+                assert!(!step.contains('\u{2014}'), "{step}");
+            }
+            assert!(guide_not_offered(id, "").is_none());
+            assert!(guide_not_offered(id, "Eligible unmanaged local preference").is_none());
+        }
+        assert!(guide_not_offered("linux.firewall", unavailable).is_none());
+    }
+
+    #[test]
+    fn the_privacy_page_is_opened_with_words_that_fit_a_linux_desktop() {
+        let text = failure_text(Lang::En, Page::PrivacySettings);
+        assert_eq!(
+            text,
+            "We couldn't open Privacy settings. Open your computer's Settings app and look for Privacy settings."
+        );
+        assert!(!text.contains("Windows"));
+        for lang in [Lang::Es, Lang::Fr, Lang::De, Lang::Pt, Lang::It] {
+            let translated = failure_text(lang, Page::PrivacySettings);
+            assert_ne!(translated, text, "{}", lang.code());
+            assert!(!translated.contains('{'), "{translated}");
         }
     }
 
@@ -593,7 +666,7 @@ mod tests {
             vbs::UNREADABLE,
             vbs::SET_BY_HAND,
             vbs::OLD_WINDOWS,
-            "Not offered: a driver on this PC may not work with itself",
+            "Not offered: a driver on this computer may not work with itself",
             "Not offered: this edition of Windows does not include it",
         ] {
             assert!(guide_not_offered(mi, no).is_none(), "{no}");

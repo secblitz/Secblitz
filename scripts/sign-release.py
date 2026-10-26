@@ -28,15 +28,53 @@ ARCHES = {
 }
 
 
+# Linux and macOS packages, signed into their own feeds. Kept apart from ARCHES
+# so nothing that walks the Windows installers sees them.
+PACKAGES = {
+    "linux-x64": dict(target="linux-x86_64", tag="linux-x64", suffixes=(".deb", ".rpm"),
+                      feeds=dict(deb="stable-linux-x64-deb.json", rpm="stable-linux-x64-rpm.json")),
+    "linux-arm64": dict(target="linux-aarch64", tag="linux-arm64", suffixes=(".deb", ".rpm"),
+                        feeds=dict(deb="stable-linux-arm64-deb.json", rpm="stable-linux-arm64-rpm.json")),
+    "macos": dict(target="macos-universal", tag="macos-universal", suffixes=(".dmg",), feed="stable-macos.json"),
+}
+TARGETS = {**ARCHES, **PACKAGES}
+
+
 def arch_of_target(target):
-    for name, info in ARCHES.items():
+    for name, info in TARGETS.items():
         if info["target"] == target:
             return name
     raise ValueError("unknown target")
 
 
+def feed_name(arch, package=None):
+    """The feed file for one target. Linux has one feed per package kind because one binary serves both."""
+    info = TARGETS[arch]
+    if "feeds" in info:
+        if package not in info["feeds"]:
+            raise ValueError("this target needs a package kind: deb or rpm")
+        return info["feeds"][package]
+    if package is not None:
+        raise ValueError("this target has no package kinds")
+    return info["feed"]
+
+
+def package_of(filename):
+    for kind in ("deb", "rpm"):
+        if filename.endswith("." + kind):
+            return kind
+    return None
+
+
+def setup_names(version, arch):
+    if arch in PACKAGES:
+        info = PACKAGES[arch]
+        return [f"secblitz-{version}-{info['tag']}{suffix}" for suffix in info["suffixes"]]
+    return [f"secblitz-{version}-{ARCHES[arch]['tag']}-setup.exe"]
+
+
 def setup_name(version, arch):
-    return f"secblitz-{version}-{ARCHES[arch]['tag']}-setup.exe"
+    return setup_names(version, arch)[0]
 
 
 def strict_json(data):
@@ -127,13 +165,13 @@ def validate_manifest(payload, now, arch=None):
     for field in ("schema", "size", "published_at", "expires_at"):
         if type(payload[field]) is not int or not 0 <= payload[field] <= 2**64 - 1:
             raise ValueError("invalid integer")
-    if payload["target"] not in {info["target"] for info in ARCHES.values()}:
+    if payload["target"] not in {info["target"] for info in TARGETS.values()}:
         raise ValueError("invalid or stale v1 manifest")
     found = arch_of_target(payload["target"])
     if arch is not None and found != arch:
         raise ValueError("invalid or stale v1 manifest")
     if (payload["schema"] != 1
-            or payload["filename"] != setup_name(payload["version"], found)
+            or payload["filename"] not in setup_names(payload["version"], found)
             or not isinstance(payload["sha256"], str) or not HASH.fullmatch(payload["sha256"])
             or not 0 < payload["size"] <= 64 * 1024 * 1024
             or not 0 < payload["expires_at"] - payload["published_at"] <= 90 * 86400
@@ -215,13 +253,17 @@ def main():
     parser.add_argument("--key", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--lifetime-days", type=int, default=90)
-    parser.add_argument("--arch", choices=sorted(ARCHES), default="x64")
+    parser.add_argument("--arch", choices=sorted(TARGETS), default="x64")
+    parser.add_argument("--package", choices=("deb", "rpm"), help="package kind; required with linux architectures")
     parser.add_argument("--public-key", type=Path, default=ROOT / "assets/update-public-key.hex")
     args = parser.parse_args()
     stable_version(args.version)
-    expected = setup_name(args.version, args.arch)
-    if args.installer.name != expected or args.installer.is_symlink():
+    if args.installer.name not in setup_names(args.version, args.arch) or args.installer.is_symlink():
         parser.error("installer must be a regular file with the exact versioned setup filename")
+    if ("feeds" in TARGETS[args.arch]) != (args.package is not None):
+        parser.error("--package is required with linux architectures and not allowed with the others")
+    if args.package and package_of(args.installer.name) != args.package:
+        parser.error("installer filename does not match --package")
     if not 1 <= args.lifetime_days <= 90:
         parser.error("lifetime must be 1 through 90 days")
     for path in (args.key, args.installer, args.public_key, args.output):
@@ -242,11 +284,11 @@ def main():
     if not 0 < size <= 25 * 1024 * 1024:
         parser.error("installer must be nonempty and at most 25 MiB for Pages")
     now = int(time.time())
-    payload = dict(schema=1, version=args.version, target=ARCHES[args.arch]["target"], filename=expected,
+    payload = dict(schema=1, version=args.version, target=TARGETS[args.arch]["target"], filename=args.installer.name,
                    sha256=digest.hexdigest(), size=size, published_at=now,
                    expires_at=now + args.lifetime_days * 86400)
     write_output(args.output, signed_envelope(payload, key))
-    print(f"Signed {expected}: sha256={digest.hexdigest()}, size={size}")
+    print(f"Signed {args.installer.name}: sha256={digest.hexdigest()}, size={size}")
 
 
 if __name__ == "__main__":

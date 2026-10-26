@@ -1,0 +1,4 @@
+dccp /lib/modules/6.14.0-37-generic/kernel/net/dccp/dccp.ko.zst
+sctp /lib/modules/6.14.0-37-generic/kernel/net/sctp/sctp.ko.zst
+rds /lib/modules/6.14.0-37-generic/kernel/net/rds/rds.ko.zst
+tipc /lib/modules/6.14.0-37-generic/kernel/net/tipc/tipc.ko.zst

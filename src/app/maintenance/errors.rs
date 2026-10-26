@@ -1,24 +1,24 @@
 //! Plain-words mapping from raw engine errors to the sentences and reasons the GUI shows.
 pub const ERR_USE_WINDOWS_UPDATE: &str =
-    "Updates can't be installed from this account. Sign in to Windows with a different administrator account, or ask the person who manages this PC, then open Secblitz again. You can also install them in Windows Update.";
+    "Updates can't be installed from this account. Sign in to Windows with a different administrator account, or ask the person who manages this computer, then open Secblitz again. You can also install them in Windows Update.";
 pub const ERR_UNAVAILABLE: &str =
-    "This isn't available on this PC. Check for a newer version of Secblitz, or use Windows Settings instead.";
+    "This isn't available on this computer. Check for a newer version of Secblitz, or use Windows Settings instead.";
 pub const ERR_SETTINGS_BLOCK: &str =
-    "Your PC's settings don't allow this. If someone else manages this PC, ask them to allow it, then try again.";
+    "Your computer's settings don't allow this. If someone else manages this computer, ask them to allow it, then try again.";
 pub const ERR_CHANGED: &str =
     "The list of updates changed. Press Check again, look over the updates, then install them.";
-pub const ERR_RESTART: &str = "Restart your PC, then try again.";
+pub const ERR_RESTART: &str = "Restart your computer, then try again.";
 pub const ERR_BUSY: &str = "Windows is busy with another task. Try again in a few minutes.";
-pub const ERR_POWER: &str = "Plug your PC in, then try again.";
+pub const ERR_POWER: &str = "Plug your computer in, then try again.";
 pub const ERR_DISK: &str = "Free up at least 5 GB on your system drive, then try again.";
 pub const ERR_METERED: &str =
     "You're on a connection with a data limit. Connect to a network without one, then try again.";
-pub const ERR_NOT_READY: &str = "Your PC isn't ready for this right now. Plug it in, save your work, restart if Windows is waiting, then try again.";
+pub const ERR_NOT_READY: &str = "Your computer isn't ready for this right now. Plug it in, save your work, restart if Windows is waiting, then try again.";
 pub const ERR_EARLIER: &str =
     "An earlier repair or update still needs to be checked. Restart Secblitz and try again.";
 pub const ERR_NETWORK: &str =
     "We couldn't reach Windows Update. Check your internet connection and try again.";
-pub const ERR_GENERAL: &str = "We couldn't finish this. Try again in a few minutes. If it keeps happening, restart your PC and check for a Secblitz update.";
+pub const ERR_GENERAL: &str = "We couldn't finish this. Try again in a few minutes. If it keeps happening, restart your computer and check for a Secblitz update.";
 pub const ERR_REOPEN: &str = "Reopen Secblitz from its shortcut and try again.";
 
 /// False when trying again cannot help (the GUI should show a different next
@@ -136,20 +136,20 @@ pub fn check_start_blocker() -> Option<&'static str> {
 
 pub fn why_for_note(note: &str) -> &'static str {
     match note {
-        ERR_USE_WINDOWS_UPDATE => "Windows only lets Secblitz install updates from a standard administrator account, and this account can't. Sign in with a different administrator account, or ask the person who manages this PC, then open Secblitz again.",
+        ERR_USE_WINDOWS_UPDATE => "Windows only lets Secblitz install updates from a standard administrator account, and this account can't. Sign in with a different administrator account, or ask the person who manages this computer, then open Secblitz again.",
         ERR_UNAVAILABLE => "This version of Windows doesn't support this feature, so Secblitz can't do it here.",
-        ERR_SETTINGS_BLOCK => "A setting on this PC, often set by a workplace or school, stops Secblitz from doing this.",
+        ERR_SETTINGS_BLOCK => "A setting on this computer, often set by a workplace or school, stops Secblitz from doing this.",
         ERR_CHANGED => "Windows found different updates from the ones you looked at, so nothing was installed.",
         ERR_REOPEN => "Secblitz was started in a way that doesn't allow this. Opening it from its shortcut fixes that.",
         ERR_RESTART => "Windows has changes waiting that need a restart before it can carry on.",
         ERR_BUSY => "Windows is running its own update or maintenance work. This usually ends within a few minutes.",
-        ERR_POWER => "Updates need your PC to be plugged in, so it can't switch off part way through.",
+        ERR_POWER => "Updates need your computer to be plugged in, so it can't switch off part way through.",
         ERR_DISK => "Windows needs room on your system drive to download and set up updates.",
         ERR_METERED => "Windows treats this connection as one with a data limit, so large downloads are held back.",
         ERR_NOT_READY => "Windows isn't in a state where it can safely make changes yet.",
         ERR_EARLIER => "A job that was running earlier didn't finish cleanly, and Secblitz wants to check it first.",
         ERR_NETWORK => "Secblitz couldn't connect to the internet. Your connection may be off or very slow.",
-        _ => "Something unexpected stopped this. Nothing was damaged. Restart your PC and try again, and check for a Secblitz update if it keeps happening.",
+        _ => "Something unexpected stopped this. Nothing was damaged. Restart your computer and try again, and check for a Secblitz update if it keeps happening.",
     }
 }
 

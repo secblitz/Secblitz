@@ -757,7 +757,7 @@ mod system {
             changes,
             apps,
             web,
-            update: secblitz::updater::status().ok(),
+            update: crate::app::settings::update_status().ok(),
             services,
             problems,
         }

@@ -208,11 +208,11 @@ pub fn finding_advice(report: &Report, f: &secblitz::model::Finding) -> advice::
 }
 
 pub const RESTART_TO_START: &str =
-    "Core system protection is on but is not running. Restart your PC (choose Restart, not Shut down).";
+    "Core system protection is on but is not running. Restart your computer (choose Restart, not Shut down).";
 
 const REASONS_THAT_REPLACE_THE_TIP: [&str; 2] = [
-    "Not offered: you are connected to this PC from another device right now",
-    "Not offered: this PC is set up as a kiosk",
+    "Not offered: you are connected to this computer from another device right now",
+    "Not offered: this computer is set up as a kiosk",
 ];
 
 pub fn to_check_count(report: &Report) -> usize {
@@ -392,6 +392,21 @@ mod tests {
             Class::Protected,
             "still listed with its undo"
         );
+    }
+
+    #[test]
+    fn a_linux_finding_that_needs_attention_is_something_to_check_like_any_other() {
+        for title in secblitz::linux::controls::findings::TITLES {
+            let mut r = rep(vec![]);
+            r.findings.push(secblitz::model::Finding {
+                title: title.into(),
+                status: CheckStatus::Attention,
+                detail: String::new(),
+            });
+            assert_eq!(classify_finding(&r.findings[0]), Class::Review, "{title}");
+            assert_eq!(to_check_count(&r), 1, "{title}");
+            assert!(matches!(to_check(&r)[0], ToCheck::Finding(_)), "{title}");
+        }
     }
 
     #[test]
@@ -596,8 +611,8 @@ mod tests {
         assert!(!finding_has_fix(&r, &r.findings[0]));
         assert_eq!(to_check_count(&r), 1);
         for reason in [
-            "Not offered: you are connected to this PC from another device right now",
-            "Not offered: this PC is set up as a kiosk",
+            "Not offered: you are connected to this computer from another device right now",
+            "Not offered: this computer is set up as a kiosk",
         ] {
             let id = if reason.contains("kiosk") {
                 "accounts.autologon"
@@ -634,7 +649,7 @@ mod tests {
             ("skipped", secblitz::vbs::LOCKED),
             (
                 "skipped",
-                "Not offered: a driver on this PC may not work with it: a.sys",
+                "Not offered: a driver on this computer may not work with it: a.sys",
             ),
             ("skipped", "Relevant policy is configured: assessment only"),
             ("unknown", ""),
@@ -693,7 +708,7 @@ mod tests {
         let mut r = rep(vec![row(
             "accounts.autologon",
             "skipped",
-            "Not offered: this PC is set up as a kiosk",
+            "Not offered: this computer is set up as a kiosk",
         )]);
         r.findings.push(tip("Remote Desktop"));
         assert!(!finding_has_fix(&r, &r.findings[0]));

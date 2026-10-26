@@ -147,7 +147,7 @@ probe_ids! {
     Vpn => "VpnClient/Get-VpnConnection -AllUserConnection: status only",
     Permissions => "permissions::audit: bounded fixed-service broad-principal DACL audit",
     OsSupport => "HKLM Windows version values: DisplayVersion, build and edition id only",
-    SecureBootCerts => "System event ids, Secure Boot servicing values, the renewal task state, db certificate presence, virtual PC, BitLocker and other-system hints (no firmware data or event text emitted)",
+    SecureBootCerts => "System event ids, Secure Boot servicing values, the renewal task state, db certificate presence, virtual computer, BitLocker and other-system hints (no firmware data or event text emitted)",
     DefenderProtection => "Defender/Get-MpComputerStatus, Get-MpThreat, Get-MpThreatDetection and exclusion counts only (no paths)",
     SmartScreen => "HKLM SmartScreen, Smart App Control and browser safe-browsing policy indicators",
     UpdatePolicy => "HKLM Windows Update policy and pause values, service start types, pending restart and uptime",

@@ -524,7 +524,7 @@ function AutoLogonFinding {
         if ($flag -cnotin @('0','1')) { throw 'AutoAdminLogon has an unknown configuration' }
         $enabled = $flag -ceq '1'
     }
-    return @{title='Automatic logon';status=$(if ($enabled -or $secretPresent) {'attention'} else {'info'});detail="AutoAdminLogon enabled=$enabled; Winlogon DefaultPassword value present=$secretPresent. Presence only: no password data is read. Passwords kept in the Windows secret store are not checked. Review who can use this PC; automatic logon is kept to avoid disrupting kiosk or sign-in workflows."}
+    return @{title='Automatic logon';status=$(if ($enabled -or $secretPresent) {'attention'} else {'info'});detail="AutoAdminLogon enabled=$enabled; Winlogon DefaultPassword value present=$secretPresent. Presence only: no password data is read. Passwords kept in the Windows secret store are not checked. Review who can use this computer; automatic logon is kept to avoid disrupting kiosk or sign-in workflows."}
 }
 function Findings {
     Finding 'Automatic logon' { AutoLogonFinding }

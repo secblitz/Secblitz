@@ -100,7 +100,7 @@ fn checking_again_shows_the_whole_checking_screen_then_hands_off() {
         app.ctx.finishing && app.handoff.is_some(),
         "the result waits for the screen to settle"
     );
-    drop(app.update(Message::Navigate(Page::Tools)));
+    drop(app.update(Message::Navigate(Page::Settings)));
     assert!(!app.ctx.finishing && app.ctx.checking.is_none());
 }
 
@@ -1852,7 +1852,7 @@ fn the_info_dialog_opens_closes_and_gives_way_to_escape_first() {
     drop(app.update(Message::Escape));
     assert!(!app.whats_new);
 
-    for leave in [Message::Navigate(Page::Tools), Message::CheckNow] {
+    for leave in [Message::Navigate(Page::Settings), Message::CheckNow] {
         drop(app.update(Message::Info(Some(Box::new(sheet.clone())))));
         drop(app.update(leave));
         assert!(app.ctx.info.is_none());
@@ -1926,4 +1926,20 @@ fn pages_without_a_check_ask_for_one_and_the_welcome_covers_the_window() {
         drop(app.update(Message::Navigate(page)));
         drop(app.view());
     }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn on_linux_a_way_to_tools_lands_on_home() {
+    let _motion = widgets::anim::forced::set(false);
+    let mut app = app();
+    drop(app.update(Message::Navigate(Page::Settings)));
+    drop(app.update(Message::Navigate(Page::Tools)));
+    assert_eq!(app.page, Page::Home);
+    drop(app.view());
+    drop(app.update(Message::Navigate(Page::Web)));
+    assert_eq!(app.page, Page::Web);
+    drop(app.view());
+    drop(app.update(Message::Navigate(Page::Fixes)));
+    assert_eq!(app.page, Page::Fixes);
 }

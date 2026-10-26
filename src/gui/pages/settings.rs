@@ -19,7 +19,12 @@ enum Remote<T> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UpdateView {
     UpToDate,
+    NotPublished,
     Ready,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    Waiting,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    Installing,
     Checking,
     Unknown,
     NotChecked,
@@ -30,11 +35,27 @@ pub fn update_view(status: &secblitz::updater::UpdateStatus) -> UpdateView {
     use secblitz::updater::UpdateOutcome as O;
     match &status.result {
         O::UpToDate | O::Installed { .. } | O::DeferredRollout { .. } => UpdateView::UpToDate,
+        O::NotPublished => UpdateView::NotPublished,
         O::DeferredBusy if status.checked_at == 0 => UpdateView::Checking,
-        O::WorkerStarted { .. } | O::DeferredBusy => UpdateView::Ready,
+        O::WorkerStarted { .. } | O::Available { .. } | O::DeferredBusy => UpdateView::Ready,
         O::Failed { .. } => UpdateView::Unknown,
         O::NotConfigured if status.checked_at == 0 => UpdateView::NotChecked,
         O::NotConfigured => UpdateView::Off,
+    }
+}
+
+/// On Linux a waiting version is installed by the software app when the Secblitz repository is set up, and by Secblitz
+/// itself otherwise; a started install is its own state.
+#[cfg(target_os = "linux")]
+pub fn linux_update_view(
+    status: &secblitz::updater::UpdateStatus,
+    by_software_app: bool,
+) -> UpdateView {
+    use secblitz::updater::UpdateOutcome as O;
+    match (&status.result, by_software_app) {
+        (O::Available { .. }, true) => UpdateView::Waiting,
+        (O::WorkerStarted { .. }, _) => UpdateView::Installing,
+        _ => update_view(status),
     }
 }
 
@@ -44,6 +65,16 @@ fn shown_update(installed: bool, update: Option<UpdateView>) -> Remote<UpdateVie
         Some(view) => Remote::Ready(view),
         None => Remote::Failed,
     }
+}
+
+/// Windows copies run from the install folder; the other systems install through their package manager.
+fn updates_apply(os: secblitz::os::Os, installed: bool) -> bool {
+    os != secblitz::os::Os::Windows || installed
+}
+
+/// The tray icon and the notifications about switched back settings and blocked websites exist on Windows only.
+fn has_background_extras(os: secblitz::os::Os) -> bool {
+    os == secblitz::os::Os::Windows
 }
 
 fn shown_tray(installed: bool, tray: bool) -> bool {
@@ -183,6 +214,12 @@ pub enum Msg {
     FeedbackOpened(bool),
     PrivacyOpened(bool),
     Frame,
+    InstallUpdate,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    UpdateInstalled(Result<UpdateView, String>),
+    CheckUpdate,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    UpdateChecked(Result<UpdateView, String>),
     PrefsSaved(bool),
     Remove(remove::Msg),
     Help(support::Msg),
@@ -210,10 +247,75 @@ pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
         Msg::Frame => Task::none(),
         Msg::PrefsSaved(true) => Task::none(),
         Msg::PrefsSaved(false) => toast(
-            "We couldn't save that choice. Please try again. If it keeps happening, restart your PC.",
+            "We couldn't save that choice. Please try again. If it keeps happening, restart your computer.",
             Tone::Warn,
             ctx,
         ),
+        Msg::InstallUpdate => {
+            #[cfg(target_os = "linux")]
+            if !state.working {
+                state.working = true;
+                state.generation = state.generation.wrapping_add(1);
+                state.clock.restart();
+                return Task::perform(
+                    blocking(|| {
+                        prefs_store::install_update()
+                            .map(|status| linux_update_view(&status, false))
+                            .map_err(|e| format!("{e:#}"))
+                    }),
+                    |result| Message::Settings(Msg::UpdateInstalled(result)),
+                );
+            }
+            Task::none()
+        }
+        Msg::CheckUpdate => {
+            #[cfg(target_os = "linux")]
+            if !matches!(state.update, Remote::Ready(UpdateView::Checking)) {
+                state.generation = state.generation.wrapping_add(1);
+                state.clock.restart();
+                state.update = Remote::Ready(UpdateView::Checking);
+                return Task::perform(
+                    blocking(|| {
+                        prefs_store::check_update()
+                            .map(|s| linux_update_view(&s, prefs_store::updates_by_software_app()))
+                            .map_err(|e| format!("{e:#}"))
+                    }),
+                    |result| Message::Settings(Msg::UpdateChecked(result)),
+                );
+            }
+            #[cfg(not(target_os = "linux"))]
+            return update(state, Msg::Load, ctx);
+            #[cfg(target_os = "linux")]
+            Task::none()
+        }
+        Msg::UpdateChecked(result) => {
+            state.generation = state.generation.wrapping_add(1);
+            match result {
+                Ok(view) => {
+                    state.update = Remote::Ready(view);
+                    Task::none()
+                }
+                Err(message) => {
+                    state.update = Remote::Failed;
+                    toast(&message, Tone::Warn, ctx)
+                }
+            }
+        }
+        Msg::UpdateInstalled(result) => {
+            state.working = false;
+            state.generation = state.generation.wrapping_add(1);
+            match result {
+                Ok(view) => {
+                    state.update = Remote::Ready(view);
+                    toast(
+                        "Secblitz is installing the update. It is ready the next time you open it.",
+                        Tone::Good,
+                        ctx,
+                    )
+                }
+                Err(message) => toast(&message, Tone::Warn, ctx),
+            }
+        }
         Msg::Remove(m) => remove::update(&mut state.remove, m, ctx),
         Msg::SetTab(tab) => {
             state.tab = tab;
@@ -252,7 +354,10 @@ pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
                 Ok(on) => Remote::Ready(on),
                 Err(_) => Remote::Failed,
             };
-            state.update = shown_update(state.installed, update);
+            state.update = shown_update(
+                updates_apply(secblitz::os::Os::CURRENT, state.installed),
+                update,
+            );
             Task::none()
         }
         Msg::SetTheme(choice) => {
@@ -348,8 +453,11 @@ pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
                         ctx,
                     )
                 }
+                #[cfg(target_os = "linux")]
+                Err(message) => toast(&message, Tone::Warn, ctx),
+                #[cfg(not(target_os = "linux"))]
                 Err(_) => toast(
-                    "We couldn't change that. Nothing was changed on your PC. Please try again, or restart your PC first.",
+                    "We couldn't change that. Nothing was changed on your computer. Please try again, or restart your computer first.",
                     Tone::Warn,
                     ctx,
                 ),
@@ -377,7 +485,7 @@ pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
                     )
                 }
                 Err(_) => toast(
-                    "We couldn't change that. Nothing was changed on your PC. Please try again, or restart your PC first.",
+                    "We couldn't change that. Nothing was changed on your computer. Please try again, or restart your computer first.",
                     Tone::Warn,
                     ctx,
                 ),
@@ -431,10 +539,29 @@ fn busy<'a>(p: Palette, state: &State, label: String) -> Element<'a, Message> {
 }
 
 fn confirm_text(confirm: Confirm) -> (&'static str, &'static str, &'static str) {
+    if cfg!(target_os = "linux") {
+        match confirm {
+            Confirm::Background(true) => {
+                return (
+                    "Look for updates automatically?",
+                    "Once a day, Secblitz looks for a newer version of itself. It never changes anything on its own.",
+                    "Turn on",
+                )
+            }
+            Confirm::Background(false) => {
+                return (
+                    "Stop looking for updates?",
+                    "Secblitz stops looking for updates by itself. You can still update it from your software app or from our website.",
+                    "Turn off",
+                )
+            }
+            _ => {}
+        }
+    }
     match confirm {
         Confirm::Background(true) => (
-            "Check my PC automatically?",
-            "Secblitz checks your PC every 15 minutes in the background. It never changes anything on its own.",
+            "Check my computer automatically?",
+            "Secblitz checks your computer every 15 minutes in the background. It never changes anything on its own.",
             "Turn on",
         ),
         Confirm::Background(false) => (
@@ -444,7 +571,7 @@ fn confirm_text(confirm: Confirm) -> (&'static str, &'static str, &'static str) 
         ),
         Confirm::Tray(true) => (
             "Show Secblitz in the system tray?",
-            "A small shield will appear near the clock when you sign in. It shows whether your PC looks safe.",
+            "A small shield will appear near the clock when you sign in. It shows whether your computer looks safe.",
             "Turn on",
         ),
         Confirm::Tray(false) => (
@@ -561,68 +688,78 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
     let mut rows = vec![widgets::row_item(
         p,
         Some(Icon::Scan),
-        t("Check my PC automatically"),
-        Some(t(
-            "Looks for problems in the background and tells you if something changes.",
-        )),
+        t(if cfg!(target_os = "linux") {
+            "Look for updates automatically"
+        } else {
+            "Check my computer automatically"
+        }),
+        Some(t(if cfg!(target_os = "linux") {
+            "Once a day, Secblitz looks for a newer version of itself."
+        } else {
+            "Looks for problems in the background and tells you if something changes."
+        })),
         background_control,
         None,
     )];
     if let Some(c @ Confirm::Background(_)) = state.confirm {
         rows.push(confirm_row(p, ctx, state, c));
     }
-    let tray_toggle =
-        (state.installed && !state.working).then_some(|v| Message::Settings(Msg::AskTray(v)));
-    rows.push(widgets::row_item(
-        p,
-        Some(Icon::Bell),
-        t("System tray icon"),
-        Some(if state.installed {
-            t("A small shield tells you at a glance if your PC looks safe.")
-        } else {
-            t("Available once Secblitz is installed.")
-        }),
-        widgets::switch(p, shown_tray(state.installed, state.tray), tray_toggle),
-        None,
-    ));
-    if let Some(c @ Confirm::Tray(_)) = state.confirm {
-        rows.push(confirm_row(p, ctx, state, c));
+    if has_background_extras(secblitz::os::Os::CURRENT) {
+        let tray_toggle =
+            (state.installed && !state.working).then_some(|v| Message::Settings(Msg::AskTray(v)));
+        rows.push(widgets::row_item(
+            p,
+            Some(Icon::Bell),
+            t("System tray icon"),
+            Some(if state.installed {
+                t("A small shield tells you at a glance if your computer looks safe.")
+            } else {
+                t("Available once Secblitz is installed.")
+            }),
+            widgets::switch(p, shown_tray(state.installed, state.tray), tray_toggle),
+            None,
+        ));
+        if let Some(c @ Confirm::Tray(_)) = state.confirm {
+            rows.push(confirm_row(p, ctx, state, c));
+        }
     }
     let protection = widgets::group(p, t("Background protection"), None, None, rows);
 
     let needs_background = matches!(state.background, Remote::Ready(false));
-    let notifications = widgets::group(
-        p,
-        t("Notifications"),
-        None,
-        None,
-        vec![
-            widgets::row_item(
-                p,
-                Some(Icon::Bell),
-                t("Tell me when a setting is switched back"),
-                needs_background.then(|| t("Needs background checks, above.")),
-                widgets::switch(
+    let notifications = has_background_extras(secblitz::os::Os::CURRENT).then(|| {
+        widgets::group(
+            p,
+            t("Notifications"),
+            None,
+            None,
+            vec![
+                widgets::row_item(
                     p,
-                    ctx.prefs.notify_reverted,
-                    Some(|v| Message::Settings(Msg::SetNotifyReverted(v))),
+                    Some(Icon::Bell),
+                    t("Tell me when a setting is switched back"),
+                    needs_background.then(|| t("Needs background checks, above.")),
+                    widgets::switch(
+                        p,
+                        ctx.prefs.notify_reverted,
+                        Some(|v| Message::Settings(Msg::SetNotifyReverted(v))),
+                    ),
+                    None,
                 ),
-                None,
-            ),
-            widgets::row_item(
-                p,
-                Some(Icon::ShieldAlert),
-                t("Tell me when a website is blocked"),
-                None,
-                widgets::switch(
+                widgets::row_item(
                     p,
-                    ctx.prefs.notify_dangerous,
-                    Some(|v| Message::Settings(Msg::SetNotifyDangerous(v))),
+                    Some(Icon::ShieldAlert),
+                    t("Tell me when a website is blocked"),
+                    None,
+                    widgets::switch(
+                        p,
+                        ctx.prefs.notify_dangerous,
+                        Some(|v| Message::Settings(Msg::SetNotifyDangerous(v))),
+                    ),
+                    None,
                 ),
-                None,
-            ),
-        ],
-    );
+            ],
+        )
+    });
 
     let (status, line): (Element<'a, Message>, String) = match &state.update {
         Remote::Loading | Remote::Ready(UpdateView::Checking) => {
@@ -636,13 +773,33 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
             widgets::pill(p, t("Up to date"), Tone::Good),
             t("You have the latest version of Secblitz."),
         ),
+        Remote::Ready(UpdateView::NotPublished) => (
+            widgets::pill(p, t("No update yet"), Tone::Neutral),
+            t("No update has been published for your computer yet."),
+        ),
         Remote::Ready(UpdateView::Ready) => (
             widgets::pill(p, t("Update ready"), Tone::Warn),
-            t("An update is ready. It installs when Secblitz is closed."),
+            t(if cfg!(target_os = "linux") {
+                "A new version is ready to install."
+            } else {
+                "An update is ready. It installs when Secblitz is closed."
+            }),
+        ),
+        Remote::Ready(UpdateView::Waiting) => (
+            widgets::pill(p, t("Update ready"), Tone::Warn),
+            t("A new version is ready. Install it from your software app."),
+        ),
+        Remote::Ready(UpdateView::Installing) => (
+            widgets::pill(p, t("Installing"), Tone::Neutral),
+            t("Secblitz is installing the update. It is ready the next time you open it."),
         ),
         Remote::Ready(UpdateView::NotChecked) => (
             widgets::pill(p, t("Not checked yet"), Tone::Neutral),
-            t("Automatic updates are on. Secblitz looks for new versions every hour."),
+            t(if cfg!(target_os = "linux") {
+                "Secblitz has not looked for updates yet."
+            } else {
+                "Automatic updates are on. Secblitz looks for new versions every hour."
+            }),
         ),
         Remote::Ready(UpdateView::Off) => (
             widgets::pill(p, t("Not set up"), Tone::Neutral),
@@ -654,7 +811,40 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
         state.update,
         Remote::Loading | Remote::Ready(UpdateView::Off | UpdateView::Checking)
     ) {
-        trailing = trailing.push(reload_menu(p, t("Check now")));
+        trailing = trailing.push(
+            if cfg!(target_os = "linux")
+                && matches!(state.update, Remote::Ready(UpdateView::Ready))
+                && !state.working
+            {
+                widgets::overflow_menu(
+                    p,
+                    vec![
+                        (
+                            Icon::Download,
+                            t("Install now"),
+                            Message::Settings(Msg::InstallUpdate),
+                            false,
+                        ),
+                        (
+                            Icon::Refresh,
+                            t("Check now"),
+                            Message::Settings(Msg::CheckUpdate),
+                            false,
+                        ),
+                    ],
+                )
+            } else {
+                widgets::overflow_menu(
+                    p,
+                    vec![(
+                        Icon::Refresh,
+                        t("Check now"),
+                        Message::Settings(Msg::CheckUpdate),
+                        false,
+                    )],
+                )
+            },
+        );
     }
     let updates = widgets::group(
         p,
@@ -672,7 +862,7 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
     );
 
     let mut details = column![
-        widgets::small(p, t("A safer PC. Without headaches.")),
+        widgets::small(p, t("A safer computer. Without headaches.")),
         widgets::small(p, t("Fonts: Lexend (SIL Open Font License).")),
         widgets::small(p, t("Icons: Fluent UI System Icons (MIT license).")),
         widgets::small(
@@ -812,16 +1002,13 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
         |tab| Message::Settings(Msg::SetTab(tab)),
     );
     let body: Element<'a, Message> = match state.tab {
-        Tab::General => column![
-            appearance,
-            protection,
-            notifications,
-            updates,
-            removal,
-            about
-        ]
-        .spacing(theme::S8)
-        .into(),
+        Tab::General => {
+            let mut sections = column![appearance, protection].spacing(theme::S8);
+            if let Some(notifications) = notifications {
+                sections = sections.push(notifications);
+            }
+            sections.push(updates).push(removal).push(about).into()
+        }
         Tab::Help => column![support::questions(&state.help, ctx), feedback]
             .spacing(theme::S8)
             .into(),
@@ -848,7 +1035,16 @@ fn load_task(state: &mut State) -> Task<Message> {
     Task::perform(
         blocking(|| {
             let background = prefs_store::background_on().map_err(|e| format!("{e:#}"));
-            let update = secblitz::updater::status().ok().map(|s| update_view(&s));
+            let update = prefs_store::update_status().ok().map(|s| {
+                #[cfg(target_os = "linux")]
+                {
+                    linux_update_view(&s, prefs_store::updates_by_software_app())
+                }
+                #[cfg(not(target_os = "linux"))]
+                {
+                    update_view(&s)
+                }
+            });
             (background, update)
         }),
         move |(background, update)| {
@@ -891,6 +1087,10 @@ mod tests {
             )),
             UpdateView::Ready
         );
+        assert_eq!(
+            update_view(&status(O::NotPublished, 5)),
+            UpdateView::NotPublished
+        );
         assert_eq!(update_view(&status(O::DeferredBusy, 5)), UpdateView::Ready);
         assert_eq!(
             update_view(&status(O::DeferredBusy, 0)),
@@ -905,6 +1105,30 @@ mod tests {
             UpdateView::NotChecked
         );
         assert_eq!(update_view(&status(O::NotConfigured, 5)), UpdateView::Off);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_tells_a_waiting_version_from_one_being_installed() {
+        let waiting = status(
+            O::Available {
+                version: "2.0.0".into(),
+            },
+            5,
+        );
+        assert_eq!(linux_update_view(&waiting, true), UpdateView::Waiting);
+        assert_eq!(linux_update_view(&waiting, false), UpdateView::Ready);
+        let started = status(
+            O::WorkerStarted {
+                version: "2.0.0".into(),
+            },
+            5,
+        );
+        assert_eq!(linux_update_view(&started, false), UpdateView::Installing);
+        assert_eq!(
+            linux_update_view(&status(O::UpToDate, 5), true),
+            UpdateView::UpToDate
+        );
     }
 
     #[test]
@@ -922,6 +1146,17 @@ mod tests {
             Remote::Ready(UpdateView::Unknown)
         ));
         assert!(matches!(shown_update(true, None), Remote::Failed));
+    }
+
+    #[test]
+    fn linux_always_shows_the_update_status_and_hides_the_windows_only_rows() {
+        use secblitz::os::Os;
+        assert!(updates_apply(Os::Linux, false));
+        assert!(updates_apply(Os::Windows, true));
+        assert!(!updates_apply(Os::Windows, false));
+        assert!(has_background_extras(Os::Windows));
+        assert!(!has_background_extras(Os::Linux));
+        assert!(!has_background_extras(Os::Macos));
     }
 
     #[test]

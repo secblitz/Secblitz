@@ -1,0 +1,16 @@
+[Unit]
+Description=Secblitz helper
+Documentation=https://secblitz.lol
+
+[Service]
+Type=dbus
+BusName=org.secblitz.Helper1
+ExecStart=/usr/bin/secblitz helper
+# The helper removes and installs packages. With NoNewPrivileges SELinux refuses rpm's switch into its
+# scriptlet domain, so every package script fails; RestrictSUIDSGID would refuse packages that ship setuid programs.
+PrivateTmp=yes
+ProtectHome=read-only
+StateDirectory=secblitz
+StateDirectoryMode=0700
+ProtectControlGroups=yes
+LockPersonality=yes

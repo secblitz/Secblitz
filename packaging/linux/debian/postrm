@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    remove|purge)
+        # The repository entry is useless and breaks "apt update" once its keyring is gone.
+        rm -f /etc/apt/sources.list.d/secblitz.sources /usr/share/keyrings/secblitz.gpg
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload || true
+            systemctl reload dbus.service 2>/dev/null || systemctl reload dbus-broker.service 2>/dev/null || true
+        fi
+        ;;
+esac
+
+# Web protection leaves nothing behind when the package is purged.
+if [ "$1" = "purge" ]; then
+    rm -rf /var/lib/secblitz-filter
+fi
+
+# /var/lib/secblitz is kept on purpose so a reinstall can still undo earlier changes.
+exit 0

@@ -222,15 +222,9 @@ pub fn tray_enabled() -> bool {
 
 /// True only when Windows confirms the startup entry is gone, never on a failed read,
 /// so a running tray closes when the user turns it off and not on a passing error.
+#[cfg(windows)]
 pub fn tray_turned_off() -> bool {
-    #[cfg(windows)]
-    {
-        run_key::absent()
-    }
-    #[cfg(not(windows))]
-    {
-        false
-    }
+    run_key::absent()
 }
 
 pub fn set_tray_enabled(on: bool) -> anyhow::Result<()> {
@@ -387,6 +381,52 @@ mod run_key {
     }
 }
 
+#[cfg(target_os = "linux")]
+pub fn background_on() -> anyhow::Result<bool> {
+    secblitz::updater::linux::monitor_timer_on(&secblitz::linux::cmd::RealSys)
+}
+
+#[cfg(target_os = "linux")]
+pub fn enable_background() -> anyhow::Result<()> {
+    super::remote::set_monitor_timer(&mut crate::linux_bus::client::DbusTransport::system(), true)
+}
+
+#[cfg(target_os = "linux")]
+pub fn disable_background() -> anyhow::Result<()> {
+    super::remote::set_monitor_timer(
+        &mut crate::linux_bus::client::DbusTransport::system(),
+        false,
+    )
+}
+
+/// What the last update check found. On Linux the result is kept in a folder only the helper can open.
+pub fn update_status() -> anyhow::Result<secblitz::updater::UpdateStatus> {
+    #[cfg(target_os = "linux")]
+    {
+        super::remote::update_status(&mut crate::linux_bus::client::DbusTransport::system())
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        secblitz::updater::status()
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub fn check_update() -> anyhow::Result<secblitz::updater::UpdateStatus> {
+    super::remote::check_update(&mut crate::linux_bus::client::DbusTransport::system())
+}
+
+#[cfg(target_os = "linux")]
+pub fn install_update() -> anyhow::Result<secblitz::updater::UpdateStatus> {
+    super::remote::install_update(&mut crate::linux_bus::client::DbusTransport::system())
+}
+
+#[cfg(target_os = "linux")]
+pub fn updates_by_software_app() -> bool {
+    secblitz::updater::linux::repository_configured(&secblitz::linux::cmd::RealSys)
+}
+
+#[cfg(not(target_os = "linux"))]
 pub fn background_on() -> anyhow::Result<bool> {
     use secblitz::service::MonitorState;
     Ok(!matches!(
@@ -395,6 +435,7 @@ pub fn background_on() -> anyhow::Result<bool> {
     ))
 }
 
+#[cfg(not(target_os = "linux"))]
 pub fn enable_background() -> anyhow::Result<()> {
     use secblitz::service::{self, MonitorState};
     if service::query_status()?.state == MonitorState::NotInstalled {
@@ -409,6 +450,7 @@ pub fn enable_background() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(not(target_os = "linux"))]
 pub fn disable_background() -> anyhow::Result<()> {
     #[cfg(windows)]
     stop_monitor()?;

@@ -3,7 +3,7 @@ use super::Explainer;
 pub(super) fn get(id: &str) -> Option<Explainer> {
     Some(match id {
         "web.ads" => Explainer {
-            what: "Most ads come from a known list of advertising websites. This stops your PC from loading anything from that list.",
+            what: "Most ads come from a known list of advertising websites. This stops your computer from loading anything from that list.",
             risk: "Ads slow pages down, follow you from site to site, and sometimes lead to scam or virus websites.",
             change: "Many ads disappear from websites and apps. Some pages look a little different, and a few sites may ask you to turn this off.",
         },
@@ -14,36 +14,36 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
         },
         "web.dangerous" => Explainer {
             what: "Secblitz keeps a list of known scam and virus websites and updates it often.",
-            risk: "A link in an email or message could take you to a look-alike bank page or a site that infects your PC.",
-            change: "Your PC can't open websites on that list. If a safe site is blocked by mistake, pause web protection for an hour.",
+            risk: "A link in an email or message could take you to a look-alike bank page or a site that infects your computer.",
+            change: "Your computer can't open websites on that list. If a safe site is blocked by mistake, pause web protection for an hour.",
         },
         "web.scam" => Explainer {
             what: "Secblitz keeps a list of fake online shops, fake streaming sites and subscription traps, and updates it every day.",
             risk: "A fake shop takes your money and card details and sends nothing. A fake streaming site can sign you up to payments you never meant to make.",
-            change: "Your PC can't open websites on that list. If a real site is blocked by mistake, open it for 10 minutes from Recent blocks on the Overview tab, or allow it on the Sites tab.",
+            change: "Your computer can't open websites on that list. If a real site is blocked by mistake, open it for 10 minutes from Recent blocks on the Overview tab, or allow it on the Sites tab.",
         },
         "web.popups" => Explainer {
             what: "Secblitz keeps a list of websites known for flooding people with pop-ups and fake alerts, and updates it every day.",
-            risk: "These sites show fake messages such as 'your PC is infected' to scare you into calling a scam number or paying for software you don't need.",
-            change: "Your PC can't open websites on that list. This list sometimes blocks a real site by mistake, so you can open one for 10 minutes from Recent blocks on the Overview tab, or allow it on the Sites tab.",
+            risk: "These sites show fake messages such as 'your computer is infected' to scare you into calling a scam number or paying for software you don't need.",
+            change: "Your computer can't open websites on that list. This list sometimes blocks a real site by mistake, so you can open one for 10 minutes from Recent blocks on the Overview tab, or allow it on the Sites tab.",
         },
         "web.adult" => Explainer {
             what: "Secblitz keeps a list of websites meant for adults and updates it often.",
-            risk: "Children, and anyone else using this PC, can open those websites by accident or on purpose.",
-            change: "Your PC can't open websites on that list. If a safe site is blocked by mistake, allow it on the Sites tab.",
+            risk: "Children, and anyone else using this computer, can open those websites by accident or on purpose.",
+            change: "Your computer can't open websites on that list. If a safe site is blocked by mistake, allow it on the Sites tab.",
         },
         "web.gambling" => Explainer {
             what: "Secblitz keeps a list of online betting and casino websites and updates it often.",
             risk: "Gambling websites are easy to open and can lead to losing money quickly, especially for children.",
-            change: "Your PC can't open websites on that list. If a safe site is blocked by mistake, allow it on the Sites tab.",
+            change: "Your computer can't open websites on that list. If a safe site is blocked by mistake, allow it on the Sites tab.",
         },
         "web.safe_search" => Explainer {
             what: "Search websites can hide results meant for adults. This asks Google, Bing, YouTube and DuckDuckGo to show only family-friendly results.",
             risk: "Searches and videos can show adult content, even when nobody was looking for it.",
-            change: "Searches on those four websites show only family-friendly results in every browser on this PC. Other search websites are not changed.",
+            change: "Searches on those four websites show only family-friendly results in every browser on this computer. Other search websites are not changed.",
         },
         "web.private_lookups" => Explainer {
-            what: "Every time you open a website, your PC first asks where it is. Normally that question can be read by your internet provider and by anyone on the same public Wi-Fi.",
+            what: "Every time you open a website, your computer first asks where it is. Normally that question can be read by your internet provider and by anyone on the same public Wi-Fi.",
             risk: "They can see every website you visit, even when the website itself is protected.",
             change: "The question is sent privately to Quad9, a non-profit service. If your network doesn't allow that, Secblitz goes back to the normal way so the internet keeps working.",
         },

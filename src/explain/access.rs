@@ -16,18 +16,18 @@ const IDS: &[&str] = &[
 pub(super) fn get(id: &str) -> Option<Explainer> {
     Some(match id {
         "accounts.autologon" => e(
-            "Your PC is set to sign in to your account by itself when it starts, without asking for a password.",
-            "Anyone who can switch on your PC, or who finds it lost, gets straight into your files and accounts.",
-            "Your PC asks for your password or PIN when it starts. Make sure you know it before you turn this on.",
+            "Your computer is set to sign in to your account by itself when it starts, without asking for a password.",
+            "Anyone who can switch on your computer, or who finds it lost, gets straight into your files and accounts.",
+            "Your computer asks for your password or PIN when it starts. Make sure you know it before you turn this on.",
         ),
         "remote_desktop.disabled" => e(
-            "Remote Desktop lets someone sign in to this PC and use it from another device, anywhere on the internet or your network.",
-            "Anyone who knows one password could sign in from another device and use this PC.",
-            "Other devices can no longer connect this way. Everything on this PC works as before, and you can turn it back on.",
+            "Remote Desktop lets someone sign in to this computer and use it from another device, anywhere on the internet or your network.",
+            "Anyone who knows one password could sign in from another device and use this computer.",
+            "Other devices can no longer connect this way. Everything on this computer works as before, and you can turn it back on.",
         ),
         "smb1.disabled" => e(
-            "A very old way of sharing files and printers between PCs is still switched on in Windows.",
-            "Malware has used flaws in it to spread from one PC to the next without anyone clicking anything.",
+            "A very old way of sharing files and printers between computers is still switched on in Windows.",
+            "Malware has used flaws in it to spread from one computer to the next without anyone clicking anything.",
             "Very old network drives or printers that only use it may stop working. Needs a restart, and you can turn it back on.",
         ),
         _ => return None,

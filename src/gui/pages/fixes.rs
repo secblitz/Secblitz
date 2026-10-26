@@ -224,6 +224,24 @@ impl Rows {
         topics::first_needing_action(|t| self.line(t))
     }
 
+    /// The topics worth a tile: those with a check on `os`, plus any that already hold a result.
+    fn visible_topics(&self, os: secblitz::os::Os) -> Vec<Topic> {
+        let own = Topic::shown_on(os);
+        Topic::ALL
+            .into_iter()
+            .filter(|t| own.contains(t) || self.holds(*t))
+            .collect()
+    }
+
+    fn holds(&self, topic: Topic) -> bool {
+        self.attention
+            .iter()
+            .chain(&self.privacy)
+            .any(|r| r.topic == topic)
+            || self.others.iter().any(|o| o.topic == topic)
+            || self.protected_count(topic) > 0
+    }
+
     fn protected_count(&self, topic: Topic) -> usize {
         self.protected.iter().filter(|r| r.topic == topic).count()
     }
@@ -332,6 +350,26 @@ fn search_text(shown: &[&str], sources: &[&str], id: &str) -> Haystack {
             .chain(english.iter().map(String::as_str))
             .chain([id]),
     )
+}
+
+/// A finding's own sentence in the person's language. A list of names keeps the names and translates the words around them.
+fn finding_detail(lang: Lang, detail: &str) -> String {
+    use secblitz::linux::controls::findings as f;
+    let whole = lang.t(detail);
+    if whole != detail {
+        return whole;
+    }
+    [
+        f::ADMIN_ONE,
+        f::ADMIN_MANY,
+        f::OPEN_ONE,
+        f::OPEN_MANY,
+        f::OPEN_UNNAMED,
+    ]
+    .into_iter()
+    .fold(detail.to_owned(), |shown, part| {
+        shown.replace(part, &lang.t(part))
+    })
 }
 
 fn plain_status(status: &CheckStatus, a: &advice::Advice, lang: Lang) -> (String, String) {
@@ -561,6 +599,12 @@ fn build(ctx: &Ctx, report: &Report) -> Rows {
                         secblitz::vbs::blocked_names(&f.detail),
                     )
                     .unwrap_or_default(),
+                    match f.title.as_str() {
+                        advice::ADMIN_ACCOUNTS
+                        | advice::OPEN_PROGRAMS
+                        | advice::SWAP_PROTECTION => finding_detail(lang, &f.detail),
+                        _ => String::new(),
+                    },
                 ],
                 detail: None,
             },
@@ -671,7 +715,7 @@ fn other_line(
     if bucket == Bucket::Managed {
         (
             None,
-            "This PC's owner controls this setting, so we leave it as it is.",
+            "This computer's owner controls this setting, so we leave it as it is.",
         )
     } else if has_guide && bucket == Bucket::Look && !a.impact.is_empty() {
         (Some("Turning it on protects you from:"), a.impact)
@@ -686,14 +730,19 @@ fn other_page(
     guide: Option<&guide::Guide>,
     step: NextStep,
 ) -> Option<Page> {
+    let step_page = |step| {
+        if explain.1 && advice::is_linux_finding(explain.0) {
+            None
+        } else {
+            Page::for_step(step)
+        }
+    };
     match bucket {
         Bucket::Look => guide
             .map(|g| g.page)
             .or_else(|| Page::for_finding(explain.0))
-            .or_else(|| Page::for_step(step)),
-        Bucket::GoodToKnow if explain.1 => {
-            Page::for_finding(explain.0).or_else(|| Page::for_step(step))
-        }
+            .or_else(|| step_page(step)),
+        Bucket::GoodToKnow if explain.1 => Page::for_finding(explain.0).or_else(|| step_page(step)),
         Bucket::GoodToKnow => guide.map(|g| g.page),
         _ => None,
     }
@@ -746,7 +795,7 @@ fn item_lines(ctx: &Ctx, items: &[secblitz::model::ItemLabel]) -> Vec<String> {
                 for why in item.why.split(',') {
                     parts.push(match why {
                         "sites" => ctx.t("Can read every site you visit"),
-                        "programs" => ctx.t("Can talk to other programs on your PC"),
+                        "programs" => ctx.t("Can talk to other programs on your computer"),
                         _ => continue,
                     });
                 }
@@ -1442,7 +1491,7 @@ fn first_check<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
     let (ratio, sub) = check_status(ctx);
     scan::checking_screen(
         ctx.palette,
-        ctx.t("Checking your PC"),
+        ctx.t("Checking your computer"),
         sub,
         ratio,
         check_art(state, ctx, Plate::Bg, ratio),
@@ -1459,7 +1508,7 @@ fn checking_region<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
     let (ratio, sub) = check_status(ctx);
     let live = anim::animating();
     let mut text = column![
-        widgets::h2(p, ctx.t("Checking your PC")),
+        widgets::h2(p, ctx.t("Checking your computer")),
         widgets::muted(p, sub)
     ]
     .spacing(theme::S1)
@@ -1490,6 +1539,16 @@ pub fn fills_window(ctx: &Ctx) -> bool {
     ctx.engine_error.is_none() && ctx.full_check().is_some()
 }
 
+/// Which apps may use the camera, microphone and location is a Windows setting; other systems keep theirs elsewhere.
+pub fn app_access_applies() -> bool {
+    secblitz::os::Os::CURRENT == secblitz::os::Os::Windows
+}
+
+/// On Windows, personal settings are undone from the Tools page; elsewhere they are undone here with the rest.
+fn personal_undo_on_tools(os: secblitz::os::Os) -> bool {
+    os == secblitz::os::Os::Windows
+}
+
 pub fn view<'a>(
     state: &'a State,
     ctx: &'a Ctx,
@@ -1505,7 +1564,7 @@ pub fn view<'a>(
         ctx.t("To check ({n})")
             .replace("{n}", &to_check.to_string())
     } else {
-        ctx.t("Everything we check on your PC, in plain words.")
+        ctx.t("Everything we check on your computer, in plain words.")
     };
     let header = widgets::page_header(p, ctx.t("Protection"), Some(subtitle));
     let bar = shows_search(ctx).then(|| search_bar(state, ctx));
@@ -1537,7 +1596,7 @@ pub fn view<'a>(
                     Icon::ShieldAlert,
                     ctx.t("We couldn't start the protection check"),
                     ctx.t(
-                        "Close Secblitz and open it again. If this keeps happening, restart your PC.",
+                        "Close Secblitz and open it again. If this keeps happening, restart your computer.",
                     ),
                     Some(error_details(
                         ctx,
@@ -1608,9 +1667,12 @@ pub fn view<'a>(
                 if part.is_empty() {
                     continue;
                 }
-                let mut section =
-                    column![container(widgets::h2(p, ctx.t(t.label()))).padding([0.0, theme::S4])]
-                        .spacing(theme::S3);
+                let mut section = column![container(widgets::h2(
+                    p,
+                    ctx.t(t.display_label(secblitz::os::Os::CURRENT))
+                ))
+                .padding([0.0, theme::S4])]
+                .spacing(theme::S3);
                 for group in topic_groups(state, ctx, rows, &part, t, true) {
                     section = section.push(group);
                 }
@@ -1630,7 +1692,7 @@ pub fn view<'a>(
         }
         body = body.push(tile::grid(p, tiles(ctx, rows, topic)));
         let part = shown.in_topic(topic);
-        let title = widgets::h2(p, ctx.t(topic.label()));
+        let title = widgets::h2(p, ctx.t(topic.display_label(secblitz::os::Os::CURRENT)));
         let head: Element<'_, Message> = if part.selectable().next().is_some() {
             let (count, buttons) = fix_controls(state, ctx, report, rows, &part, Some(topic));
             row![
@@ -1647,7 +1709,7 @@ pub fn view<'a>(
         };
         let head = container(head).padding([0.0, theme::S4]);
         let mut section = column![head].spacing(theme::S3);
-        if topic == Topic::Privacy {
+        if topic == Topic::Privacy && app_access_applies() {
             section = section.push(super::app_access::view(access, ctx));
         }
         let mut groups = topic_groups(state, ctx, rows, &part, topic, false).into_iter();
@@ -1671,9 +1733,12 @@ fn current_topic(state: &State, ctx: &Ctx, rows: &Rows) -> Topic {
     if let Some(topic) = state.topic.get() {
         return topic;
     }
+    let shown = rows.visible_topics(secblitz::os::Os::CURRENT);
     let topic = rows
         .first_topic_to_act_on()
         .or(ctx.prefs.protection_topic)
+        .filter(|t| shown.contains(t))
+        .or_else(|| shown.first().copied())
         .unwrap_or(Topic::Threats);
     state.topic.set(Some(topic));
     topic
@@ -1720,13 +1785,13 @@ fn line_tone(line: Line) -> Tone {
 }
 
 fn tiles(ctx: &Ctx, rows: &Rows, on_show: Topic) -> Vec<Tile> {
-    Topic::ALL
+    rows.visible_topics(secblitz::os::Os::CURRENT)
         .into_iter()
         .map(|topic| {
             let line = rows.line(topic);
             Tile {
                 glyph: topic_icon(topic),
-                title: ctx.t(topic.label()),
+                title: ctx.t(topic.display_label(secblitz::os::Os::CURRENT)),
                 status: line_text(ctx, line),
                 tone: line_tone(line),
                 done: line == Line::AllSet,
@@ -1848,11 +1913,11 @@ fn not_checked<'a>(ctx: &Ctx) -> Element<'a, Message> {
             p,
             Icon::ShieldCheck,
             ctx.t("Not checked yet"),
-            ctx.t("Check your PC to see what's protected. Nothing is changed."),
+            ctx.t("Check your computer to see what's protected. Nothing is changed."),
             Some(widgets::action(
                 p,
                 ButtonKind::Primary,
-                ctx.t("Check my PC"),
+                ctx.t("Check my computer"),
                 Some(Icon::Refresh),
                 (!ctx.busy).then_some(Message::CheckNow),
             )),
@@ -1876,7 +1941,7 @@ fn check_failed<'a>(ctx: &Ctx, error: &str) -> Element<'a, Message> {
             p,
             Icon::ShieldAlert,
             ctx.t("We couldn't finish checking"),
-            ctx.t("Nothing was changed. Press Check again. If it keeps failing, restart your PC."),
+            ctx.t("Nothing was changed. Press Check again. If it keeps failing, restart your computer."),
             Some(
                 column![
                     again,
@@ -2100,7 +2165,9 @@ fn topic_groups<'a>(
         groups.push(widgets::group(
             p,
             ctx.t("Worth a look"),
-            Some(ctx.t("You do these in Windows itself. We show the steps.")),
+            Some(ctx.t(crate::app::os_text::here(
+                crate::app::os_text::WORTH_A_LOOK_NOTE,
+            ))),
             None,
             look.iter().map(|o| other_row(ctx, o)).collect(),
         ));
@@ -2221,15 +2288,16 @@ fn protected_group<'a>(
     let mut list = column![].spacing(theme::S1);
     let offers_undo = shown.protected.iter().any(|r| r.undoable);
     if offers_undo {
-        list = list
-            .push(widgets::muted(
-                p,
-                ctx.t("You can put any setting Secblitz changed back the way it was."),
-            ))
-            .push(widgets::small(
+        list = list.push(widgets::muted(
+            p,
+            ctx.t("You can put any setting Secblitz changed back the way it was."),
+        ));
+        if personal_undo_on_tools(secblitz::os::Os::CURRENT) {
+            list = list.push(widgets::small(
                 p,
                 ctx.t("Personal settings you changed are on the Tools page."),
             ));
+        }
     }
     for r in visible {
         list = list.push(if r.undoable {
@@ -2327,6 +2395,48 @@ fn protected_group<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_windows_points_to_the_tools_page_for_personal_settings() {
+        use secblitz::os::Os;
+        assert!(personal_undo_on_tools(Os::Windows));
+        assert!(!personal_undo_on_tools(Os::Linux));
+        assert!(!personal_undo_on_tools(Os::Macos));
+    }
+
+    #[test]
+    fn tiles_follow_the_system_and_never_hide_a_result() {
+        use secblitz::os::Os;
+        let rows = Rows::default();
+        assert_eq!(rows.visible_topics(Os::Windows), Topic::ALL.to_vec());
+        assert_eq!(
+            rows.visible_topics(Os::Linux),
+            [
+                Topic::SignIn,
+                Topic::Network,
+                Topic::Windows,
+                Topic::Browsers,
+                Topic::Privacy
+            ]
+        );
+    }
+
+    #[test]
+    fn a_hidden_topic_with_a_result_keeps_its_tile() {
+        let mut rows = Rows::default();
+        rows.protected.push(Prot {
+            id: "defender.realtime".into(),
+            topic: Topic::Threats,
+            name: String::new(),
+            line: String::new(),
+            undoable: false,
+            info: None,
+            hay: search_text(&[], &[], "defender.realtime"),
+        });
+        let shown = rows.visible_topics(secblitz::os::Os::Linux);
+        assert!(shown.contains(&Topic::Threats));
+        assert!(!shown.contains(&Topic::Clutter));
+    }
 
     #[test]
     fn who_published_an_allowed_app_is_said_in_the_chosen_language() {
@@ -2581,6 +2691,72 @@ mod tests {
             other_page(Bucket::Managed, ("Windows updates", true), None, a.step),
             None
         );
+    }
+
+    #[test]
+    fn the_names_in_a_linux_finding_survive_translation_around_them() {
+        use secblitz::linux::controls::findings as f;
+        let lists = [
+            (
+                format!("2 {} tester, alex", f::ADMIN_MANY),
+                f::ADMIN_MANY,
+                "tester, alex",
+            ),
+            (format!("1 {} tester", f::ADMIN_ONE), f::ADMIN_ONE, "tester"),
+            (
+                format!("2 {} python3, {}", f::OPEN_MANY, f::OPEN_UNNAMED),
+                f::OPEN_MANY,
+                "python3, ",
+            ),
+            (format!("1 {} sshd", f::OPEN_ONE), f::OPEN_ONE, "sshd"),
+        ];
+        for lang in [Lang::Es, Lang::Fr, Lang::De, Lang::Pt, Lang::It] {
+            for (text, fragment, names) in &lists {
+                let shown = finding_detail(lang, text);
+                assert!(shown.contains(names), "{shown}");
+                assert!(!shown.contains(fragment), "{shown}");
+                assert!(shown.starts_with(&text[..2]), "{shown}");
+                assert!(!shown.contains(f::OPEN_UNNAMED), "{shown}");
+            }
+            for sentence in [f::OPEN_NONE, f::SWAP_SAFE, f::SWAP_OPEN] {
+                assert_ne!(finding_detail(lang, sentence), sentence);
+            }
+        }
+        assert_eq!(finding_detail(Lang::En, f::SWAP_OPEN), f::SWAP_OPEN);
+    }
+
+    #[test]
+    fn a_linux_finding_never_opens_a_windows_settings_page_or_speaks_of_windows() {
+        for title in [
+            advice::DISK_ENCRYPTION,
+            advice::LINUX_SECURE_BOOT,
+            advice::UPDATES_WAITING,
+            advice::RESTART_NEEDED,
+            advice::PROGRAM_LIMITS,
+            advice::ACCOUNTS_WITHOUT_PASSWORD,
+            advice::ADMIN_WITHOUT_PASSWORD,
+            advice::EXTRA_ADMIN_ACCOUNTS,
+            advice::UNCHECKED_SOURCES,
+            advice::SECURITY_SUPPORT,
+            advice::HARDWARE_UPDATES,
+            advice::ADMIN_ACCOUNTS,
+            advice::OPEN_PROGRAMS,
+            advice::SWAP_PROTECTION,
+        ] {
+            let a = advice::for_finding(title, &CheckStatus::Attention, "");
+            for bucket in [Bucket::Look, Bucket::GoodToKnow] {
+                assert_eq!(
+                    other_page(bucket, (title, true), None, a.step),
+                    None,
+                    "{title}"
+                );
+            }
+            for line in [a.label, a.next, a.impact] {
+                for word in ["Windows", "BIOS", "Microsoft", "administrator"] {
+                    assert!(!line.contains(word), "{title}: {line}");
+                }
+            }
+        }
     }
 
     #[test]

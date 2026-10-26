@@ -1,0 +1,21 @@
+exit 0
+org.gnome.desktop.screensaver lock-enabled = true
+org.gnome.desktop.screensaver lock-delay = uint32 0
+org.gnome.desktop.session idle-delay = uint32 300
+org.gnome.desktop.screensaver ubuntu-lock-on-suspend = true
+org.gnome.desktop.remote-desktop.rdp enable = false
+org.gnome.desktop.remote-desktop.vnc enable = false
+org.gnome.desktop.privacy remember-recent-files = true
+org.gnome.desktop.privacy recent-files-max-age = -1
+org.gnome.desktop.notifications show-in-lock-screen = true
+linux-consent.toml
+ubuntu_desktop_provision-consent.toml
+ubuntu_release_upgrader-consent.toml
+==> /home/tester/.config/ubuntu-insights/linux-consent.toml <==
+consent_state = false
+
+==> /home/tester/.config/ubuntu-insights/ubuntu_desktop_provision-consent.toml <==
+consent_state = false
+
+==> /home/tester/.config/ubuntu-insights/ubuntu_release_upgrader-consent.toml <==
+consent_state = false

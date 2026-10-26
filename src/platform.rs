@@ -16,6 +16,10 @@ pub(crate) use windows::{run_dism_json, run_json};
 #[cfg(windows)]
 pub mod security;
 
+#[cfg(unix)]
+#[path = "platform/unix.rs"]
+pub mod unix;
+
 /// Explicitly selected support operation, never a reversible hardening control.
 /// No scripts, paths, sources, scan arguments, or arbitrary IDs are accepted.
 pub fn support_action(id: &str) -> Result<()> {
@@ -393,18 +397,33 @@ pub const APP_BACKUPS: &str = "AppBackups";
 /// leaves it alone: no journal is ever read from or written to it.
 pub const WEB_PROTECTION: &str = "Filter";
 pub const UPDATES: &str = "Updates";
+/// What the Linux fixes write down so an undo can put things back exactly, inside the state directory. Never a journal.
+pub const LINUX_NOTES: &str = "Linux";
 
 pub fn app_dir() -> Result<PathBuf> {
-    let dir = state_dir()?.join("App");
+    let dir = app_root()?.join("App");
     match std::fs::symlink_metadata(&dir) {
         Ok(m) => anyhow::ensure!(
             m.is_dir() && !m.file_type().is_symlink(),
             "The app data folder is not a plain directory"
         ),
+        #[cfg(unix)]
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => unix::create_private_dir(&dir)?,
+        #[cfg(not(unix))]
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => std::fs::create_dir(&dir)?,
         Err(e) => return Err(e.into()),
     }
     Ok(dir)
+}
+
+/// On Linux the window runs as the person, who cannot open the root-only state folder, so the
+/// window's own data stays in their private folder at home.
+fn app_root() -> Result<PathBuf> {
+    #[cfg(target_os = "linux")]
+    if !unix::is_root() {
+        return crate::linux::person::own_state_dir();
+    }
+    state_dir()
 }
 
 pub fn state_dir() -> Result<PathBuf> {
@@ -412,7 +431,11 @@ pub fn state_dir() -> Result<PathBuf> {
     {
         windows::state_dir()
     }
-    #[cfg(not(windows))]
+    #[cfg(unix)]
+    {
+        unix::state_dir()
+    }
+    #[cfg(not(any(windows, unix)))]
     {
         bail!("The protected journal directory is only available on Windows")
     }
@@ -424,7 +447,11 @@ pub fn create_private_dir(path: &std::path::Path) -> Result<()> {
     {
         windows::create_private_dir(path)
     }
-    #[cfg(not(windows))]
+    #[cfg(unix)]
+    {
+        unix::create_private_dir(path)
+    }
+    #[cfg(not(any(windows, unix)))]
     {
         std::fs::create_dir(path)?;
         Ok(())
@@ -1096,7 +1123,12 @@ mod tests {
         assert!(backend().is_err());
         assert!(is_elevated().is_err());
         assert!(elevate(&[]).is_err());
-        assert!(state_dir().is_err());
+        // A machine with Secblitz installed has the real private folder, which is rightly trusted.
+        #[cfg(unix)]
+        let installed = std::path::Path::new(unix::state_path()).exists();
+        #[cfg(not(unix))]
+        let installed = false;
+        assert!(installed || state_dir().is_err());
         assert!(permission_gate("permissions.service.bits").is_err());
         assert!(permission_gate("permissions.service.wuauserv").is_err());
     }

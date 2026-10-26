@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    remove|deconfigure)
+        # Lookups go back to the network's own servers before the filter stops.
+        if [ -e /run/systemd/resolved.conf.d/95-secblitz-web-protection.conf ]; then
+            rm -f /run/systemd/resolved.conf.d/95-secblitz-web-protection.conf
+            if [ -d /run/systemd/system ]; then
+                systemctl try-restart systemd-resolved.service 2>/dev/null || true
+            fi
+        fi
+        if [ -d /run/systemd/system ]; then
+            systemctl stop secblitz-monitor.timer secblitz-monitor.service secblitz-helper.service 2>/dev/null || true
+            systemctl disable secblitz-monitor.timer 2>/dev/null || true
+            systemctl disable --now secblitz-filter.service 2>/dev/null || true
+        fi
+        ;;
+esac
+
+exit 0

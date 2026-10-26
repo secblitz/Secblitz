@@ -30,12 +30,19 @@ fn open(path: &Path) -> Result<Handle> {
             null_mut(),
         )
     };
-    ensure!(
-        h != INVALID_HANDLE_VALUE,
-        "Cannot open journal path safely: {}",
-        winerr()
-    );
+    if h == INVALID_HANDLE_VALUE {
+        return Err(anyhow::Error::new(std::io::Error::last_os_error())
+            .context("Cannot open journal path safely"));
+    }
     Ok(Handle(h))
+}
+
+/// Settings are saved by renaming a temporary file over the old one, so an
+/// entry listed a moment ago can already be gone. Nothing is left to trust or pin.
+fn vanished(error: &anyhow::Error) -> bool {
+    error
+        .downcast_ref::<std::io::Error>()
+        .is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound)
 }
 
 fn planted(handle: &Handle) -> Result<bool> {
@@ -235,7 +242,11 @@ fn secure_tree(
     );
     for entry in std::fs::read_dir(path)? {
         let path = entry?.path();
-        let h = open(&path).with_context(|| format!("Inspect {}", path.display()))?;
+        let h = match open(&path) {
+            Ok(h) => h,
+            Err(e) if vanished(&e) => continue,
+            Err(e) => return Err(e.context(format!("Inspect {}", path.display()))),
+        };
         if path == foreign {
             inspect(&h, false, false)
                 .and_then(|directory| {
@@ -407,4 +418,19 @@ pub fn state_dir() -> Result<PathBuf> {
         path.clone()
     });
     Ok(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_entry_gone_before_it_is_opened_counts_as_vanished() {
+        let dir = tempfile::tempdir().unwrap();
+        let gone = open(&dir.path().join("notify.1.2.tmp")).err().unwrap();
+        assert!(vanished(&gone), "{gone:#}");
+        assert!(format!("{gone:#}").starts_with("Cannot open journal path safely: "));
+        let other = anyhow::anyhow!("Cannot open journal path safely: Access is denied.");
+        assert!(!vanished(&other));
+    }
 }

@@ -15,6 +15,24 @@ Both feeds use the same schema, the same root key and the same rules. `scripts/s
 
 The protected highest-seen floor (`release-floor.json`) is shared by both builds of a PC and accepts either target, so moving to the native build keeps its history. At the same version, a change of target is not treated as changed content. A lower version is still refused. The delivery floor is kept per build (`delivery-floor.json`, `delivery-floor-arm64.json`).
 
+## Linux and macOS targets
+
+Builds for Linux and macOS read their own feeds with the same schema, root key and rules. Nothing about the Windows feeds changes, and a build refuses any manifest whose `target` is not its own. Each build is fixed at compile time.
+
+| Build | Feed | `target` | Package |
+| --- | --- | --- | --- |
+| Linux x86_64, Debian family | `releases/stable-linux-x64-deb.json` | `linux-x86_64` | `secblitz-X.Y.Z-linux-x64.deb` |
+| Linux x86_64, Fedora | `releases/stable-linux-x64-rpm.json` | `linux-x86_64` | `secblitz-X.Y.Z-linux-x64.rpm` |
+| Linux aarch64, Debian family | `releases/stable-linux-arm64-deb.json` | `linux-aarch64` | `secblitz-X.Y.Z-linux-arm64.deb` |
+| Linux aarch64, Fedora | `releases/stable-linux-arm64-rpm.json` | `linux-aarch64` | `secblitz-X.Y.Z-linux-arm64.rpm` |
+| macOS | `releases/stable-macos.json` | `macos-universal` | `secblitz-X.Y.Z-macos-universal.dmg` |
+
+One Linux binary serves both package kinds, so it picks its feed at run time from the system it runs on: the Debian family (Debian, Ubuntu, Linux Mint and the like) reads the `-deb` feed and Fedora the `-rpm` feed. Other Linux families do not check for updates. A manifest whose `filename` does not end in the matching suffix is refused (the same refusal as a package for another kind of Linux).
+
+A feed that answers 404 means nothing has been published for that system yet. The app shows "No update has been published for your computer yet." and treats it as no news, not as a failure. Any other answer keeps the usual failure handling.
+
+The candidate and delivery lanes follow the same naming (`candidate-linux-x64.json`, `delivery-macos.json` and so on). The release floor accepts any of the five known targets, so its history carries across builds. `scripts/sign-release.py --arch linux-x64|linux-arm64 --package deb|rpm` (or `--arch macos`) signs one feed per call. `--package` is required with the Linux architectures, and signing refuses an installer whose filename does not end in that package kind. Signing and verification also refuse a package whose name does not match the target. `scripts/prepare-pages.py --verify-feed` takes the same `--package` for Linux feeds.
+
 ## Unreleased 0.6.0 delivery extension
 
 Candidate clients optionally read root-signed `releases/delivery.json`, which authorizes one exact `releases/candidate.json` envelope, one delegated key, version/origin/target, bounded sequence/freshness and signed cohort policy. The authorization lasts at most seven days. A protected random local rollout identity is not uploaded; the signed basis-point policy produces deterministic holdback. Observing a held-back candidate advances the release floor, so withdrawing rollout cannot authorize downgrade. Recovery requires a higher-version fix.

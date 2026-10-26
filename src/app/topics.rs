@@ -28,6 +28,18 @@ impl Topic {
         Topic::Clutter,
     ];
 
+    /// The topics that hold at least one check on `os`, in display order. Windows shows all of them.
+    pub fn shown_on(os: secblitz::os::Os) -> Vec<Topic> {
+        if os == secblitz::os::Os::Windows {
+            return Topic::ALL.to_vec();
+        }
+        let ids = secblitz::engine::catalog::ids(os);
+        Topic::ALL
+            .into_iter()
+            .filter(|t| ids.iter().any(|id| Topic::of(id) == *t))
+            .collect()
+    }
+
     /// The topic a setting belongs to. The first rule that fits wins; unknown settings are Windows settings.
     pub fn of(id: &str) -> Topic {
         let head = id.split_once('.').map_or(id, |(head, _)| head);
@@ -46,6 +58,79 @@ impl Topic {
             (_, "privacy.recall") | ("ai", _) => Topic::Ai,
             ("privacy", _) => Topic::Privacy,
             ("debloat", _) => Topic::Clutter,
+            (
+                "linux",
+                "linux.firewall"
+                | "linux.fedora_open_ports"
+                | "linux.ssh_server"
+                | "linux.ssh_password"
+                | "linux.file_sharing"
+                | "linux.remote_desktop"
+                | "linux.network_redirects"
+                | "linux.llmnr"
+                | "linux.rare_protocols"
+                | "linux.fake_sources"
+                | "linux.flood_protection"
+                | "linux.source_routing"
+                | "linux.broadcast_pings"
+                | "linux.announce_name"
+                | "linux.old_network_services"
+                | "linux.bluetooth_autostart",
+            ) => Topic::Network,
+            (
+                "linux",
+                "linux.autologin"
+                | "linux.guest"
+                | "linux.screen_lock"
+                | "linux.media_autorun"
+                | "linux.home_private"
+                | "linux.root_account"
+                | "linux.screen_off_delay"
+                | "linux.lock_delay"
+                | "linux.lock_on_suspend",
+            ) => Topic::SignIn,
+            (
+                "linux",
+                "linux.browser_data_collection"
+                | "linux.browser_https_only"
+                | "linux.browser_tracking"
+                | "linux.browser_ad_topics"
+                | "linux.browser_sponsored"
+                | "linux.browser_safe_browsing"
+                | "linux.browser_password_leaks"
+                | "linux.browser_background"
+                | "linux.browser_search_suggestions"
+                | "linux.browser_encrypted_dns",
+            ) => Topic::Browsers,
+            (
+                "linux",
+                "linux.crash_reports"
+                | "linux.countme"
+                | "linux.connectivity_check"
+                | "linux.wifi_mac"
+                | "linux.ipv6_privacy"
+                | "linux.computer_name_sent"
+                | "linux.encrypted_dns"
+                | "linux.recent_files"
+                | "linux.lock_previews"
+                | "linux.ubuntu_insights"
+                | "linux.location"
+                | "linux.problem_reports"
+                | "linux.app_usage"
+                | "linux.old_files"
+                | "linux.crash_files",
+            ) => Topic::Privacy,
+            ("linux", "linux.printer_sharing" | "linux.printer_discovery") => Topic::Network,
+            ("linux", "linux.ubuntu_news" | "linux.usage_survey") => Topic::Privacy,
+            (
+                "linux",
+                "linux.memory_shuffle"
+                | "linux.bpf_hardening"
+                | "linux.terminal_drivers"
+                | "linux.crash_memory"
+                | "linux.app_sandbox_limits"
+                | "linux.processor_updates",
+            ) => Topic::Windows,
             _ => Topic::Windows,
         }
     }
@@ -57,6 +142,11 @@ impl Topic {
         match title {
             "Security providers" | "Defender" | "SmartScreen" => Topic::Threats,
             "Windows Firewall" => Topic::Network,
+            secblitz::advice::ACCOUNTS_WITHOUT_PASSWORD
+            | secblitz::advice::ADMIN_WITHOUT_PASSWORD
+            | secblitz::advice::EXTRA_ADMIN_ACCOUNTS
+            | secblitz::advice::ADMIN_ACCOUNTS => Topic::SignIn,
+            secblitz::advice::OPEN_PROGRAMS => Topic::Network,
             _ if title.starts_with("asr.") || title.starts_with("cfa.") => Topic::Threats,
             _ if title.starts_with("dns.") => Topic::Network,
             _ => Topic::of(title),
@@ -73,6 +163,14 @@ impl Topic {
             Topic::Privacy => "Privacy",
             Topic::Ai => "AI features",
             Topic::Clutter => "Less clutter",
+        }
+    }
+
+    /// The name shown to the person. The topic saved as `windows` is "System" on the other systems.
+    pub fn display_label(self, os: secblitz::os::Os) -> &'static str {
+        match (self, os) {
+            (Topic::Windows, secblitz::os::Os::Linux | secblitz::os::Os::Macos) => "System",
+            _ => self.label(),
         }
     }
 }
@@ -127,6 +225,28 @@ mod tests {
     use secblitz::engine::Outcome;
     use secblitz::model::CheckStatus;
     use Topic::*;
+
+    #[test]
+    fn windows_shows_every_topic() {
+        assert_eq!(
+            Topic::shown_on(secblitz::os::Os::Windows),
+            Topic::ALL.to_vec()
+        );
+    }
+
+    #[test]
+    fn linux_shows_only_topics_with_linux_checks() {
+        let shown = Topic::shown_on(secblitz::os::Os::Linux);
+        assert_eq!(shown, vec![SignIn, Network, Windows, Browsers, Privacy]);
+        for gone in [Threats, Ai, Clutter] {
+            assert!(!shown.contains(&gone));
+        }
+    }
+
+    #[test]
+    fn a_system_without_checks_shows_no_topics() {
+        assert!(Topic::shown_on(secblitz::os::Os::Macos).is_empty());
+    }
 
     #[test]
     fn every_hardening_setting_goes_where_the_design_says() {
@@ -225,6 +345,112 @@ mod tests {
                 "{id} is not a setting"
             );
         }
+    }
+
+    #[test]
+    fn every_linux_setting_goes_where_the_design_says() {
+        let expected: &[(&str, Topic)] = &[
+            ("linux.firewall", Network),
+            ("linux.fedora_open_ports", Network),
+            ("linux.ssh_server", Network),
+            ("linux.ssh_password", Network),
+            ("linux.file_sharing", Network),
+            ("linux.remote_desktop", Network),
+            ("linux.autologin", SignIn),
+            ("linux.guest", SignIn),
+            ("linux.screen_lock", SignIn),
+            ("linux.auto_updates", Windows),
+            ("linux.kernel_protections", Windows),
+            ("linux.ptrace", Windows),
+            ("linux.network_redirects", Network),
+            ("linux.llmnr", Network),
+            ("linux.fake_sources", Network),
+            ("linux.flood_protection", Network),
+            ("linux.source_routing", Network),
+            ("linux.broadcast_pings", Network),
+            ("linux.announce_name", Network),
+            ("linux.old_network_services", Network),
+            ("linux.ipv6_privacy", Privacy),
+            ("linux.computer_name_sent", Privacy),
+            ("linux.encrypted_dns", Privacy),
+            ("linux.crash_reports", Privacy),
+            ("linux.countme", Privacy),
+            ("linux.connectivity_check", Privacy),
+            ("linux.wifi_mac", Privacy),
+            ("linux.recent_files", Privacy),
+            ("linux.lock_previews", Privacy),
+            ("linux.ubuntu_insights", Privacy),
+            ("linux.time_sync", Windows),
+            ("linux.printer_sharing", Network),
+            ("linux.printer_discovery", Network),
+            ("linux.ubuntu_news", Privacy),
+            ("linux.snap_updates", Windows),
+            ("linux.media_autorun", SignIn),
+            ("linux.location", Privacy),
+            ("linux.problem_reports", Privacy),
+            ("linux.app_usage", Privacy),
+            ("linux.old_files", Privacy),
+            ("linux.home_private", SignIn),
+            ("linux.screen_off_delay", SignIn),
+            ("linux.lock_delay", SignIn),
+            ("linux.lock_on_suspend", SignIn),
+            ("linux.browser_data_collection", Browsers),
+            ("linux.browser_https_only", Browsers),
+            ("linux.memory_shuffle", Windows),
+            ("linux.bpf_hardening", Windows),
+            ("linux.terminal_drivers", Windows),
+            ("linux.crash_memory", Windows),
+            ("linux.crash_files", Privacy),
+            ("linux.rare_protocols", Network),
+            ("linux.app_sandbox_limits", Windows),
+            ("linux.processor_updates", Windows),
+            ("linux.root_account", SignIn),
+            ("linux.bluetooth_autostart", Network),
+            ("linux.usage_survey", Privacy),
+            ("linux.mint_app_updates", Windows),
+            ("linux.app_store_updates", Windows),
+            ("linux.browser_tracking", Browsers),
+            ("linux.browser_ad_topics", Browsers),
+            ("linux.browser_sponsored", Browsers),
+            ("linux.browser_safe_browsing", Browsers),
+            ("linux.browser_password_leaks", Browsers),
+            ("linux.browser_background", Browsers),
+            ("linux.browser_search_suggestions", Browsers),
+            ("linux.browser_encrypted_dns", Browsers),
+        ];
+        for (id, topic) in expected {
+            assert_eq!(Topic::of(id), *topic, "{id}");
+        }
+        for spec in secblitz::linux::catalog::specs() {
+            assert!(
+                expected.iter().any(|(id, _)| *id == spec.id),
+                "{} is missing from the expected list",
+                spec.id
+            );
+        }
+        assert_eq!(expected.len(), secblitz::linux::catalog::specs().len());
+        for title in [
+            secblitz::advice::DISK_ENCRYPTION,
+            secblitz::advice::LINUX_SECURE_BOOT,
+            secblitz::advice::UPDATES_WAITING,
+            secblitz::advice::RESTART_NEEDED,
+            secblitz::advice::PROGRAM_LIMITS,
+            secblitz::advice::UNCHECKED_SOURCES,
+            secblitz::advice::SECURITY_SUPPORT,
+            secblitz::advice::HARDWARE_UPDATES,
+            secblitz::advice::SWAP_PROTECTION,
+        ] {
+            assert_eq!(Topic::of_finding(title), Windows, "{title}");
+        }
+        for title in [
+            secblitz::advice::ACCOUNTS_WITHOUT_PASSWORD,
+            secblitz::advice::ADMIN_WITHOUT_PASSWORD,
+            secblitz::advice::EXTRA_ADMIN_ACCOUNTS,
+            secblitz::advice::ADMIN_ACCOUNTS,
+        ] {
+            assert_eq!(Topic::of_finding(title), SignIn, "{title}");
+        }
+        assert_eq!(Topic::of_finding(secblitz::advice::OPEN_PROGRAMS), Network);
     }
 
     #[test]
@@ -333,6 +559,23 @@ mod tests {
         );
         assert_eq!(serde_json::from_str::<Topic>("\"ai\"").unwrap(), Topic::Ai);
         assert!(serde_json::from_str::<Topic>("\"nope\"").is_err());
+    }
+
+    #[test]
+    fn the_windows_topic_is_called_system_on_the_other_systems() {
+        use secblitz::os::Os;
+        assert_eq!(Topic::Windows.display_label(Os::Windows), "Windows");
+        assert_eq!(Topic::Windows.display_label(Os::Linux), "System");
+        assert_eq!(Topic::Windows.display_label(Os::Macos), "System");
+        for t in Topic::ALL.into_iter().filter(|t| *t != Topic::Windows) {
+            for os in [Os::Windows, Os::Linux, Os::Macos] {
+                assert_eq!(t.display_label(os), t.label());
+            }
+        }
+        assert_eq!(
+            serde_json::to_string(&Topic::Windows).unwrap(),
+            "\"windows\""
+        );
     }
 
     #[test]

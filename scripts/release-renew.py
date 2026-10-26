@@ -90,7 +90,7 @@ def main():
     parser.add_argument("--public-key", type=Path, default=sign.ROOT / "assets/update-public-key.hex")
     parser.add_argument("--renew-within-days", type=int, default=14)
     parser.add_argument("--lifetime-days", type=int, default=90)
-    parser.add_argument("--arch", choices=sorted(sign.ARCHES), default="x64")
+    parser.add_argument("--arch", choices=sorted(sign.TARGETS), default="x64")
     parser.add_argument("--sign", action="store_true")
     parser.add_argument("--key", type=Path)
     parser.add_argument("--output", type=Path)
@@ -113,7 +113,7 @@ def main():
     if public_text != args.expected_public_key or hashlib.sha256(current).hexdigest() != args.current_sha256:
         raise ValueError("key/current bytes changed")
     public = bytes.fromhex(public_text)
-    feed = sign.ARCHES[args.arch]["feed"]
+    feed = sign.feed_name(args.arch, sign.package_of(args.installer.name))
     if live_feed(origin, feed) != current:
         raise ValueError("live feed differs from renewal snapshot")
     now = int(time.time())

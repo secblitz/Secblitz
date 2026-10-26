@@ -1,5 +1,5 @@
 //! Web protection: overview, switches and allowed sites.
-use crate::app::{history, settings as app_settings};
+use crate::app::history;
 use crate::gui::icons::Icon;
 use crate::gui::pages::home;
 use crate::gui::theme::{self, Palette, Tone};
@@ -19,6 +19,7 @@ use secblitz::filter::config::{
 use secblitz::filter::control::{self, ServiceState};
 use secblitz::filter::gaps::Gap;
 use secblitz::filter::matcher::{Kind, KINDS};
+use secblitz::linux::web::WebState;
 use std::time::{Duration, Instant};
 
 type El<'a> = Element<'a, Message>;
@@ -28,6 +29,8 @@ const CHART_HEIGHT: f32 = 150.0;
 const TOP_SHOWN: usize = 5;
 const RECENT_SHOWN: usize = 6;
 const MAX_TYPED: usize = 300;
+/// Each reading on Linux asks the helper, which looks at the system, so it is read less often.
+const POLL_EVERY: Duration = Duration::from_secs(if cfg!(target_os = "linux") { 4 } else { 2 });
 const MONTHS: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
@@ -144,6 +147,8 @@ pub struct Snapshot {
     pub status: Option<Status>,
     pub service: ServiceState,
     pub installed: bool,
+    /// False when this computer cannot send its website lookups through web protection.
+    pub available: bool,
     pub now: u64,
     pub recent: Vec<RecentItem>,
     pub stats: Option<BlockHistory>,
@@ -323,11 +328,11 @@ fn note_look(state: &mut State, snapshot: &Snapshot, now: Instant) {
 }
 
 pub fn controls_enabled(snapshot: Option<&Snapshot>, busy: bool) -> bool {
-    snapshot.is_some_and(|s| s.installed) && !busy
+    snapshot.is_some_and(|s| s.installed && s.available) && !busy
 }
 
 pub fn suggests(snapshot: &Snapshot) -> bool {
-    snapshot.installed && !snapshot.config.any_on()
+    snapshot.installed && snapshot.available && !snapshot.config.any_on()
 }
 
 fn blocked_today(snapshot: &Snapshot) -> Option<[u64; KINDS]> {
@@ -465,6 +470,7 @@ fn site_problem_text(problem: SiteProblem) -> &'static str {
     }
 }
 
+const NOT_AVAILABLE: &str = secblitz::linux::web::NOT_AVAILABLE;
 const NOT_A_NAME: &str = "That is not a website name. Type it the way it appears in the address bar, for example example.com.";
 const LIST_FULL: &str =
     "The list of allowed sites is full. Remove a site you no longer need and try again.";
@@ -496,6 +502,7 @@ pub fn recent_blocks(snapshot: &Snapshot) -> Vec<&RecentItem> {
         .collect()
 }
 
+#[cfg(not(target_os = "linux"))]
 fn service_state() -> ServiceState {
     #[cfg(windows)]
     {
@@ -507,6 +514,42 @@ fn service_state() -> ServiceState {
     }
 }
 
+/// `installed` is whether the helper answered, since everything on Linux goes through it.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub fn snapshot_from_helper(state: Option<WebState>) -> Snapshot {
+    match state {
+        Some(ws) => Snapshot {
+            config: ws.config,
+            status: ws.status,
+            service: ws.service,
+            installed: true,
+            available: ws.available,
+            now: ws.now,
+            recent: ws.recent,
+            stats: ws.stats,
+        },
+        None => Snapshot {
+            config: Config::default(),
+            status: None,
+            service: ServiceState::NotInstalled,
+            installed: false,
+            available: true,
+            now: history::now(),
+            recent: Vec::new(),
+            stats: None,
+        },
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn read_snapshot() -> Snapshot {
+    let state = crate::linux_bus::client::web_state()
+        .map_err(|e| eprintln!("Could not read web protection: {e:#}"))
+        .ok();
+    snapshot_from_helper(state)
+}
+
+#[cfg(not(target_os = "linux"))]
 fn read_snapshot() -> Snapshot {
     let config = config::config_path()
         .map(|p| config::load_config(&p))
@@ -527,7 +570,8 @@ fn read_snapshot() -> Snapshot {
         config,
         status,
         service: service_state(),
-        installed: app_settings::installed_exe().is_some(),
+        installed: crate::app::settings::installed_exe().is_some(),
+        available: true,
         now,
         recent,
         stats,
@@ -539,7 +583,11 @@ fn apply(config: Config) -> Result<(), String> {
     {
         secblitz::filter::control::apply_switches(config).map_err(|e| format!("{e:#}"))
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        linux_call(crate::linux_bus::client::web_apply(config))
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         let _ = config;
         Err("unavailable".into())
@@ -556,7 +604,16 @@ fn pause(length: PauseFor) -> Result<(), String> {
         }
         .map_err(|e| format!("{e:#}"))
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        use secblitz::linux::web::PauseFor as Length;
+        linux_call(crate::linux_bus::client::web_pause(match length {
+            PauseFor::Quarter => Length::Quarter,
+            PauseFor::Hour => Length::Hour,
+            PauseFor::UntilRestart => Length::UntilRestart,
+        }))
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         let _ = length;
         Err("unavailable".into())
@@ -568,7 +625,11 @@ fn resume() -> Result<(), String> {
     {
         secblitz::filter::control::resume().map_err(|e| format!("{e:#}"))
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        linux_call(crate::linux_bus::client::web_resume())
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         Err("unavailable".into())
     }
@@ -579,7 +640,11 @@ fn allow_site(name: String) -> Result<(), String> {
     {
         secblitz::filter::control::allow_site(&name).map_err(|e| format!("{e:#}"))
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        linux_call(crate::linux_bus::client::web_allow(&name))
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         let _ = name;
         Err("unavailable".into())
@@ -591,7 +656,11 @@ fn allow_once(name: String) -> Result<(), String> {
     {
         secblitz::filter::control::allow_site_once(&name).map_err(|e| format!("{e:#}"))
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        linux_call(crate::linux_bus::client::web_allow_once(&name))
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         let _ = name;
         Err("unavailable".into())
@@ -603,11 +672,24 @@ fn remove_allowed(name: String) -> Result<(), String> {
     {
         secblitz::filter::control::remove_allowed(&name).map_err(|e| format!("{e:#}"))
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        linux_call(crate::linux_bus::client::web_remove_allowed(&name))
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         let _ = name;
         Err("unavailable".into())
     }
+}
+
+/// Keeps the helper's own sentence for the person; the detail goes to the log.
+#[cfg(target_os = "linux")]
+fn linux_call(result: anyhow::Result<()>) -> Result<(), String> {
+    result.map_err(|e| {
+        eprintln!("Web protection change failed: {e:#}");
+        e.to_string()
+    })
 }
 
 fn read_task(generation: u32) -> Task<Message> {
@@ -655,6 +737,7 @@ fn same_look(a: &Snapshot, b: &Snapshot) -> bool {
         && a.status == b.status
         && a.service == b.service
         && a.installed == b.installed
+        && a.available == b.available
         && current_line(a) == current_line(b)
         && blocked_today(a) == blocked_today(b)
         && fresh(a) == fresh(b)
@@ -668,7 +751,7 @@ fn same_look(a: &Snapshot, b: &Snapshot) -> bool {
             .eq(b.recent.iter().map(|i| minutes_ago(b.now, i.at)))
 }
 
-/// Rereads every two seconds on its own thread and speaks up only when the
+/// Rereads every few seconds on its own thread and speaks up only when the
 /// page would look different, so an unchanged page never redraws.
 pub fn subscription() -> Subscription<Message> {
     Subscription::run(|| {
@@ -676,7 +759,7 @@ pub fn subscription() -> Subscription<Message> {
         std::thread::spawn(move || {
             let mut last: Option<Snapshot> = None;
             loop {
-                std::thread::sleep(Duration::from_secs(2));
+                std::thread::sleep(POLL_EVERY);
                 if tx.is_closed() {
                     break;
                 }
@@ -860,11 +943,37 @@ pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
     }
 }
 
+/// The helper only sends sentences from this list, so anything else is a failure it did not expect.
+#[cfg(target_os = "linux")]
+fn linux_failure_text(raw: &str) -> &'static str {
+    use secblitz::linux::web;
+    let known = web::SENTENCES
+        .iter()
+        .copied()
+        .chain([
+            crate::linux_bus::polkit::NOT_ALLOWED,
+            crate::launcher::NOT_INSTALLED,
+        ])
+        .find(|k| raw.contains(k));
+    known.unwrap_or(LINUX_FAILED)
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+const LINUX_FAILED: &str = "Web protection could not be changed. Try again in a moment.";
+
 fn failure_text(raw: &str) -> &'static str {
+    #[cfg(target_os = "linux")]
+    return linux_failure_text(raw);
+    #[cfg(not(target_os = "linux"))]
+    windows_failure_text(raw)
+}
+
+#[cfg_attr(target_os = "linux", allow(dead_code))]
+fn windows_failure_text(raw: &str) -> &'static str {
     let r = raw.to_ascii_lowercase();
     let has = |needles: &[&str]| needles.iter().any(|n| r.contains(n));
     if has(&["administrator", "access is denied", "os error 5", "elevat"]) {
-        "Windows wouldn't let Secblitz change web protection. Sign in with an account that can make changes to this PC, then open Secblitz again."
+        "Windows wouldn't let Secblitz change web protection. Sign in with an account that can make changes to this computer, then open Secblitz again."
     } else if has(&["not a website name"]) {
         NOT_A_NAME
     } else if has(&["allowed sites is full"]) {
@@ -876,13 +985,13 @@ fn failure_text(raw: &str) -> &'static str {
         "only supported on windows",
         "requires windows",
     ]) {
-        "Web protection isn't available on this PC."
+        "Web protection isn't available on this computer."
     } else if has(&["marked for deletion", "already exists", "1072", "1073"]) {
-        "Windows is still tidying up the old web protection. Restart your PC, then try again."
+        "Windows is still tidying up the old web protection. Restart your computer, then try again."
     } else if has(&["untrusted", "unexpected", "writable", "owner"]) {
-        "Secblitz couldn't safely set up web protection on this PC. Install the latest Secblitz and try again."
+        "Secblitz couldn't safely set up web protection on this computer. Install the latest Secblitz and try again."
     } else {
-        "We couldn't change web protection. Please try again. If it keeps happening, restart your PC."
+        "We couldn't change web protection. Please try again. If it keeps happening, restart your computer."
     }
 }
 
@@ -896,7 +1005,7 @@ fn problem_hint(snapshot: &Snapshot, line: Line) -> Option<&'static str> {
         .filter(|s| config::fresh(s, snapshot.now));
     match status.and_then(|s| s.last_error) {
         Some(ErrorCode::PortInUse) => Some(
-            "Another program on your PC is using what web protection needs. Close other ad blockers or VPN apps.",
+            "Another program on your computer is using what web protection needs. Close other ad blockers or VPN apps.",
         ),
         Some(ErrorCode::NoUpstream) => Some(
             "Web protection can't find your internet connection. Connect to the internet.",
@@ -908,7 +1017,7 @@ fn problem_hint(snapshot: &Snapshot, line: Line) -> Option<&'static str> {
             "The block lists couldn't be used. Secblitz will try to download them again. If this stays, check for a Secblitz update.",
         ),
         None if line == Line::NotWorking => Some(
-            "Press Try again. If that doesn't help, restart your PC.",
+            "Press Try again. If that doesn't help, restart your computer.",
         ),
         None => None,
     }
@@ -1091,6 +1200,16 @@ fn ago_text(ctx: &Ctx, minutes: u64) -> String {
     }
 }
 
+const LINUX_TRACKING: &str = "Stops websites and apps from sending data about what you do.";
+
+fn tracking_detail() -> &'static str {
+    if cfg!(target_os = "linux") {
+        LINUX_TRACKING
+    } else {
+        "Stops websites, apps and Windows from sending data about what you do."
+    }
+}
+
 fn switch_text(ctx: &Ctx, switch: Switch) -> (Icon, String, String) {
     match switch {
         Switch::Ads => (
@@ -1101,12 +1220,12 @@ fn switch_text(ctx: &Ctx, switch: Switch) -> (Icon, String, String) {
         Switch::Tracking => (
             Icon::Eye,
             ctx.t("Block tracking and telemetry"),
-            ctx.t("Stops websites, apps and Windows from sending data about what you do."),
+            ctx.t(tracking_detail()),
         ),
         Switch::Dangerous => (
             Icon::ShieldAlert,
             ctx.t("Block dangerous websites"),
-            ctx.t("Stops your PC from opening known scam and virus websites."),
+            ctx.t("Stops your computer from opening known scam and virus websites."),
         ),
         Switch::Scam => (
             Icon::AlertTriangle,
@@ -1117,18 +1236,18 @@ fn switch_text(ctx: &Ctx, switch: Switch) -> (Icon, String, String) {
             Icon::Bell,
             ctx.t("Pop-up and notification spam"),
             ctx.t(
-                "Blocks pop-up floods and fake 'your PC is infected' warnings.",
+                "Blocks pop-up floods and fake 'your computer is infected' warnings.",
             ),
         ),
         Switch::Adult => (
             Icon::EyeOff,
             ctx.t("Block adult websites"),
-            ctx.t("Stops your PC from opening websites meant for adults."),
+            ctx.t("Stops your computer from opening websites meant for adults."),
         ),
         Switch::Gambling => (
             Icon::Gamepad,
             ctx.t("Block gambling websites"),
-            ctx.t("Stops your PC from opening online betting and casino websites."),
+            ctx.t("Stops your computer from opening online betting and casino websites."),
         ),
         Switch::SafeSearch => (
             Icon::Search,
@@ -1364,7 +1483,7 @@ fn most_blocked_group<'a>(ctx: &'a Ctx, top: Vec<(String, u64)>) -> Option<El<'a
     Some(widgets::group(
         p,
         ctx.t("Most blocked"),
-        Some(ctx.t("Over the last 30 days, kept only on this PC.")),
+        Some(ctx.t("Over the last 30 days, kept only on this computer.")),
         None,
         rows,
     ))
@@ -1402,7 +1521,7 @@ fn gap_text(gap: Gap) -> (Icon, &'static str, &'static str) {
         Gap::OtherDnsRule => (
             Icon::AlertTriangle,
             "Another program redirects your lookups",
-            "A VPN, security tool or work setting on this PC sends all lookups somewhere else, so Web protection may not see them.",
+            "A VPN, security tool or work setting on this computer sends all lookups somewhere else, so Web protection may not see them.",
         ),
         Gap::Vpn => (
             Icon::Lock,
@@ -1851,6 +1970,14 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> El<'a> {
             .spacing(theme::S8)
             .into();
     };
+    if !snapshot.available {
+        return column![
+            header,
+            widgets::inline_notice(p, Tone::Neutral, ctx.t(NOT_AVAILABLE)),
+        ]
+        .spacing(theme::S6)
+        .into();
+    }
     let tabs = widgets::segmented(
         p,
         &[Tab::Overview, Tab::Block, Tab::Sites].map(|t| (t, tab_label(ctx, t))),
@@ -1908,6 +2035,7 @@ mod tests {
             status,
             service: ServiceState::Running,
             installed,
+            available: true,
             now: NOW,
             recent: Vec::new(),
             stats: None,
@@ -2232,13 +2360,14 @@ mod tests {
 
     #[test]
     fn known_failures_get_a_fix_and_unknown_ones_never_echo_raw_text() {
-        let admin = failure_text("Changing web protection needs administrator rights");
+        let admin = windows_failure_text("Changing web protection needs administrator rights");
         assert!(admin.contains("Sign in with an account"));
         assert!(
-            failure_text("The service is marked for deletion (1072)").contains("Restart your PC")
+            windows_failure_text("The service is marked for deletion (1072)")
+                .contains("Restart your computer")
         );
         let raw = "os error 87: weird HRESULT 0x80070057 in scm.rs";
-        let general = failure_text(raw);
+        let general = windows_failure_text(raw);
         assert!(general.starts_with("We couldn't change web protection."));
         assert!(!general.contains("0x8") && !general.contains("scm"));
         for text in [admin, general] {
@@ -2263,7 +2392,7 @@ mod tests {
         };
         assert!(problem_hint(&down, Line::NotWorking)
             .unwrap()
-            .contains("restart your PC"));
+            .contains("restart your computer"));
         let ok = snapshot(on, Some(healthy()), true);
         assert!(problem_hint(&ok, Line::On).is_none());
     }
@@ -2603,9 +2732,9 @@ mod tests {
 
     #[test]
     fn site_errors_from_the_backend_become_plain_sentences() {
-        assert_eq!(failure_text(NOT_A_NAME), NOT_A_NAME);
-        assert_eq!(failure_text(LIST_FULL), LIST_FULL);
-        assert_eq!(failure_text(LIST_TOO_LONG), LIST_TOO_LONG);
+        assert_eq!(windows_failure_text(NOT_A_NAME), NOT_A_NAME);
+        assert_eq!(windows_failure_text(LIST_FULL), LIST_FULL);
+        assert_eq!(windows_failure_text(LIST_TOO_LONG), LIST_TOO_LONG);
     }
 
     #[test]
@@ -2671,6 +2800,117 @@ mod tests {
         s
     }
 
+    fn helper_state(config: Config, status: Option<Status>, service: ServiceState) -> WebState {
+        WebState {
+            available: true,
+            config,
+            status,
+            service,
+            routed: true,
+            now: NOW,
+            recent: Vec::new(),
+            stats: None,
+        }
+    }
+
+    #[test]
+    fn the_helper_reading_draws_every_linux_state() {
+        let line = |ws: WebState| current_line(&snapshot_from_helper(Some(ws)));
+        let running = ServiceState::Running;
+        assert_eq!(
+            line(helper_state(
+                config(false),
+                None,
+                ServiceState::NotInstalled
+            )),
+            Line::Off
+        );
+        assert_eq!(
+            line(helper_state(config(true), Some(healthy()), running)),
+            Line::On
+        );
+        assert_eq!(
+            line(helper_state(config(true), None, ServiceState::Stopped)),
+            Line::NotWorking
+        );
+        let paused = Config {
+            paused_until: Some(NOW + 600),
+            ..config(true)
+        };
+        assert_eq!(
+            line(helper_state(paused, Some(healthy()), running)),
+            Line::Paused(NOW + 600)
+        );
+        let paused_until_restart =
+            control::paused_until_restart_config(config(true), config::boot_time(NOW));
+        assert_eq!(
+            line(helper_state(paused_until_restart, Some(healthy()), running)),
+            Line::PausedUntilRestart
+        );
+        let with_gap = snapshot_from_helper(Some(helper_state(
+            config(true),
+            Some(Status {
+                gaps: Some(vec![Gap::Vpn]),
+                ..healthy()
+            }),
+            running,
+        )));
+        assert_eq!(
+            coverage(&with_gap, current_line(&with_gap)),
+            Some(Coverage::Gaps(vec![Gap::Vpn]))
+        );
+    }
+
+    #[test]
+    fn without_the_lookup_service_the_page_offers_no_controls_and_no_suggestion() {
+        let mut ws = helper_state(config(false), None, ServiceState::NotInstalled);
+        ws.available = false;
+        ws.routed = false;
+        let snap = snapshot_from_helper(Some(ws));
+        assert!(snap.installed && !snap.available);
+        assert!(!controls_enabled(Some(&snap), false));
+        assert!(!suggests(&snap));
+        let ready = snapshot_from_helper(Some(helper_state(
+            config(false),
+            None,
+            ServiceState::NotInstalled,
+        )));
+        assert!(controls_enabled(Some(&ready), false) && suggests(&ready));
+    }
+
+    #[test]
+    fn an_unreachable_helper_looks_like_a_computer_without_the_install() {
+        let snap = snapshot_from_helper(None);
+        assert!(!snap.installed && snap.available);
+        assert!(!controls_enabled(Some(&snap), false));
+        assert!(!suggests(&snap));
+        assert_eq!(current_line(&snap), Line::Off);
+    }
+
+    #[test]
+    fn the_not_available_sentence_and_the_linux_wording_are_translated() {
+        for lang in [Lang::Es, Lang::Fr, Lang::De, Lang::Pt, Lang::It] {
+            for key in [NOT_AVAILABLE, LINUX_TRACKING, LINUX_FAILED] {
+                assert_ne!(lang.t(key), key, "{}: {key}", lang.code());
+            }
+        }
+        for key in [NOT_AVAILABLE, LINUX_TRACKING, LINUX_FAILED] {
+            assert!(!key.contains('\u{2014}') && !key.contains("Windows"));
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_shows_the_helpers_sentence_and_nothing_technical() {
+        assert_eq!(failure_text(NOT_AVAILABLE), NOT_AVAILABLE);
+        assert_eq!(
+            failure_text(crate::linux_bus::polkit::NOT_ALLOWED),
+            crate::linux_bus::polkit::NOT_ALLOWED
+        );
+        assert_eq!(failure_text("error 1072 in the service"), LINUX_FAILED);
+        assert!(!failure_text("access is denied").contains("Windows"));
+    }
+
     #[test]
     fn every_tab_lays_out_in_every_language_and_state() {
         use crate::gui::{App, Options, Page};
@@ -2696,10 +2936,23 @@ mod tests {
             },
             ..busy_day()
         };
+        let gap = Snapshot {
+            status: Some(Status {
+                gaps: Some(vec![Gap::BrowserSecureDns, Gap::OtherDnsRule, Gap::Vpn]),
+                ..healthy()
+            }),
+            ..snapshot(config(true), None, true)
+        };
+        let unavailable = Snapshot {
+            available: false,
+            ..snapshot(config(false), None, true)
+        };
         let states = [
             busy_day(),
             stopped,
             paused,
+            gap,
+            unavailable,
             snapshot(config(false), None, false),
             snapshot(config(true), Some(healthy()), true),
         ];

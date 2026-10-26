@@ -6,6 +6,7 @@ mod gui;
 mod guide;
 mod i18n;
 mod launcher;
+mod linux_bus;
 mod tray;
 mod uninstall;
 
@@ -22,7 +23,7 @@ fn command(lang: Lang) -> Command {
     let sub = |name, key| Command::new(name).about(text(lang.t(key)));
     let cmd = Command::new("secblitz")
         .version(env!("CARGO_PKG_VERSION"))
-        .about(text(lang.t("A safer PC. Without headaches.")))
+        .about(text(lang.t("A safer computer. Without headaches.")))
         .arg(
             Arg::new("lang")
                 .long("lang")
@@ -84,6 +85,8 @@ fn command(lang: Lang) -> Command {
                 .hide(true)
                 .arg(Arg::new("user").long("user").action(ArgAction::SetTrue)),
         )
+        .subcommand(Command::new("helper").hide(true))
+        .subcommand(Command::new("monitor-once").hide(true))
         .subcommand(
             Command::new("uninstall-cleanup").hide(true).arg(
                 Arg::new("user")
@@ -106,6 +109,12 @@ fn command(lang: Lang) -> Command {
                         .arg(Arg::new("site").required(true).value_parser(clean_site)),
                 ),
         );
+    #[cfg(target_os = "linux")]
+    let cmd = cmd.mut_subcommand("filter", |filter| {
+        filter
+            .subcommand(Command::new("add-rule").hide(true))
+            .subcommand(Command::new("remove-rule").hide(true))
+    });
     fn localize(cmd: Command, lang: Lang, parent: &str) -> Command {
         let path = if parent.is_empty() {
             cmd.get_name().to_owned()
@@ -213,6 +222,21 @@ fn elevated_args(matches: &ArgMatches, lang: Lang) -> Vec<String> {
 }
 
 fn execute(matches: &ArgMatches, lang: Lang) -> Result<i32> {
+    if matches.subcommand_matches("helper").is_some() {
+        #[cfg(target_os = "linux")]
+        {
+            linux_bus::helper::run_installed()?;
+            return Ok(0);
+        }
+        #[cfg(not(target_os = "linux"))]
+        bail!(launcher::NOT_INSTALLED);
+    }
+    if matches.subcommand_matches("monitor-once").is_some() {
+        #[cfg(target_os = "linux")]
+        return monitor_once(lang);
+        #[cfg(not(target_os = "linux"))]
+        bail!(launcher::NOT_INSTALLED);
+    }
     if update_command(matches) == Some(UpdateCommand::Health) {
         anyhow::ensure!(matches.get_flag("json"), "update-health-requires-json");
         return write_health(updater::health()?, &mut io::stdout().lock());
@@ -221,6 +245,10 @@ fn execute(matches: &ArgMatches, lang: Lang) -> Result<i32> {
         return execute_uninstall(command, matches.get_flag("json"), lang);
     }
     if let Some(filter) = matches.subcommand_matches("filter") {
+        #[cfg(target_os = "linux")]
+        if let Some(action) = filter_command(matches) {
+            return run_filter_linux(action);
+        }
         return match filter.subcommand_name() {
             Some("run") => {
                 secblitz::filter::service::run()?;
@@ -280,6 +308,22 @@ fn execute(matches: &ArgMatches, lang: Lang) -> Result<i32> {
     Ok(0)
 }
 
+/// The daily background check the packaged timer starts. It runs as root only and never changes the computer: it
+/// looks at the signed update feed and keeps what it found for the window to show.
+#[cfg(target_os = "linux")]
+fn monitor_once(lang: Lang) -> Result<i32> {
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    if unsafe { libc::geteuid() } != 0 {
+        eprintln!("{}", lang.t(updater::linux::NOT_ROOT));
+        return Ok(2);
+    }
+    let outcome = updater::linux::check(&secblitz::linux::cmd::RealSys)?;
+    Ok(i32::from(matches!(
+        outcome,
+        updater::UpdateOutcome::Failed { .. }
+    )))
+}
+
 /// A site name exactly as Web protection writes it, so the argument cannot be anything else.
 fn clean_site(value: &str) -> Result<String, String> {
     secblitz::filter::config::normalized_site(value)
@@ -293,6 +337,10 @@ enum FilterCommand {
     Install,
     Uninstall,
     AllowOnce(String),
+    #[cfg(target_os = "linux")]
+    AddRule,
+    #[cfg(target_os = "linux")]
+    RemoveRule,
 }
 
 fn filter_command(matches: &ArgMatches) -> Option<FilterCommand> {
@@ -304,9 +352,35 @@ fn filter_command(matches: &ArgMatches) -> Option<FilterCommand> {
         ("allow-once", sub) => Some(FilterCommand::AllowOnce(
             sub.get_one::<String>("site")?.clone(),
         )),
+        #[cfg(target_os = "linux")]
+        ("add-rule", _) => Some(FilterCommand::AddRule),
+        #[cfg(target_os = "linux")]
+        ("remove-rule", _) => Some(FilterCommand::RemoveRule),
         ("run", _) => None,
         _ => unreachable!(),
     }
+}
+
+/// The unit's own steps and the package's. Only root runs them; anyone else gets exit code 2 and nothing happens.
+#[cfg(target_os = "linux")]
+fn run_filter_linux(action: FilterCommand) -> Result<i32> {
+    use secblitz::linux::cmd::RealSys;
+    use secblitz::linux::web;
+    // SAFETY: geteuid has no preconditions and cannot fail.
+    if unsafe { libc::geteuid() } != 0 {
+        return Ok(2);
+    }
+    let sys = RealSys;
+    let now = secblitz::filter::server::unix_now();
+    match action {
+        FilterCommand::Reconcile => web::reconcile(&sys, web::service_state(&sys), now)?,
+        FilterCommand::Install => {}
+        FilterCommand::Uninstall => web::remove_everything(&sys)?,
+        FilterCommand::AllowOnce(site) => web::allow_site_once(&sys, &site, now)?,
+        FilterCommand::AddRule => web::add_rule_when_ready(&sys, now)?,
+        FilterCommand::RemoveRule => web::remove_rule_from_unit(&sys)?,
+    }
+    Ok(0)
 }
 
 /// Runs only for an administrator or SYSTEM; anyone else gets exit code 2
@@ -446,6 +520,7 @@ impl UpdateReport {
         match self.outcome() {
             UpdateOutcome::NotConfigured => "Updates aren't available for this installation.",
             UpdateOutcome::UpToDate => "Secblitz is up to date.",
+            UpdateOutcome::NotPublished => "No update has been published for your computer yet.",
             UpdateOutcome::DeferredBusy => "We'll try updating when Secblitz is closed.",
             UpdateOutcome::DeferredRollout { .. } => {
                 "This update is not yet offered to this device."
@@ -454,6 +529,7 @@ impl UpdateReport {
                 "Your update is ready. Close Secblitz so the installer can continue."
             }
             UpdateOutcome::Installed { .. } => "Secblitz was updated.",
+            UpdateOutcome::Available { .. } => "A newer version of Secblitz is ready to install.",
             UpdateOutcome::Failed { .. } => "The update could not be completed. Check your internet connection and try again later. If it keeps happening, download the latest Secblitz from our website.",
         }
     }
@@ -595,12 +671,16 @@ fn run_gui(args: &[std::ffi::OsString], lang: Lang) -> i32 {
         let open = flag_value(args, "--open");
         let start = flag_value(args, "--self-test")
             .and_then(gui::Page::parse)
-            .or_else(|| open.map(gui::Page::open_target));
-        if !platform::is_elevated_or_false() {
-            return launcher::run(lang, open);
-        }
-        if broker.is_none() && launcher::reopen_normally(lang, open) {
-            return Ok(0);
+            .or_else(|| open.map(gui::Page::open_target))
+            .map(|page| page.on(secblitz::os::Os::CURRENT));
+        #[cfg(windows)]
+        {
+            if !platform::is_elevated_or_false() {
+                return launcher::run(lang, open);
+            }
+            if broker.is_none() && launcher::reopen_normally(lang, open) {
+                return Ok(0);
+            }
         }
         let _guard = match launcher::single_instance(open)? {
             launcher::Instance::First(guard) => guard,
@@ -620,12 +700,27 @@ fn run_gui(args: &[std::ffi::OsString], lang: Lang) -> i32 {
 }
 
 fn dispatch_gui(args: &[std::ffi::OsString], lang: Lang) -> Option<i32> {
-    match first_word(args)? {
-        "gui" => Some(run_gui(args, lang)),
-        "tray" => Some(tray::run(lang).unwrap_or(1)),
-        "warn" => Some(gui::warn::run(args, lang)),
+    match first_word(args) {
+        Some("gui") => Some(run_gui(args, lang)),
+        Some("tray") => Some(tray::run(lang).unwrap_or(1)),
+        Some("warn") => Some(gui::warn::run(args, lang)),
+        #[cfg(not(windows))]
+        None if opens_window(args) => Some(run_gui(args, lang)),
         _ => None,
     }
+}
+
+/// Off Windows there is no elevation launcher: the menu entry starts the window
+/// directly, with nothing but a language or a page to open.
+#[cfg(not(windows))]
+fn opens_window(args: &[std::ffi::OsString]) -> bool {
+    let mut args = args.iter().skip(1);
+    while let Some(arg) = args.next() {
+        if !(arg == "--lang" || arg == "--open") || args.next().is_none() {
+            return false;
+        }
+    }
+    true
 }
 
 fn main() {
@@ -652,7 +747,7 @@ fn main() {
             gui_entry = matches.subcommand_name().is_none();
             plumbing = matches!(
                 matches.subcommand_name(),
-                Some("filter" | "uninstall-revert" | "uninstall-cleanup")
+                Some("filter" | "uninstall-revert" | "uninstall-cleanup" | "monitor-once")
             );
             execute(&matches, lang)
         }
@@ -776,6 +871,57 @@ mod tests {
         );
     }
 
+    #[cfg(not(windows))]
+    #[test]
+    fn a_bare_start_opens_the_window_but_commands_and_help_do_not() {
+        let words = |list: &[&str]| -> Vec<std::ffi::OsString> {
+            std::iter::once("secblitz")
+                .chain(list.iter().copied())
+                .map(Into::into)
+                .collect()
+        };
+        assert!(opens_window(&words(&[])));
+        assert!(opens_window(&words(&["--lang", "fr"])));
+        assert!(opens_window(&words(&["--open", "network", "--lang", "de"])));
+        for other in [
+            &["--help"][..],
+            &["--version"],
+            &["--lang"],
+            &["check"],
+            &["--json"],
+        ] {
+            assert!(!opens_window(&words(other)), "{other:?}");
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_filter_units_steps_are_hidden_take_no_arguments_and_only_root_runs_them() {
+        let root = command(Lang::En);
+        let filter = root.find_subcommand("filter").unwrap();
+        for (word, expected) in [
+            ("add-rule", FilterCommand::AddRule),
+            ("remove-rule", FilterCommand::RemoveRule),
+        ] {
+            assert!(
+                filter.find_subcommand(word).unwrap().is_hide_set(),
+                "{word}"
+            );
+            let matches = command(Lang::En)
+                .try_get_matches_from(["secblitz", "filter", word])
+                .unwrap();
+            assert_eq!(filter_command(&matches), Some(expected.clone()));
+            assert!(!json_allowed(&matches));
+            assert!(command(Lang::En)
+                .try_get_matches_from(["secblitz", "filter", word, "extra"])
+                .is_err());
+            // SAFETY: geteuid has no preconditions and cannot fail.
+            if unsafe { libc::geteuid() } != 0 {
+                assert_eq!(run_filter_linux(expected).unwrap(), 2);
+            }
+        }
+    }
+
     #[test]
     fn filter_commands_are_hidden_and_never_elevate() {
         let root = command(Lang::En);
@@ -846,6 +992,21 @@ mod tests {
             .is_err());
         let help = command(Lang::En).render_help().to_string();
         assert!(!help.contains("filter"), "{help}");
+    }
+
+    #[test]
+    fn the_background_check_is_hidden_and_takes_nothing() {
+        let matches = command(Lang::En)
+            .try_get_matches_from(["secblitz", "monitor-once"])
+            .unwrap();
+        assert!(matches.subcommand_matches("monitor-once").is_some());
+        for extra in ["--url=https://example.invalid", "now", "--force"] {
+            assert!(command(Lang::En)
+                .try_get_matches_from(["secblitz", "monitor-once", extra])
+                .is_err());
+        }
+        let help = command(Lang::En).render_help().to_string();
+        assert!(!help.contains("monitor-once"), "{help}");
     }
 
     #[test]
@@ -998,6 +1159,7 @@ mod tests {
         use updater::{UpdateOutcome, UpdateStatus};
         for outcome in [
             UpdateOutcome::NotConfigured,
+            UpdateOutcome::NotPublished,
             UpdateOutcome::UpToDate,
             UpdateOutcome::DeferredBusy,
             UpdateOutcome::WorkerStarted {
@@ -1094,6 +1256,7 @@ mod tests {
         for lang in [Lang::En, Lang::Es, Lang::Fr, Lang::De, Lang::Pt, Lang::It] {
             for outcome in [
                 UpdateOutcome::NotConfigured,
+                UpdateOutcome::NotPublished,
                 UpdateOutcome::UpToDate,
                 UpdateOutcome::DeferredBusy,
                 UpdateOutcome::WorkerStarted {

@@ -3,7 +3,7 @@
 
 use anyhow::{Context, Result};
 use std::fs;
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -21,7 +21,7 @@ use super::server::{self, upstream_addrs, BindError, Shared};
 use super::store;
 
 const TICK: Duration = Duration::from_millis(200);
-pub(super) const CONFIG_EVERY: Duration = Duration::from_secs(2);
+pub const CONFIG_EVERY: Duration = Duration::from_secs(2);
 const UPSTREAM_EVERY: Duration = Duration::from_secs(30);
 const UPSTREAM_RETRY_MIN: Duration = Duration::from_secs(5);
 const BIND_RETRY: Duration = Duration::from_secs(30);
@@ -53,10 +53,17 @@ impl Paths {
 
 /// The only addresses the filter ever listens on.
 pub fn listen_addresses() -> Vec<SocketAddr> {
-    vec![
-        SocketAddr::new(Ipv4Addr::LOCALHOST.into(), 53),
-        SocketAddr::new(Ipv6Addr::LOCALHOST.into(), 53),
-    ]
+    #[cfg(target_os = "linux")]
+    {
+        vec![SocketAddr::new(crate::linux::web::LISTEN.into(), 53)]
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        vec![
+            SocketAddr::new(std::net::Ipv4Addr::LOCALHOST.into(), 53),
+            SocketAddr::new(std::net::Ipv6Addr::LOCALHOST.into(), 53),
+        ]
+    }
 }
 
 #[derive(Default)]
@@ -291,6 +298,17 @@ pub fn serve(
     download: bool,
     stop: &Arc<AtomicBool>,
 ) -> Result<()> {
+    serve_with(paths, addrs, download, stop, &|| {})
+}
+
+/// Like [`serve`]. `ready` runs once, after the first status that says the filter is listening has been saved.
+pub fn serve_with(
+    paths: Paths,
+    addrs: &[SocketAddr],
+    download: bool,
+    stop: &Arc<AtomicBool>,
+    ready: &dyn Fn(),
+) -> Result<()> {
     // Best effort: the installer normally created it already.
     let _ = fs::create_dir_all(&paths.lists);
     let paths = Arc::new(paths);
@@ -341,6 +359,7 @@ pub fn serve(
     let mut last_status: Option<Status> = None;
     let mut upstream_checked = Instant::now();
     let mut lists_wanted = false;
+    let mut announced = false;
     let mut gaps_timer = Every::new(GAPS_EVERY);
     let mut gaps = gaps::check();
     gaps_timer.reset();
@@ -432,6 +451,10 @@ pub fn serve(
         // A write that failed is tried again on the next tick, so a block notice is not late.
         if (changed || status_timer.due()) && config::save_status(&paths.status, &status).is_ok() {
             status_timer.reset();
+            if status.listening && !announced {
+                announced = true;
+                ready();
+            }
             last_status = Some(status);
         }
         thread::sleep(TICK);
@@ -458,16 +481,20 @@ pub fn run() -> Result<()> {
     {
         scm::run()
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
     {
-        anyhow::bail!("Windows services are only supported on Windows")
+        crate::linux::web_service::run()
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        anyhow::bail!("The web protection service is not supported on this system")
     }
 }
 
-#[cfg_attr(not(windows), allow(dead_code))]
-fn run_production(stop: &Arc<AtomicBool>) -> Result<()> {
+#[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
+pub(crate) fn run_production(stop: &Arc<AtomicBool>, ready: &dyn Fn()) -> Result<()> {
     let paths = Paths::production().context("Cannot find the filter folder")?;
-    serve(paths, &listen_addresses(), true, stop)
+    serve_with(paths, &listen_addresses(), true, stop, ready)
 }
 
 #[cfg(windows)]
@@ -545,8 +572,9 @@ mod scm {
         // Running at once: the loop retries binding, so a taken port is
         // reported in the status file instead of failing the start.
         set_status(&handle, ServiceState::Running, 0, false);
-        let outcome =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_production(&stop)));
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            run_production(&stop, &|| {})
+        }));
         let failed = !matches!(outcome, Ok(Ok(())));
         set_status(&handle, ServiceState::StopPending, 1, false);
         set_status(&handle, ServiceState::Stopped, 0, failed);
@@ -557,7 +585,7 @@ mod scm {
 mod tests {
     use super::*;
     use crate::filter::config::load_status;
-    use std::net::UdpSocket;
+    use std::net::{Ipv4Addr, UdpSocket};
 
     fn paths(dir: &std::path::Path) -> Paths {
         Paths {

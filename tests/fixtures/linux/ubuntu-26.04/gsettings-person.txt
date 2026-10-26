@@ -1,0 +1,12 @@
+org.gnome.desktop.media-handling autorun-never true
+org.gnome.desktop.privacy old-files-age uint32 30
+org.gnome.desktop.privacy remember-app-usage true
+org.gnome.desktop.privacy remove-old-temp-files false
+org.gnome.desktop.privacy remove-old-trash-files false
+org.gnome.desktop.privacy report-technical-problems false
+org.gnome.desktop.privacy send-software-usage-stats false
+org.gnome.desktop.screensaver lock-delay uint32 0
+org.gnome.desktop.screensaver lock-enabled true
+org.gnome.desktop.screensaver ubuntu-lock-on-suspend true
+org.gnome.desktop.session idle-delay uint32 300
+org.gnome.system.location enabled false

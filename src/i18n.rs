@@ -9,6 +9,21 @@ mod fixes;
 mod guided;
 mod interface;
 mod italian;
+mod linux;
+mod linux_browsers;
+mod linux_cleanup;
+mod linux_desktop;
+mod linux_devices;
+mod linux_feeds;
+mod linux_findings;
+mod linux_kernel;
+mod linux_netguard;
+mod linux_network;
+mod linux_person;
+mod linux_services;
+mod linux_space;
+mod linux_updates;
+mod linux_web;
 mod maintenance;
 mod results;
 
@@ -139,6 +154,21 @@ const MAINTENANCE_PARTS: &[&[[&str; 6]]] = &[
     fixes::ROWS,
     results::ROWS,
     guided::ROWS,
+    linux::ROWS,
+    linux_updates::ROWS,
+    linux_cleanup::ROWS,
+    linux_desktop::ROWS,
+    linux_network::ROWS,
+    linux_kernel::ROWS,
+    linux_netguard::ROWS,
+    linux_services::ROWS,
+    linux_devices::ROWS,
+    linux_person::ROWS,
+    linux_browsers::ROWS,
+    linux_findings::ROWS,
+    linux_space::ROWS,
+    linux_feeds::ROWS,
+    linux_web::ROWS,
 ];
 
 const TEXT_PARTS: &[&[[&str; 5]]] = &[
@@ -177,6 +207,28 @@ mod tests {
                 assert_eq!(lang.t(row[0]), row[lang as usize]);
                 assert_eq!(lang.detail(row[0]), row[lang as usize]);
             }
+        }
+    }
+
+    #[test]
+    fn the_linux_clean_up_texts_are_translated() {
+        for key in [
+            "Downloaded install files",
+            "Old crash reports",
+            "Unused app parts",
+            "Trash",
+            "Remote control apps",
+            "Your computer will ask for your password first.",
+            "You can install it again later from Removed apps. That needs the internet.",
+            "You can install them again later from Removed apps. That needs the internet.",
+            "Install again",
+        ] {
+            assert!(
+                maintenance_rows().any(|r| r[0] == key) || text_rows().any(|r| r[0] == key),
+                "missing translations for {key}"
+            );
+            assert_ne!(Lang::Es.t(key), key, "{key}");
+            assert_ne!(Lang::De.t(key), key, "{key}");
         }
     }
 
@@ -301,6 +353,28 @@ mod tests {
     }
 
     #[test]
+    fn every_linux_and_macos_check_is_explained_and_translated() {
+        let known: std::collections::HashSet<_> = all_keys().collect();
+        for os in [secblitz::os::Os::Linux, secblitz::os::Os::Macos] {
+            for id in secblitz::engine::catalog::ids(os) {
+                let e = secblitz::explain::for_check(id)
+                    .unwrap_or_else(|| panic!("{id} has no explainer"));
+                for line in [e.what, e.risk, e.change] {
+                    assert!(known.contains(line), "{id}: not translated: {line}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_system_topic_name_is_translated() {
+        let row = maintenance_rows()
+            .find(|r| r[0] == "System")
+            .expect("System row");
+        assert!(row.iter().all(|t| !t.is_empty()));
+    }
+
+    #[test]
     fn the_ads_and_tips_switches_are_translated_in_all_six_languages() {
         let known: std::collections::HashSet<_> = all_keys().collect();
         for setting in secblitz::user_settings::Setting::ADS_AND_TIPS {
@@ -375,7 +449,7 @@ mod tests {
                 assert_ne!(lang.control(id), id);
                 assert_ne!(lang.control(id), Lang::En.control(id));
             }
-            let detail = lang.detail("AutoAdminLogon enabled=True; Winlogon DefaultPassword value present=False. Presence only: no password data is read. Passwords kept in the Windows secret store are not checked. Review who can use this PC; automatic logon is kept to avoid disrupting kiosk or sign-in workflows.");
+            let detail = lang.detail("AutoAdminLogon enabled=True; Winlogon DefaultPassword value present=False. Presence only: no password data is read. Passwords kept in the Windows secret store are not checked. Review who can use this computer; automatic logon is kept to avoid disrupting kiosk or sign-in workflows.");
             assert!(detail.contains("True"));
             assert!(detail.contains("False"));
             assert!(!detail.contains("no password data is read"));
@@ -469,7 +543,10 @@ mod tests {
                     || text == "Secblitz · v{}"
                     || matches!(
                         text.as_str(),
-                        " -k netsvcs" | " -k netsvcs -p" | "Windows Update"
+                        " -k netsvcs"
+                            | " -k netsvcs -p"
+                            | "Windows Update"
+                            | "/Library/Application Support/Secblitz"
                     )
                 {
                     continue;

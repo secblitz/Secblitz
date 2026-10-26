@@ -893,6 +893,7 @@ fn floor_keeps_its_history_when_the_pc_switches_to_the_other_architecture() {
 
 #[test]
 fn each_build_reads_only_its_own_feed_and_installer() {
+    #[cfg(not(target_os = "linux"))]
     assert!(arch::STABLE_FEED.starts_with("releases/stable"));
     assert!(arch::CANDIDATE_FEED.starts_with("releases/candidate"));
     assert!(arch::DELIVERY_FEED.starts_with("releases/delivery"));
@@ -912,16 +913,101 @@ fn each_build_reads_only_its_own_feed_and_installer() {
         )
         .into();
     assert!(verify_value(foreign, 1500).is_err());
-    if cfg!(target_arch = "aarch64") {
-        assert_eq!(arch::STABLE_FEED, "releases/stable-arm64.json");
+    if cfg!(target_os = "macos") {
+        assert_eq!(arch::TARGET, "macos-universal");
+        assert_eq!(
+            setup_filename("9.0.0"),
+            "secblitz-9.0.0-macos-universal.dmg"
+        );
+    } else if cfg!(target_os = "linux") {
+        assert!(arch::TARGET.starts_with("linux-"));
+        assert!(setup_filename("9.0.0").ends_with(".deb"));
+    } else if cfg!(target_arch = "aarch64") {
+        assert_eq!(arch::TARGET, "windows-aarch64");
     } else {
-        assert_eq!(arch::STABLE_FEED, "releases/stable.json");
         assert_eq!(arch::TARGET, "windows-x86_64");
         assert_eq!(
             setup_filename("9.0.0"),
             "secblitz-9.0.0-windows-x64-setup.exe"
         );
     }
+    #[cfg(all(
+        not(any(target_os = "linux", target_os = "macos")),
+        target_arch = "aarch64"
+    ))]
+    assert_eq!(arch::STABLE_FEED, "releases/stable-arm64.json");
+    #[cfg(all(
+        not(any(target_os = "linux", target_os = "macos")),
+        not(target_arch = "aarch64")
+    ))]
+    assert_eq!(arch::STABLE_FEED, "releases/stable.json");
+    #[cfg(target_os = "linux")]
+    {
+        assert!(arch::STABLE_FEED_DEB.starts_with("releases/stable-linux-"));
+        assert!(arch::STABLE_FEED_DEB.ends_with("-deb.json"));
+        assert!(arch::STABLE_FEED_RPM.starts_with("releases/stable-linux-"));
+        assert!(arch::STABLE_FEED_RPM.ends_with("-rpm.json"));
+    }
+}
+
+#[test]
+fn a_build_refuses_every_other_systems_target() {
+    let all = [
+        "windows-x86_64",
+        "windows-aarch64",
+        "linux-x86_64",
+        "linux-aarch64",
+        "macos-universal",
+    ];
+    assert!(all.contains(&arch::TARGET));
+    for target in all.iter().filter(|t| **t != arch::TARGET) {
+        let mut other = payload();
+        other["target"] = (*target).into();
+        assert!(verify_value(other, 1500).is_err(), "{target}");
+    }
+    for target in all {
+        assert!(known_target(target));
+    }
+    assert!(!known_target("linux-riscv64"));
+    assert!(!known_target("macos-arm64"));
+}
+
+#[test]
+fn a_build_accepts_only_its_own_package_names() {
+    let own = setup_filename("9.0.0");
+    assert!(is_setup_filename("9.0.0", &own));
+    assert!(!is_setup_filename("9.0.1", &own));
+    for foreign in [
+        "secblitz-9.0.0-windows-x64-setup.exe",
+        "secblitz-9.0.0-windows-arm64-setup.exe",
+        "secblitz-9.0.0-linux-x64.deb",
+        "secblitz-9.0.0-linux-arm64.rpm",
+        "secblitz-9.0.0-macos-universal.dmg",
+        "../secblitz-9.0.0-linux-x64.deb",
+    ] {
+        if foreign != own
+            && !arch::SETUP_SUFFIXES
+                .iter()
+                .any(|s| foreign == format!("secblitz-9.0.0-{}{s}", arch::SETUP_TAG))
+        {
+            let mut p = payload();
+            p["filename"] = foreign.into();
+            assert!(verify_value(p, 1500).is_err(), "{foreign}");
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn linux_builds_accept_deb_and_rpm_packages_for_their_own_cpu() {
+    for suffix in [".deb", ".rpm"] {
+        let mut p = payload();
+        p["filename"] = format!("secblitz-9.0.0-{}{suffix}", arch::SETUP_TAG).into();
+        verify_value(p, 1500).unwrap();
+    }
+    let mut p = payload();
+    p["filename"] = format!("secblitz-9.0.0-{}.dmg", arch::SETUP_TAG).into();
+    assert!(verify_value(p, 1500).is_err());
 }
 
 #[test]

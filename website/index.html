@@ -6,20 +6,20 @@
   <meta name="theme-color" content="#F7F7F8" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0E0E10" media="(prefers-color-scheme: dark)">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Secblitz turns on the security and privacy settings Windows leaves off, in one click. It also removes bloatware and blocks ads, trackers and malware sites. Free and open source.">
-  <title>Secblitz: Windows security and privacy in one click</title>
+  <meta name="description" content="Secblitz turns on the security and privacy settings your computer leaves off, in one click, on Windows and Linux. It also removes unwanted apps and blocks ads, trackers and malware sites. Free and open source.">
+  <title>Secblitz: Windows and Linux security and privacy in one click</title>
   <link rel="canonical" href="https://secblitz.lol/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Secblitz">
-  <meta property="og:title" content="Secblitz: Windows security and privacy in one click">
-  <meta property="og:description" content="Secblitz turns on the security and privacy settings Windows leaves off, in one click. It also removes bloatware and blocks ads, trackers and malware sites. Free and open source.">
+  <meta property="og:title" content="Secblitz: Windows and Linux security and privacy in one click">
+  <meta property="og:description" content="Secblitz turns on the security and privacy settings your computer leaves off, in one click, on Windows and Linux. It also removes unwanted apps and blocks ads, trackers and malware sites. Free and open source.">
   <meta property="og:url" content="https://secblitz.lol/">
   <meta property="og:image" content="https://secblitz.lol/assets/preview-92912b03eb97.webp">
   <meta property="og:image:alt" content="The Secblitz home screen">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preload" href="assets/fonts/ibm-plex-sans-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/ibm-plex-sans-600.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="styles.css?v=0706">
+  <link rel="stylesheet" href="styles.css?v=0707">
   <script src="theme.js?v=0703"></script>
   <script src="app.js?v=0706" defer></script>
 </head>
@@ -86,16 +86,16 @@
   <main id="main">
     <section class="hero" aria-labelledby="hero-title">
       <div class="wrap hero-copy">
-        <h1 id="hero-title">Maximum Windows security and privacy, in one click.</h1>
-        <p class="lead">Secblitz turns on the security and privacy settings Windows leaves off, in one click. It also removes bloatware and blocks ads, trackers and malware sites on your whole PC. Every change can be undone.</p>
+        <h1 id="hero-title">Maximum security and privacy for Windows and Linux, in one click.</h1>
+        <p class="lead">Secblitz turns on the security and privacy settings your computer leaves off, in one click. It also removes unwanted apps and blocks ads, trackers and malware sites on your whole computer. Every change can be undone.</p>
         <div class="cta">
-          <a class="button" href="downloads/secblitz-1.1.0-windows-x64-setup.exe" data-auto-download download>
+          <a class="button" href="downloads/secblitz-1.5.0-windows-x64-setup.exe" data-auto-download download>
             <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Download for Windows
           </a>
-          <a class="button button-quiet" href="#how">See how it works</a>
+          <a class="button button-quiet" href="#linux">Install on Linux</a>
         </div>
-        <p class="meta choice"><a href="downloads/secblitz-1.1.0-windows-x64-setup.exe" data-arch="x64" download>For most PCs</a> · <a href="downloads/secblitz-1.1.0-windows-arm64-setup.exe" data-arch="arm64" download>For PCs with an ARM processor, like Snapdragon laptops</a></p>
-        <p class="meta"><span>Free and open source</span> · <span>No account</span> · <span>Windows 10 and 11, 64-bit</span> · <a href="privacy.html">Privacy</a></p>
+        <p class="meta choice"><a href="downloads/secblitz-1.5.0-windows-x64-setup.exe" data-arch="x64" download>For most PCs</a> · <a href="downloads/secblitz-1.5.0-windows-arm64-setup.exe" data-arch="arm64" download>For PCs with an ARM processor, like Snapdragon laptops</a></p>
+        <p class="meta"><span>Free and open source</span> · <span>No account</span> · <span>Windows 10 and 11</span> · <span>Ubuntu, Linux Mint, Fedora and Debian</span> · <a href="privacy.html">Privacy</a></p>
       </div>
       <div class="wrap-wide">
         <figure class="shot">
@@ -118,7 +118,7 @@
         <li><svg class="icon" aria-hidden="true"><use href="#i-shield-check"/></svg><span><strong>You approve every change.</strong> Checking changes nothing.</span></li>
         <li><svg class="icon" aria-hidden="true"><use href="#i-undo"/></svg><span><strong>Every change can be undone.</strong> Your original settings are saved first.</span></li>
         <li><svg class="icon" aria-hidden="true"><use href="#i-eye-off"/></svg><span><strong>No data collection.</strong> No account, no ads, no tracking.</span></li>
-        <li><svg class="icon" aria-hidden="true"><use href="#i-check-circle"/></svg><span><strong>Only changes this PC.</strong> It turns on the security Windows already has. It does not look at other devices, list open ports or test passwords.</span></li>
+        <li><svg class="icon" aria-hidden="true"><use href="#i-check-circle"/></svg><span><strong>Only changes this computer.</strong> It turns on the security your system already has. It does not look at other devices, list open ports or test passwords.</span></li>
       </ul>
     </section>
 
@@ -130,7 +130,7 @@
         <li>
           <svg class="icon" aria-hidden="true"><use href="#i-scan"/></svg>
           <h3>Check</h3>
-          <p>Secblitz looks at your Windows settings and shows which ones could be safer. It takes about a minute and changes nothing.</p>
+          <p>Secblitz looks at your computer's settings and shows which ones could be safer. It takes about a minute and changes nothing.</p>
         </li>
         <li>
           <svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>
@@ -231,15 +231,15 @@
         <h2 id="extras-title">Also included</h2>
       </div>
       <ul class="rows">
-        <li><svg class="icon" aria-hidden="true"><use href="#i-globe"/></svg><div><h3>Ad and malware blocker</h3><p>Blocks ads, trackers and malware sites in every browser and app on your PC. You can pause it for an hour.</p></div></li>
-        <li><svg class="icon" aria-hidden="true"><use href="#i-sparkles"/></svg><div><h3>Bloatware removal</h3><p>Removes unwanted apps that came with Windows. Secblitz keeps a copy of each, so you can restore it later, even offline.</p></div></li>
+        <li><svg class="icon" aria-hidden="true"><use href="#i-globe"/></svg><div><h3>Ad and malware blocker</h3><p>Blocks ads, trackers and malware sites in every browser and app on your computer. You can pause it for an hour.</p></div></li>
+        <li><svg class="icon" aria-hidden="true"><use href="#i-sparkles"/></svg><div><h3>Unwanted app removal</h3><p>Removes bloatware that came with Windows and keeps a copy of each, so you can restore it later, even offline. On Linux, removes remote control and file sharing apps you don't use.</p></div></li>
         <li><svg class="icon" aria-hidden="true"><use href="#i-hard-drive"/></svg><div><h3>Free up space</h3><p>See how much space old temporary files, update leftovers, crash memory files and saved picture previews take, and remove the ones you choose.</p></div></li>
         <li><svg class="icon" aria-hidden="true"><use href="#i-bug"/></svg><div><h3>Virus scan and protection updates</h3><p>Run a Microsoft Defender scan and update its virus definitions.</p></div></li>
         <li><svg class="icon" aria-hidden="true"><use href="#i-wrench"/></svg><div><h3>Repair Windows</h3><p>Repair damaged Windows system files with the tools built into Windows.</p></div></li>
         <li><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><div><h3>Windows updates</h3><p>Check for important security updates and install them.</p></div></li>
         <li><svg class="icon" aria-hidden="true"><use href="#i-apps"/></svg><div><h3>PC health tips</h3><p>Pick how you use your PC (everyday, gaming, work or extra security) and get a short list of recommendations.</p></div></li>
         <li><svg class="icon" aria-hidden="true"><use href="#i-key"/></svg><div><h3>Passwords</h3><p>Secblitz can install Bitwarden, a free password manager.</p></div></li>
-        <li><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg><div><h3>Background monitoring</h3><p>Secblitz watches your PC in the background and tells you if your protection gets worse.</p></div></li>
+        <li><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg><div><h3>Background monitoring</h3><p>Secblitz watches your computer in the background and tells you if your protection gets worse.</p></div></li>
         <li><svg class="icon" aria-hidden="true"><use href="#i-history"/></svg><div><h3>History</h3><p>Every change Secblitz made and every app you removed.</p></div></li>
       </ul>
     </section>
@@ -251,7 +251,7 @@
       <div class="faq-list">
         <details>
           <summary>Who is Secblitz for?<svg class="icon chevron" aria-hidden="true"><use href="#i-chevron-down"/></svg></summary>
-          <p>Anyone with a Windows 10 (version 22H2) or Windows 11 PC. No technical knowledge is needed. Microsoft no longer sends free security updates for Windows 10, and Secblitz cannot replace them, so Windows 11 keeps a PC safest.</p>
+          <p>Anyone with a Windows 10 (version 22H2) or Windows 11 PC, or a computer with Ubuntu, Linux Mint, Fedora or Debian. No technical knowledge is needed. Microsoft no longer sends free security updates for Windows 10, and Secblitz cannot replace them, so Windows 11 keeps a PC safest.</p>
         </details>
         <details>
           <summary>Does it replace my antivirus?<svg class="icon chevron" aria-hidden="true"><use href="#i-chevron-down"/></svg></summary>
@@ -279,12 +279,13 @@
         </details>
         <details>
           <summary>How does it update?<svg class="icon chevron" aria-hidden="true"><use href="#i-chevron-down"/></svg></summary>
-          <p>Automatically, in the background. Every update is signed, and Secblitz verifies the signature before installing it. It never closes while you're using it and never restarts your PC.</p>
+          <p>On Windows, automatically, in the background. On Linux, Secblitz looks for a new version once a day if you turn that on, and installs it when you say yes. Every update is signed, and Secblitz verifies the signature before installing it. It never closes while you're using it and never restarts your computer.</p>
         </details>
         <details>
           <summary>What happens if I remove Secblitz?<svg class="icon chevron" aria-hidden="true"><use href="#i-chevron-down"/></svg></summary>
           <p>You choose. Keep the safer settings Secblitz made, or put everything back the way it was before, including the apps you removed. Either way, Secblitz removes itself completely.</p>
-          <p>To remove it, open Settings, then Apps, then Installed apps (on Windows 10: Apps, then Apps and features). Find Secblitz and choose Uninstall. You can also open Secblitz, go to Settings and choose Remove Secblitz from this PC. If you use the portable version, open Secblitz, go to Settings and choose Remove Secblitz from this PC to put your settings back, then delete the secblitz.exe file.</p>
+          <p>To remove it, open Settings, then Apps, then Installed apps (on Windows 10: Apps, then Apps and features). Find Secblitz and choose Uninstall. You can also open Secblitz, go to Settings and choose Remove Secblitz from this computer. If you use the portable version, open Secblitz, go to Settings and choose Remove Secblitz from this computer to put your settings back, then delete the secblitz.exe file.</p>
+          <p>On Linux, open Secblitz, go to Settings and choose Remove Secblitz from this computer, or remove it from your software app.</p>
         </details>
         <details>
           <summary>Is Secblitz open source?<svg class="icon chevron" aria-hidden="true"><use href="#i-chevron-down"/></svg></summary>
@@ -292,11 +293,11 @@
         </details>
         <details>
           <summary>How do I report a security problem?<svg class="icon chevron" aria-hidden="true"><use href="#i-chevron-down"/></svg></summary>
-          <p>Email <a href="mailto:support@secblitz.lol">support@secblitz.lol</a>. Include what you found and your Secblitz and Windows versions. We reply within a week and fix the problem before sharing details publicly.</p>
+          <p>Email <a href="mailto:support@secblitz.lol">support@secblitz.lol</a>. Include what you found and your Secblitz version and system. We reply within a week and fix the problem before sharing details publicly.</p>
         </details>
         <details>
-          <summary>Which languages and Windows versions work?<svg class="icon chevron" aria-hidden="true"><use href="#i-chevron-down"/></svg></summary>
-          <p>Secblitz is available in English, Spanish, French, German, Portuguese and Italian, with light and dark mode. It supports Windows 10 (version 22H2) and Windows 11, including PCs with an ARM processor.</p>
+          <summary>Which languages and systems work?<svg class="icon chevron" aria-hidden="true"><use href="#i-chevron-down"/></svg></summary>
+          <p>Secblitz is available in English, Spanish, French, German, Portuguese and Italian, with light and dark mode. It supports Windows 10 (version 22H2) and Windows 11, including PCs with an ARM processor, and Ubuntu, Linux Mint, Fedora and Debian on Linux.</p>
         </details>
       </div>
     </section>
@@ -306,15 +307,31 @@
         <svg class="download-mark" aria-hidden="true"><use href="#i-brand"/></svg>
         <h2 id="download-title">Download Secblitz</h2>
         <p>Free. The first check takes about a minute and changes nothing.</p>
-        <a class="button" href="downloads/secblitz-1.1.0-windows-x64-setup.exe" data-auto-download download>
+        <a class="button" href="downloads/secblitz-1.5.0-windows-x64-setup.exe" data-auto-download download>
           <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>Download for Windows
         </a>
-        <p class="meta choice"><a href="downloads/secblitz-1.1.0-windows-x64-setup.exe" data-arch="x64" download>For most PCs</a> · <a href="downloads/secblitz-1.1.0-windows-arm64-setup.exe" data-arch="arm64" download>For PCs with an ARM processor, like Snapdragon laptops</a></p>
+        <p class="meta choice"><a href="downloads/secblitz-1.5.0-windows-x64-setup.exe" data-arch="x64" download>For most PCs</a> · <a href="downloads/secblitz-1.5.0-windows-arm64-setup.exe" data-arch="arm64" download>For PCs with an ARM processor, like Snapdragon laptops</a></p>
         <p class="meta">Free and open source · Windows 10 and 11, 64-bit · <a href="privacy.html">Privacy</a> · <a href="code-signing.html">Code signing policy</a> · <a href="https://github.com/secblitz/Secblitz/blob/main/docs/ACCESSIBILITY.md">Accessibility</a></p>
+        <div class="linux" id="linux">
+          <h3>Using Linux?</h3>
+          <p>Open a terminal and run this. It works on Ubuntu, Debian, Linux Mint and Fedora. Running it again updates Secblitz.</p>
+          <div class="command">
+            <code id="linux-command">curl -fsSL https://secblitz.lol/install.sh | bash</code>
+            <button type="button" class="button button-quiet button-small" id="copy-linux-command" data-copy="linux-command">Copy</button>
+          </div>
+          <p>On Ubuntu, which comes without curl, use this instead:</p>
+          <div class="command">
+            <code id="linux-command-wget">wget -qO- https://secblitz.lol/install.sh | bash</code>
+            <button type="button" class="button button-quiet button-small" id="copy-linux-command-wget" data-copy="linux-command-wget">Copy</button>
+          </div>
+          <p>Prefer to download the package yourself?</p>
+          <p>Ubuntu, Debian and Linux Mint (.deb): <a href="downloads/secblitz-1.5.0-linux-x64.deb" download>Intel or AMD</a> · <a href="downloads/secblitz-1.5.0-linux-arm64.deb" download>ARM</a></p>
+          <p>Fedora (.rpm): <a href="downloads/secblitz-1.5.0-linux-x64.rpm" download>Intel or AMD</a> · <a href="downloads/secblitz-1.5.0-linux-arm64.rpm" download>ARM</a></p>
+        </div>
         <details class="download-details">
           <summary>Download details<svg class="icon chevron" aria-hidden="true"><use href="#i-chevron-down"/></svg></summary>
           <div class="details-body">
-            <p>Version 1.1.0 · 8.2 MB installer</p>
+            <p>Version 1.5.0 · 8.2 MB installer</p>
             <p>The first time you run it, Windows may warn that the publisher is unknown. Select More info, then Run anyway. The checksums below let you confirm the file is the one we published.</p>
             <div class="hash">
               <span class="hash-label">SHA-256</span>

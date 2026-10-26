@@ -28,7 +28,7 @@ pub fn control_label(id: &str) -> &'static str {
         "defender.asr.standard" => "Defender app and script protections",
         "defender.asr.web_script_email" => "Risky script and attachment warnings",
         "lsa.run_as_ppl" => "Sign-in process shield",
-        "net.public_sharing_exposure" => "Hide your PC on public Wi-Fi",
+        "net.public_sharing_exposure" => "Hide your computer on public Wi-Fi",
         "printer.point_and_print" => "Printer driver safety",
         "net.llmnr" => "Name-lookup reply blocking",
         "accounts.lockout_policy" => "Lock after wrong passwords",
@@ -60,7 +60,7 @@ pub fn control_label(id: &str) -> &'static str {
         "driver.vulnerable_blocklist" => "Unsafe driver blocking",
         "system.exploit_mitigations" => "Built-in memory protections",
         "ps.v2_engine" => "Old scripting tool",
-        "printer.spooler_remote" => "Print sharing on this PC",
+        "printer.spooler_remote" => "Print sharing on this computer",
         "services.legacy_remote" => "Old remote tools that start by themselves",
         "session.lock_on_wake" => "Password after sleep",
         "update.store_autoupdate_policy" => "Store app updates",
@@ -100,7 +100,7 @@ pub fn control_label(id: &str) -> &'static str {
         "browser.dns_bypass" => "Browsers use Web protection",
         "browser.extensions_off" => "Turn off a browser add-on",
         "findings" => "Additional protection checks",
-        _ => "Protection check",
+        _ => super::linux::label(id).unwrap_or("Protection check"),
     }
 }
 
@@ -133,7 +133,7 @@ pub(super) fn control_help(id: &str) -> (&'static str, NextStep) {
             ReviewWithAdministrator,
         ),
         "lsa.limit_blank_password_use" => (
-            "Make sure every account on this PC has a password.",
+            "Make sure every account on this computer has a password.",
             OpenAccounts,
         ),
         "wdigest.use_logon_credential" => (
@@ -149,7 +149,7 @@ pub(super) fn control_help(id: &str) -> (&'static str, NextStep) {
             OpenWindowsSecurity,
         ),
         "accounts.builtin_administrator" => (
-            "Check who can sign in to this PC and switch off accounts nobody uses.",
+            "Check who can sign in to this computer and switch off accounts nobody uses.",
             OpenAccounts,
         ),
         "update.auto_policy_disabled" => (

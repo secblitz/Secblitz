@@ -7,6 +7,7 @@ pub mod catalog;
 pub mod friendly;
 pub mod icons;
 pub mod journal;
+pub mod linux;
 pub mod offline;
 pub mod suggested;
 pub mod vault;
@@ -33,15 +34,19 @@ pub enum Group {
     Promotions,
     Utilities,
     Gaming,
+    RemoteAccess,
+    Sharing,
 }
 
 impl Group {
-    pub const ALL: [Group; 5] = [
+    pub const ALL: [Group; 7] = [
         Group::Recommended,
         Group::Sponsored,
         Group::Promotions,
         Group::Utilities,
         Group::Gaming,
+        Group::RemoteAccess,
+        Group::Sharing,
     ];
 }
 
@@ -115,8 +120,17 @@ impl Batch {
     }
 }
 
+/// The Windows apps first, then the Linux apps, so an index never changes meaning. Only the
+/// apps of the running system are ever found installed.
 pub fn catalog() -> &'static [App] {
-    catalog::CATALOG
+    static ALL: std::sync::OnceLock<Vec<App>> = std::sync::OnceLock::new();
+    ALL.get_or_init(|| {
+        catalog::CATALOG
+            .iter()
+            .chain(linux::CATALOG)
+            .copied()
+            .collect()
+    })
 }
 
 pub fn now() -> u64 {
@@ -175,8 +189,7 @@ pub fn inventory() -> Result<Vec<Installed>> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(not(windows), allow(dead_code))]
-pub(crate) enum PackageOutcome {
+pub enum PackageOutcome {
     Removed,
     Protected,
     Failed(String),
@@ -240,7 +253,7 @@ pub(crate) fn remove_with(
 
 /// Same, and `checkpoint` sees the batch after every app, so the record of
 /// what is already removed is never lost if the run is cut short.
-pub(crate) fn remove_with_checkpoint(
+pub fn remove_with_checkpoint(
     indices: &[u16],
     installed: &[Installed],
     backup: &dyn Fn(&Installed) -> std::result::Result<(), Kept>,
@@ -269,7 +282,9 @@ pub(crate) fn remove_with_checkpoint(
         let packages: Vec<&Installed> = installed
             .iter()
             .filter(|p| p.index == index)
-            .filter(|p| catalog::owner(&p.package) == Some(index))
+            .filter(|p| {
+                catalog::owner(&p.package) == Some(index) || linux::owner(&p.package) == Some(index)
+            })
             .collect();
         if packages.is_empty() {
             continue;

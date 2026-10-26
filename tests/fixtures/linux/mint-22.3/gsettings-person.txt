@@ -1,0 +1,13 @@
+org.cinnamon.desktop.media-handling autorun-never false
+org.cinnamon.desktop.privacy old-files-age uint32 30
+org.cinnamon.desktop.privacy remove-old-temp-files false
+org.cinnamon.desktop.privacy remove-old-trash-files false
+org.cinnamon.desktop.screensaver show-notifications false
+org.cinnamon.desktop.screensaver lock-enabled true
+org.cinnamon.desktop.session idle-delay uint32 900
+org.cinnamon.desktop.privacy remember-recent-files true
+org.cinnamon.desktop.privacy recent-files-max-age 7
+com.linuxmint.updates auto-update-cinnamon-spices false
+com.linuxmint.updates auto-update-flatpaks false
+org.cinnamon.desktop.screensaver lock-delay uint32 0
+org.cinnamon.settings-daemon.plugins.power lock-on-suspend true

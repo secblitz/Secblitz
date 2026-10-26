@@ -1167,7 +1167,7 @@ function Get-ItemProperty { param($LiteralPath, $Name, $ErrorAction); return [ps
 HPreflight
 Assert $true 'offered on a local session of a capable edition'
 $script:remote = $true
-Reject { HPreflight } 'you are connected to this PC from another device right now'
+Reject { HPreflight } 'you are connected to this computer from another device right now'
 $script:remote = $false
 foreach ($ed in @('Core', 'CoreSingleLanguage', 'CoreN')) {
     $script:edition = $ed
@@ -1233,12 +1233,12 @@ $script:pkgRootExists = $true
 
 MakeSpec '{"id":"ai.paint","source":"Registry","dynamic":false,"reboot":false,"keys":[],"gate":{}}'
 $script:pkgNames = @()
-Reject { HPreflight } 'Paint was not found on this PC'
+Reject { HPreflight } 'Paint was not found on this computer'
 $script:pkgNames = @('Microsoft.Paint_11.2605.81.0_neutral_~_8wekyb3d8bbwe')
 HPreflight
 Assert $true 'offered where Paint is installed'
 MakeSpec '{"id":"ai.notepad","source":"Registry","dynamic":false,"reboot":false,"keys":[],"gate":{}}'
-Reject { HPreflight } 'Notepad was not found on this PC'
+Reject { HPreflight } 'Notepad was not found on this computer'
 $script:pkgNames = @('Microsoft.WindowsNotepad_11.2508.38.0_x64__8wekyb3d8bbwe')
 HPreflight
 Assert $true 'offered where the Notepad app is installed'
@@ -1445,15 +1445,15 @@ Assert $true 'the empty folders Windows 11 ships with do not block'
 Assert (@($stock.Values | Where-Object { $_.Closed -ne 1 }).Count -eq 0) 'every opened kiosk folder is closed'
 $s = StockKiosk; $s['Configs'] = KioskKey @() ([ordered]@{ 'S-1-5-21-1' = (KioskKey @('DefaultProfileId') ([ordered]@{})) })
 $script:kioskKey = KioskKey @() $s
-Reject { HPreflight } 'this PC is set up as a kiosk'
+Reject { HPreflight } 'this computer is set up as a kiosk'
 $s = StockKiosk; $s['RawData'] = KioskKey @('Configuration') ([ordered]@{})
 $script:kioskKey = KioskKey @() $s
-Reject { HPreflight } 'this PC is set up as a kiosk'
+Reject { HPreflight } 'this computer is set up as a kiosk'
 $s = StockKiosk; $s['Profiles'] = $null
 $script:kioskKey = KioskKey @() $s
-Reject { HPreflight } 'this PC is set up as a kiosk'
+Reject { HPreflight } 'this computer is set up as a kiosk'
 $script:kioskKey = KioskKey @('Version') ([ordered]@{})
-Reject { HPreflight } 'this PC is set up as a kiosk'
+Reject { HPreflight } 'this computer is set up as a kiosk'
 $script:fakeFs = $false
 $gateJson = '"gate":{"areas":[],"pattern":".","tamperExempt":false,"secedit":false,"ownPolicyKey":"","policyValues":[]}'
 function HandledJson([string]$id, [string]$source) { return ('{"id":"' + $id + '","source":"' + $source + '","dynamic":true,"reboot":false,"keys":[{"name":"*","path":"","rule":"set","safe":[0,2],"absentSafe":false,"fix":0,"max":2}],' + $gateJson + '}') }
@@ -1941,17 +1941,17 @@ try {
     HPreflight
     Assert $true 'offered when the image and the tool are there'
     RecoveryImage (-1)
-    Reject { HPreflight } 'Not offered: the recovery tools are missing from this PC'
+    Reject { HPreflight } 'Not offered: the recovery tools are missing from this computer'
     RecoveryImage 0
-    Reject { HPreflight } 'Not offered: the recovery tools are missing from this PC'
+    Reject { HPreflight } 'Not offered: the recovery tools are missing from this computer'
     RecoveryImage 4096
     RecoveryTool $false
-    Reject { HPreflight } 'Not offered: the recovery tools are missing from this PC'
+    Reject { HPreflight } 'Not offered: the recovery tools are missing from this computer'
     RecoveryTool $true
     function HGate { }
     RecoveryImage (-1)
     $o = HObserve
-    Assert (!$o.eligible -and $o.reason -ceq 'Not offered: the recovery tools are missing from this PC' -and $o.value.items['Enabled'] -eq 0) "a missing image is a plain Not offered: $($o.reason)"
+    Assert (!$o.eligible -and $o.reason -ceq 'Not offered: the recovery tools are missing from this computer' -and $o.value.items['Enabled'] -eq 0) "a missing image is a plain Not offered: $($o.reason)"
     RecoveryImage 4096
     $o = HObserve
     Assert ($o.eligible -and $o.value.items['Enabled'] -eq 0) 'offered when the tools are off and can come back'
@@ -1996,7 +1996,7 @@ try {
     Assert ((CallLog) -ceq 'reagentc:/disable' -and (HReadRecovery).Enabled -eq 0) "undo turns them back off: $(CallLog)"
     # A repair is refused before anything runs when the image is gone.
     $script:calls = @()
-    Reject { HWrite (Input '{"items":{"Enabled":1}}') } 'Not offered: the recovery tools are missing from this PC'
+    Reject { HWrite (Input '{"items":{"Enabled":1}}') } 'Not offered: the recovery tools are missing from this computer'
     Assert ((CallLog) -ceq '') 'nothing runs when the fix is not offered'
     # The tool reports success but nothing changed: stop, and do not run it again.
     RecoveryImage 4096
@@ -2063,14 +2063,14 @@ try {
     HPreflight
     Assert $true 'offered when an adapter can be read'
     $script:wifiList = @()
-    Reject { HPreflight } 'Not offered: this PC has no Wi-Fi adapter'
+    Reject { HPreflight } 'Not offered: this computer has no Wi-Fi adapter'
     $script:wifiList = @(@{ id = $wifiA; name = 'Wi-Fi' })
     $script:wifiStates = @{}
-    Reject { HPreflight } 'Wi-Fi settings of this PC could not be read'
+    Reject { HPreflight } 'Wi-Fi settings of this computer could not be read'
 
     $script:wifiList = @()
     $o = HObserve
-    Assert (!$o.eligible -and $o.reason -ceq 'Not offered: this PC has no Wi-Fi adapter' -and $o.value.items.Count -eq 0) "no Wi-Fi adapter is a plain Not offered: $($o.reason)"
+    Assert (!$o.eligible -and $o.reason -ceq 'Not offered: this computer has no Wi-Fi adapter' -and $o.value.items.Count -eq 0) "no Wi-Fi adapter is a plain Not offered: $($o.reason)"
     $script:wifiList = @(@{ id = $wifiA; name = 'Wi-Fi' })
     $script:wifiStates = @{ $wifiA = 0 }
     $o = HObserve

@@ -13,6 +13,8 @@ use std::time::Instant;
 
 pub const SEARCH_ID: &str = "debloat-search";
 
+type LinuxRemoved = secblitz::debloat::linux::Removed;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Tab {
     #[default]
@@ -103,6 +105,9 @@ pub struct State {
     policy: Option<bool>,
     groups: Vec<(Group, Vec<u16>)>,
     removed: Vec<(u16, u64)>,
+    /// The apps the helper took off this Linux computer, newest first.
+    linux_removed: Vec<LinuxRemoved>,
+    reinstalling: Option<String>,
     suggested_machine: bool,
     suggested_user: bool,
     allowing: Option<(u8, bool)>,
@@ -143,6 +148,8 @@ impl Default for State {
             policy: None,
             groups: Vec::new(),
             removed: Vec::new(),
+            linux_removed: Vec::new(),
+            reinstalling: None,
             suggested_machine: false,
             suggested_user: false,
             allowing: None,
@@ -199,6 +206,9 @@ pub enum Msg {
     StoreProbed(u16, bool),
     Restored(u16, Result<crate::broker::Reply, String>),
     RestoredOffline(u16, Result<Restored, String>),
+    LinuxRemoved(Result<Vec<LinuxRemoved>, String>),
+    Reinstall(String),
+    Reinstalled(String, Result<(), String>),
     AskDelete(u16),
     Delete(u16),
     SuggestedMachine(bool),
@@ -221,7 +231,13 @@ fn inventory_task(state: &mut State) -> Task<Message> {
     state.scan_gen = state.scan_gen.wrapping_add(1);
     let generation = state.scan_gen;
     Task::perform(
-        blocking(|| debloat::inventory().map_err(|e| format!("{e:#}"))),
+        blocking(|| {
+            if cfg!(windows) {
+                debloat::inventory().map_err(|e| format!("{e:#}"))
+            } else {
+                system::inventory().map_err(|e| format!("{e:#}"))
+            }
+        }),
         move |r| wrap(Msg::Scanned(generation, r)),
     )
 }
@@ -298,13 +314,24 @@ fn allow_machine() -> bool {
 }
 
 fn scan_task(state: &mut State) -> Task<Message> {
-    Task::batch([
+    let mut tasks = vec![
         inventory_task(state),
         copies_task(),
         Task::perform(blocking(debloat::journal::load), |j| {
             wrap(Msg::JournalLoaded(j))
         }),
-    ])
+    ];
+    if cfg!(target_os = "linux") {
+        tasks.push(linux_removed_task());
+    }
+    Task::batch(tasks)
+}
+
+fn linux_removed_task() -> Task<Message> {
+    Task::perform(
+        blocking(|| system::removed().map_err(|e| format!("{e:#}"))),
+        |r| wrap(Msg::LinuxRemoved(r)),
+    )
 }
 
 /// The leftover folders are only measured while the Free up space tab is the one showing.
@@ -367,6 +394,10 @@ fn is_animating(state: &State) -> bool {
 }
 
 fn refresh_removed(state: &mut State) {
+    if cfg!(target_os = "linux") {
+        state.removed = state.linux_removed.iter().map(|r| (r.index, r.t)).collect();
+        return;
+    }
     state.removed = debloat::journal::still_removed(&state.journal, debloat::catalog().len());
 }
 
@@ -575,6 +606,19 @@ fn apply(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
         Msg::StoreProbed(index, offline) => on_store_probed(state, ctx, index, offline),
         Msg::Restored(index, result) => on_restored(state, ctx, index, result),
         Msg::RestoredOffline(index, result) => on_restored_offline(state, ctx, index, result),
+        Msg::LinuxRemoved(result) => {
+            match result {
+                Ok(mut found) => {
+                    found.sort_by(|a, b| b.t.cmp(&a.t));
+                    state.linux_removed = found;
+                    refresh_removed(state);
+                }
+                Err(error) => eprintln!("Could not list the removed apps: {error}"),
+            }
+            Task::none()
+        }
+        Msg::Reinstall(package) => reinstall(state, ctx, package),
+        Msg::Reinstalled(package, result) => on_reinstalled(state, ctx, package, result),
         Msg::SuggestedMachine(on) => {
             state.suggested_machine = on;
             Task::none()
@@ -808,9 +852,9 @@ fn batch_toast(ctx: &Ctx, batch: &BatchRestore) -> Task<Message> {
         .collect();
     if names.is_empty() {
         let text = if batch.back == 1 {
-            ctx.t("1 app is back on your PC.")
+            ctx.t("1 app is back on your computer.")
         } else {
-            ctx.t("{n} apps are back on your PC.")
+            ctx.t("{n} apps are back on your computer.")
                 .replace("{n}", &batch.back.to_string())
         };
         return toast(text, Tone::Good);
@@ -841,7 +885,7 @@ fn on_restored(
     let name = ctx.t(app_of(index).name);
     match result {
         Ok(crate::broker::Reply::Done) => {
-            let text = format!("{name} {}", ctx.t("is back on your PC."));
+            let text = format!("{name} {}", ctx.t("is back on your computer."));
             restored_ok(state, ctx, index, text, Tone::Good)
         }
         Ok(crate::broker::Reply::Offline) => {
@@ -906,7 +950,7 @@ fn on_suggested_allowed(state: &mut State, ctx: &Ctx, ok: bool) -> Task<Message>
     let text = if all_ok {
         ctx.t(ALLOWED_AGAIN)
     } else {
-        ctx.t("We couldn't change that setting. It was left as it was. Please try again, or restart your PC first.")
+        ctx.t("We couldn't change that setting. It was left as it was. Please try again, or restart your computer first.")
     };
     Task::batch([
         toast(text, if all_ok { Tone::Good } else { Tone::Warn }),
@@ -942,7 +986,7 @@ fn on_deleted(ctx: &Ctx, result: Result<(), String>) -> Task<Message> {
     let (text, tone) = match result {
         Ok(()) => (ctx.t("Saved copy deleted."), Tone::Neutral),
         Err(_) => (
-            ctx.t("We couldn't delete the saved copy. Please try again. If it keeps failing, restart your PC."),
+            ctx.t("We couldn't delete the saved copy. Please try again. If it keeps failing, restart your computer."),
             Tone::Bad,
         ),
     };
@@ -954,7 +998,7 @@ fn couldnt_bring_back(ctx: &Ctx, name: &str) -> Task<Message> {
         format!(
             "{} {name}. {}",
             ctx.t("We couldn't bring back"),
-            ctx.t("Restart your PC and try again.")
+            ctx.t("Restart your computer and try again.")
         ),
         Tone::Bad,
     )
@@ -972,7 +1016,7 @@ pub fn store_blocker(helper: Helper) -> Option<&'static str> {
 }
 
 fn store_note(helper: Helper) -> &'static str {
-    store_blocker(helper).unwrap_or("Restart your PC and try again.")
+    store_blocker(helper).unwrap_or("Restart your computer and try again.")
 }
 
 fn store_restore(state: &mut State, ctx: &mut Ctx, index: u16) -> Task<Message> {
@@ -1067,7 +1111,7 @@ fn on_restored_offline(
     let can_use_store = app_of(index).store_id.is_some();
     match result {
         Ok(Restored::Back) => {
-            let text = format!("{name} {}", ctx.t("is back on your PC."));
+            let text = format!("{name} {}", ctx.t("is back on your computer."));
             restored_ok(state, ctx, index, text, Tone::Good)
         }
         Ok(Restored::BackWithoutSomeData) => {
@@ -1078,7 +1122,7 @@ fn on_restored_offline(
         }
         Ok(Restored::AlreadyThere) => {
             let text = ctx
-                .t("{name} is already on your PC.")
+                .t("{name} is already on your computer.")
                 .replace("{name}", &name);
             restored_ok(state, ctx, index, text, Tone::Neutral)
         }
@@ -1105,6 +1149,60 @@ fn on_restored_offline(
         }
         Err(_) => couldnt_bring_back(ctx, &name),
     }
+}
+
+fn reinstall(state: &mut State, ctx: &mut Ctx, package: String) -> Task<Message> {
+    if !cfg!(target_os = "linux") || state.restoring.is_some() || state.probing || ctx.busy {
+        return Task::none();
+    }
+    let Some(index) = state
+        .linux_removed
+        .iter()
+        .find(|r| r.package == package)
+        .map(|r| r.index)
+    else {
+        return Task::none();
+    };
+    ctx.busy = true;
+    state.restoring = Some(index);
+    state.restoring_copy = false;
+    state.reinstalling = Some(package.clone());
+    state.now = Instant::now();
+    state.spin = anim::Clock::at(state.now);
+    Task::perform(
+        blocking({
+            let package = package.clone();
+            move || system::reinstall(&package)
+        }),
+        move |r| wrap(Msg::Reinstalled(package.clone(), r)),
+    )
+}
+
+fn on_reinstalled(
+    state: &mut State,
+    ctx: &mut Ctx,
+    package: String,
+    result: Result<(), String>,
+) -> Task<Message> {
+    ctx.busy = false;
+    state.restoring = None;
+    state.reinstalling = None;
+    let name = state
+        .linux_removed
+        .iter()
+        .find(|r| r.package == package)
+        .map_or_else(|| package.clone(), |r| ctx.t(app_of(r.index).name));
+    let note = match result {
+        Ok(()) => {
+            record_restore(ctx, 1);
+            toast(
+                format!("{name} {}", ctx.t("is back on your computer.")),
+                Tone::Good,
+            )
+        }
+        Err(sentence) => toast(ctx.t(&sentence), Tone::Bad),
+    };
+    Task::batch([inventory_task(state), linux_removed_task(), note])
 }
 
 fn flip(list: &mut Vec<Group>, g: Group) {
@@ -1210,8 +1308,12 @@ fn confirm(state: &mut State, ctx: &mut Ctx) -> Task<Message> {
     state.sheet = Sheet::Working(indices.iter().map(|i| (*i, Step::Waiting)).collect());
     let block = state.block_again;
     let stream = blocking_stream(move |emit: &dyn Fn(Run)| {
-        let result =
-            debloat::remove(&indices, &|p| emit(Run::Step(p))).map_err(|e| format!("{e:#}"));
+        let removed = if cfg!(windows) {
+            debloat::remove(&indices, &|p| emit(Run::Step(p)))
+        } else {
+            system::remove(&indices, &|p| emit(Run::Step(p)))
+        };
+        let result = removed.map_err(|e| format!("{e:#}"));
         if block && result.is_ok() {
             emit(Run::Policy(debloat::set_consumer_features_policy().is_ok()));
         }
@@ -1340,6 +1442,7 @@ fn count_text(ctx: &Ctx, n: usize, one: &str, many: &str) -> String {
 
 pub(crate) mod ads;
 mod space;
+mod system;
 mod view;
 pub use view::{footer, modal, view};
 

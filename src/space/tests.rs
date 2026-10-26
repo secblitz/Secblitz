@@ -479,6 +479,8 @@ fn size_phrase_reads_plainly() {
     assert_eq!(size_phrase(1), "1 MB");
     assert_eq!(size_phrase(300 * 1024 * 1024), "300 MB");
     assert_eq!(size_phrase(3 * 1024 * 1024 * 1024), "3.0 GB");
+    assert_eq!(size_phrase(1024 * 1024 * 1024 - 1000), "1.0 GB");
+    assert_eq!(size_phrase(1023 * 1024 * 1024), "1023 MB");
 }
 
 #[test]
@@ -501,4 +503,37 @@ fn item_ids_are_fixed() {
             "space.thumbnails"
         ]
     );
+}
+
+#[test]
+fn rows_for_old_apps_old_system_versions_and_app_parts_appear_only_where_their_tools_exist() {
+    let with = |present: &'static [&'static str]| move |path: &str| present.contains(&path);
+    let nothing = with(&[]);
+    let snap = with(&["/usr/bin/snap"]);
+    let apt = with(&["/usr/bin/apt-get", "/usr/bin/dpkg-query"]);
+    let half_apt = with(&["/usr/bin/apt-get"]);
+    assert!(!Item::OldSnaps.applies(&nothing));
+    assert!(Item::OldSnaps.applies(&snap));
+    assert!(!Item::OldSnaps.applies(&apt));
+    assert!(!Item::OldKernels.applies(&nothing));
+    assert!(!Item::OldKernels.applies(&half_apt));
+    assert!(Item::OldKernels.applies(&apt));
+    assert!(!Item::FlatpakRuntimes.applies(&nothing));
+    assert!(Item::FlatpakRuntimes.applies(&with(&["/usr/bin/flatpak"])));
+    for item in [Item::PackageCaches, Item::Trash, Item::Temp] {
+        assert!(item.applies(&nothing));
+    }
+}
+
+#[test]
+fn the_new_linux_items_are_known_everywhere_items_are_indexed() {
+    for item in Item::LINUX {
+        assert!(Item::EVERY.contains(&item), "{item:?}");
+    }
+    assert_eq!(Item::OldSnaps.id(), "space.old_snaps");
+    assert_eq!(Item::OldKernels.id(), "space.old_kernels");
+    let mut ids: Vec<_> = Item::EVERY.iter().map(|i| i.id()).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    assert_eq!(ids.len(), Item::EVERY.len());
 }

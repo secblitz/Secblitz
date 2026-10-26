@@ -5,9 +5,8 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Empty for a version with nothing worth announcing: then nothing is shown.
 pub const NOTES: &[&str] = &[
-    "A new Free up space tab in Clean up apps removes the leftover files you choose.",
-    "You can let Windows remove temporary files on its own by turning on Storage Sense.",
-    "The installer has a new look and follows the Windows light or dark setting.",
+    "Secblitz now runs on Linux too: Ubuntu, Linux Mint, Fedora and Debian.",
+    "Updates and block lists now download over newer, safer connections.",
 ];
 
 pub fn due(seen: Option<&str>, used_before: bool) -> bool {

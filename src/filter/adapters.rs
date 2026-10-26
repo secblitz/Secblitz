@@ -337,11 +337,25 @@ mod imp {
     use super::*;
 
     pub fn upstream_servers() -> Vec<IpAddr> {
-        Vec::new()
+        #[cfg(target_os = "linux")]
+        {
+            crate::linux::web::upstream_servers()
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            Vec::new()
+        }
     }
 
     pub fn dns_suffixes() -> Vec<String> {
-        Vec::new()
+        #[cfg(target_os = "linux")]
+        {
+            crate::linux::web::dns_suffixes()
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            Vec::new()
+        }
     }
 
     pub fn metered() -> bool {

@@ -17,7 +17,7 @@ use windows_sys::Win32::UI::Shell::ShellExecuteW;
 
 const SETTINGS_UNAVAILABLE: &str = "Windows could not open settings";
 const RESTART_REFUSED: &str =
-    "Windows would not let us restart this PC. Restart it from the Start menu instead.";
+    "Windows would not let us restart this computer. Restart it from the Start menu instead.";
 
 /// The current process token, closed on drop.
 struct Token(HANDLE);

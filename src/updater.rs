@@ -17,39 +17,103 @@ pub(crate) mod interlock;
 mod tray_cmd;
 pub use health::{health, MonitorHealth, TaskHealth, UpdateHealth};
 
+#[cfg(target_os = "linux")]
+#[path = "updater/linux.rs"]
+pub mod linux;
 #[cfg(windows)]
 #[path = "updater/windows.rs"]
 mod windows;
-/// Fixed at compile time: each build reads only its own architecture's feed.
-#[cfg(target_arch = "aarch64")]
+/// Fixed at compile time: each build reads only its own operating system's and
+/// architecture's feed.
+#[cfg(all(
+    target_arch = "aarch64",
+    not(any(target_os = "linux", target_os = "macos"))
+))]
 mod arch {
     pub const TARGET: &str = "windows-aarch64";
     #[cfg(test)]
     pub const OTHER_TARGET: &str = "windows-x86_64";
     pub const SETUP_TAG: &str = "windows-arm64";
+    pub const SETUP_SUFFIXES: &[&str] = &["-setup.exe"];
     pub const STABLE_FEED: &str = "releases/stable-arm64.json";
     pub const CANDIDATE_FEED: &str = "releases/candidate-arm64.json";
     pub const DELIVERY_FEED: &str = "releases/delivery-arm64.json";
     pub const DELIVERY_FLOOR: &str = "delivery-floor-arm64.json";
 }
-#[cfg(not(target_arch = "aarch64"))]
+#[cfg(all(
+    not(target_arch = "aarch64"),
+    not(any(target_os = "linux", target_os = "macos"))
+))]
 mod arch {
     pub const TARGET: &str = "windows-x86_64";
     #[cfg(test)]
     pub const OTHER_TARGET: &str = "windows-aarch64";
     pub const SETUP_TAG: &str = "windows-x64";
+    pub const SETUP_SUFFIXES: &[&str] = &["-setup.exe"];
     pub const STABLE_FEED: &str = "releases/stable.json";
     pub const CANDIDATE_FEED: &str = "releases/candidate.json";
     pub const DELIVERY_FEED: &str = "releases/delivery.json";
     pub const DELIVERY_FLOOR: &str = "delivery-floor.json";
 }
-// The highest-seen floor is shared by both builds of one PC, so moving from the
-// x64 build to the native arm64 build keeps its history.
-fn known_target(target: &str) -> bool {
-    matches!(target, "windows-x86_64" | "windows-aarch64")
+#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+mod arch {
+    pub const TARGET: &str = "linux-aarch64";
+    #[cfg(test)]
+    pub const OTHER_TARGET: &str = "linux-x86_64";
+    pub const SETUP_TAG: &str = "linux-arm64";
+    pub const SETUP_SUFFIXES: &[&str] = &[".deb", ".rpm"];
+    pub const STABLE_FEED_DEB: &str = "releases/stable-linux-arm64-deb.json";
+    pub const STABLE_FEED_RPM: &str = "releases/stable-linux-arm64-rpm.json";
+    pub const CANDIDATE_FEED: &str = "releases/candidate-linux-arm64.json";
+    pub const DELIVERY_FEED: &str = "releases/delivery-linux-arm64.json";
+    pub const DELIVERY_FLOOR: &str = "delivery-floor-linux-arm64.json";
 }
+#[cfg(all(target_os = "linux", not(target_arch = "aarch64")))]
+mod arch {
+    pub const TARGET: &str = "linux-x86_64";
+    #[cfg(test)]
+    pub const OTHER_TARGET: &str = "linux-aarch64";
+    pub const SETUP_TAG: &str = "linux-x64";
+    pub const SETUP_SUFFIXES: &[&str] = &[".deb", ".rpm"];
+    pub const STABLE_FEED_DEB: &str = "releases/stable-linux-x64-deb.json";
+    pub const STABLE_FEED_RPM: &str = "releases/stable-linux-x64-rpm.json";
+    pub const CANDIDATE_FEED: &str = "releases/candidate-linux-x64.json";
+    pub const DELIVERY_FEED: &str = "releases/delivery-linux-x64.json";
+    pub const DELIVERY_FLOOR: &str = "delivery-floor-linux-x64.json";
+}
+#[cfg(target_os = "macos")]
+mod arch {
+    pub const TARGET: &str = "macos-universal";
+    #[cfg(test)]
+    pub const OTHER_TARGET: &str = "linux-x86_64";
+    pub const SETUP_TAG: &str = "macos-universal";
+    pub const SETUP_SUFFIXES: &[&str] = &[".dmg"];
+    pub const STABLE_FEED: &str = "releases/stable-macos.json";
+    pub const CANDIDATE_FEED: &str = "releases/candidate-macos.json";
+    pub const DELIVERY_FEED: &str = "releases/delivery-macos.json";
+    pub const DELIVERY_FLOOR: &str = "delivery-floor-macos.json";
+}
+// The highest-seen floor is shared by every build on one computer, so moving from
+// the x64 build to the native arm64 build keeps its history.
+fn known_target(target: &str) -> bool {
+    matches!(
+        target,
+        "windows-x86_64" | "windows-aarch64" | "linux-x86_64" | "linux-aarch64" | "macos-universal"
+    )
+}
+/// The first name this build accepts.
+#[cfg(test)]
 fn setup_filename(version: &str) -> String {
-    format!("secblitz-{version}-{}-setup.exe", arch::SETUP_TAG)
+    format!(
+        "secblitz-{version}-{}{}",
+        arch::SETUP_TAG,
+        arch::SETUP_SUFFIXES[0]
+    )
+}
+fn is_setup_filename(version: &str, filename: &str) -> bool {
+    arch::SETUP_SUFFIXES
+        .iter()
+        .any(|suffix| filename == format!("secblitz-{version}-{}{suffix}", arch::SETUP_TAG))
 }
 const MANIFEST_LIMIT: usize = 16 * 1024;
 const INSTALLER_LIMIT: u64 = 64 * 1024 * 1024;
@@ -226,8 +290,10 @@ pub enum UpdateOutcome {
     UpToDate,
     DeferredBusy,
     DeferredRollout { version: String },
+    NotPublished,
     WorkerStarted { version: String },
     Installed { version: String },
+    Available { version: String },
     Failed { reason: String },
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -279,6 +345,45 @@ fn origin(text: &str) -> Result<Option<reqwest::Url>> {
     );
     Ok(Some(url))
 }
+fn config() -> Result<Option<reqwest::Url>> {
+    origin(
+        option_env!("SECBLITZ_UPDATE_ORIGIN")
+            .unwrap_or(include_str!("../assets/update-origin.txt")),
+    )
+}
+fn key() -> Result<[u8; 32]> {
+    let bytes = hex::decode(include_str!("../assets/update-public-key.hex").trim())
+        .context("Invalid embedded update public key")?;
+    bytes.try_into().map_err(|v: Vec<u8>| {
+        eprintln!("{} bytes", v.len());
+        anyhow::anyhow!("Embedded update public key must be 32 bytes")
+    })
+}
+/// The feed answered 404: nothing has been published there. Reads like any other failed request.
+#[derive(Debug)]
+struct FeedMissing;
+impl std::fmt::Display for FeedMissing {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Manifest HTTP request failed")
+    }
+}
+impl std::error::Error for FeedMissing {}
+fn fetch_manifest(client: &reqwest::blocking::Client, url: reqwest::Url) -> Result<Vec<u8>> {
+    let response = client.get(url).send()?;
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(FeedMissing.into());
+    }
+    ensure!(
+        response.status() == reqwest::StatusCode::OK,
+        "Manifest HTTP request failed"
+    );
+    let mut bytes = Vec::new();
+    response
+        .take((MANIFEST_LIMIT + 1) as u64)
+        .read_to_end(&mut bytes)?;
+    ensure!(bytes.len() <= MANIFEST_LIMIT, "Manifest too large");
+    Ok(bytes)
+}
 fn stable(text: &str) -> Result<Version> {
     let v = Version::parse(text)?;
     ensure!(
@@ -311,7 +416,7 @@ fn validate_manifest(m: &Manifest, time: u64) -> Result<()> {
     );
     stable(&m.version)?;
     ensure!(
-        m.filename == setup_filename(&m.version),
+        is_setup_filename(&m.version, &m.filename),
         "Invalid installer filename"
     );
     ensure!(valid_hash(&m.sha256), "Invalid SHA-256");
@@ -370,7 +475,11 @@ pub fn status() -> Result<UpdateStatus> {
     {
         windows::status()
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        linux::status(&crate::linux::cmd::RealSys)
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         Ok(UpdateStatus {
             checked_at: now()?,

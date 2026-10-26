@@ -1,0 +1,4 @@
+dccp none
+sctp /lib/modules/6.19.10-300.fc44.x86_64/kernel/net/sctp/sctp.ko.xz
+rds none
+tipc /lib/modules/6.19.10-300.fc44.x86_64/kernel/net/tipc/tipc.ko.xz

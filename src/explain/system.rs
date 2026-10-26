@@ -54,7 +54,7 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             "Nothing you'll notice. A very old hardware tool may stop working if its driver is on the list. Needs a restart.",
         ),
         "system.exploit_mitigations" => e(
-            "Windows has built-in memory protections that make it harder for a bug in a program to cause serious trouble on your PC.",
+            "Windows has built-in memory protections that make it harder for a bug in a program to cause serious trouble on your computer.",
             "With one of them switched off, a small program bug is more likely to cause serious trouble.",
             "Nothing you'll notice. A very old, badly written program may close unexpectedly. Needs a restart.",
         ),
@@ -65,27 +65,27 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
         ),
         "printer.spooler_remote" => e(
             "The part of Windows that handles printing can accept requests from other computers on your network.",
-            "A PC that does not need to share printers is safer not accepting print requests from other computers.",
-            "You can print as usual. Other computers can no longer print through this PC. Printing restarts for a moment.",
+            "A computer that does not need to share printers is safer not accepting print requests from other computers.",
+            "You can print as usual. Other computers can no longer print through this computer. Printing restarts for a moment.",
         ),
         "services.legacy_remote" => e(
             "Some old remote-access services are running or set to start by themselves, such as ones for remote control or file transfer.",
-            "They are old, rarely needed ways to control a PC from far away, so they are safer switched off.",
+            "They are old, rarely needed ways to control a computer from far away, so they are safer switched off.",
             "Nothing you'll notice unless you use them on purpose. Remote tools that rely on them stop until you turn them back on.",
         ),
         "session.lock_on_wake" => e(
-            "When your PC wakes from sleep, Windows can ask for your password before it shows anything.",
-            "If your PC is lost, or someone walks past while you are away, they could open it and see everything.",
+            "When your computer wakes from sleep, Windows can ask for your password before it shows anything.",
+            "If your computer is lost, or someone walks past while you are away, they could open it and see everything.",
             "You will type your password after sleep. It only takes a moment, but you can no longer skip it.",
         ),
         "update.store_autoupdate_policy" => e(
-            "A setting on this PC is stopping Microsoft Store apps from updating themselves.",
+            "A setting on this computer is stopping Microsoft Store apps from updating themselves.",
             "Apps stay on old versions that have known flaws.",
             "Store apps update by themselves again, usually quietly in the background.",
         ),
         "update.paused" => e(
             "Windows updates are paused, so new security fixes are not being installed.",
-            "While updates wait, flaws that are already fixed stay open on your PC.",
+            "While updates wait, flaws that are already fixed stay open on your computer.",
             "Windows starts downloading updates again and may ask you to restart afterwards.",
         ),
         "smartscreen.apps" => e(
@@ -100,43 +100,43 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
         ),
         "privacy.diagnostic_data_level" => e(
             "Windows sends information about how it and your apps run to Microsoft. You can limit it to the basics.",
-            "Extra details, such as which apps you use, leave your PC when they are not needed for it to run well.",
+            "Extra details, such as which apps you use, leave your computer when they are not needed for it to run well.",
             "Windows sends only the basics it needs. Nothing stops working, but some tips may feel less tailored to you.",
         ),
         "privacy.delivery_optimization" => e(
             "Windows can share the updates it has downloaded with other computers, nearby or on the internet.",
-            "Your PC may use your internet connection to send files to other people, and other computers can see that it is there.",
-            "Updates still download from Microsoft as before. Your PC just stops sharing them with others.",
+            "Your computer may use your internet connection to send files to other people, and other computers can see that it is there.",
+            "Updates still download from Microsoft as before. Your computer just stops sharing them with others.",
         ),
         "privacy.clipboard_sync" => e(
             "Windows can copy what you cut or copy on one device to your other devices that use the same account.",
             "Anything you copy, like a password or a card number, can turn up on another device you forgot about.",
-            "Copying and pasting works as usual on this PC. It just no longer appears on your other devices.",
+            "Copying and pasting works as usual on this computer. It just no longer appears on your other devices.",
         ),
         "privacy.online_speech" => e(
             "Online speech recognition sends what you say to Microsoft so Windows can turn your voice into text.",
-            "Your voice leaves your PC, and an online service may keep recordings of it to improve itself.",
+            "Your voice leaves your computer, and an online service may keep recordings of it to improve itself.",
             "Nobody can turn it on, so voice typing and dictation stop working. Not for Windows Home. You can undo this.",
         ),
         "privacy.typing_inking" => e(
             "Windows can send samples of what you type and write by hand to Microsoft to improve its suggestions.",
-            "Small pieces of your writing leave your PC, even though they are meant to be kept anonymous.",
+            "Small pieces of your writing leave your computer, even though they are meant to be kept anonymous.",
             "Windows stops sending samples. Typing and handwriting still work. Not for Windows Home. You can undo this.",
         ),
         "privacy.lock_screen_notifications" => e(
-            "While your PC is locked, messages and alerts from your apps can show up on the lock screen.",
-            "Someone standing near your PC could read your messages, codes and reminders without signing in.",
+            "While your computer is locked, messages and alerts from your apps can show up on the lock screen.",
+            "Someone standing near your computer could read your messages, codes and reminders without signing in.",
             "Your lock screen stays quiet. You still see notifications after you sign in. Not for Windows Home. You can undo this.",
         ),
         "privacy.signin_email" => e(
             "Windows can show your email address on the sign-in screen, even before anyone has signed in.",
-            "Anyone who walks past your PC or looks at a screen share could learn your email address.",
+            "Anyone who walks past your computer or looks at a screen share could learn your email address.",
             "Nobody can turn that on, so the sign-in screen shows only your name or picture. Not for Windows Home. You can undo this.",
         ),
         "privacy.wifi_random_address" => e(
             "Your Wi-Fi adapter has a fixed hardware address that every Wi-Fi network you join can see.",
-            "Cafes, hotels and other public networks can use that address to spot your PC each time and follow where it goes.",
-            "Each network sees its own made-up address instead. A network that only lets in known devices may ask you to approve this PC again. You can undo this.",
+            "Cafes, hotels and other public networks can use that address to spot your computer each time and follow where it goes.",
+            "Each network sees its own made-up address instead. A network that only lets in known devices may ask you to approve this computer again. You can undo this.",
         ),
         "ai.click_to_do" => e(
             "Click to Do lets you pick text or pictures on your screen and send them to AI tools for quick actions.",
@@ -156,35 +156,35 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
         "debloat.widgets_policy" => e(
             "Widgets is a button on the taskbar that opens a board of news, weather, stories and ads.",
             "The board can fill your screen with news and ads you did not ask for, and it uses your internet connection.",
-            "The Widgets button and board go away for everyone on this PC. Windows Home does not support this. You can undo this.",
+            "The Widgets button and board go away for everyone on this computer. Windows Home does not support this. You can undo this.",
         ),
         "debloat.device_companion_apps" => e(
             "When you plug in a new mouse, keyboard or monitor, Windows can look up its picture and suggest the maker's extra app.",
-            "Those suggestions can put extra apps on your PC that you never asked for.",
+            "Those suggestions can put extra apps on your computer that you never asked for.",
             "Device pictures and details stop downloading, so devices may show a plain icon. They still work. You can undo this.",
         ),
         "browser.shopping_ai" => e(
             "Edge and Chrome can show shopping helpers, such as price tracking and coupons, and AI side panels you never asked for.",
             "Shopping helpers send the pages you visit to online services, and AI side panels can read what you view when you use them.",
-            "Shopping helpers and side panels turn off. Browsers will then say they are managed by your organization, which only means a setting was made for this whole PC.",
+            "Shopping helpers and side panels turn off. Browsers then say they are managed by your organization, which only means a setting was made for this whole computer.",
         ),
         "browser.data_collection" => e(
             "Your browsers can send Microsoft, Google and Mozilla details about how you use them and what interests you.",
             "Those details can include the sites you visit, and they are used to tailor ads and services to you.",
-            "Browsers stop sending that usage data. They will then say they are managed by your organization, which only means a setting was made for this whole PC.",
+            "Browsers stop sending that usage data. They will then say they are managed by your organization, which only means a setting was made for this whole computer.",
         ),
         "browser.safety_mode" => e(
             "Edge and Firefox have stronger modes that make it harder for harmful sites and trackers to harm your browser or follow you.",
             "Without them, a harmful site has more room to harm your browser, and trackers can follow you from site to site.",
-            "A few sites may load a little slower. Browsers will say they are managed by your organization, which only means a setting was made for this whole PC.",
+            "A few sites may load a little slower. Browsers will say they are managed by your organization, which only means a setting was made for this whole computer.",
         ),
         "browser.dns_bypass" => e(
-            "Browsers can look up website addresses by their own private route, which skips the filtering Web protection does for the whole PC.",
+            "Browsers can look up website addresses by their own private route, which skips the filtering Web protection does for the whole computer.",
             "Ads, trackers and dangerous sites that Web protection blocks can still open in your browsers.",
             "Browsers drop their own private lookups, so keep Web protection on. They will say they are managed by your organization, which only means a setting was made.",
         ),
         "browser.extensions_off" => e(
-            "Some Chrome and Edge add-ons can read every website you visit, or talk to other programs on your PC.",
+            "Some Chrome and Edge add-ons can read every website you visit, or talk to other programs on your computer.",
             "A bad or taken-over add-on could see your passwords and everything you type on any website.",
             "The add-ons you pick turn off for everyone here. Browsers say they are managed by your organization, which only means a setting was made.",
         ),
@@ -196,7 +196,7 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
         "recovery.winre_enabled" => e(
             "Windows has built-in recovery tools that open when Windows can't start, so you can repair it or undo a bad update.",
             "If Windows ever stops starting, there would be no built-in way to repair it, and you might have to reinstall it.",
-            "Nothing changes day to day. Windows turns the tools back on from files already on this PC. You can undo this.",
+            "Nothing changes day to day. Windows turns the tools back on from files already on this computer. You can undo this.",
         ),
         _ => return None,
     })

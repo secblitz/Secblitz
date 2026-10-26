@@ -5,7 +5,7 @@ use super::fsio::{io_boundary, metadata_safe, sync_directory};
 use super::{Engine, JournalRecoveryRequired, LEGACY_UPDATE_FILES, LOCK_NAME};
 use crate::model::Backend;
 use anyhow::{Context, Result};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     fs,
@@ -17,7 +17,7 @@ pub const DAMAGED: &str = "Damaged";
 const KEEP_SETS: usize = 5;
 const MANIFEST: &str = "damage.json";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DamageKind {
     /// Some saved records cannot be read; the rest are intact.
@@ -174,6 +174,7 @@ fn is_ours(name: &str) -> bool {
             "Updates" | "operations" | "Patching" | "App" | DAMAGED
         )
         && name != crate::platform::WEB_PROTECTION
+        && name != crate::platform::LINUX_NOTES
 }
 
 fn hash(path: &Path) -> Result<Option<(u64, String)>> {

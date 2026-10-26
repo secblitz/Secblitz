@@ -1,0 +1,23 @@
+NOTE: This is only a simulation!
+      apt-get needs root privileges for real execution.
+      Keep also in mind that locking is deactivated,
+      so don't depend on the relevance to the real current situation!
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Solving dependencies...
+The following packages will be REMOVED:
+  linux-headers-7.0.0-34 linux-headers-7.0.0-34-generic
+  linux-image-7.0.0-34-generic linux-main-modules-zfs-7.0.0-34-generic
+  linux-modules-7.0.0-34-generic
+  linux-modules-nvidia-595-open-7.0.0-34-generic linux-tools-7.0.0-34
+  linux-tools-7.0.0-34-generic
+0 upgraded, 0 newly installed, 8 to remove and 143 not upgraded.
+Remv linux-headers-7.0.0-34-generic [7.0.0-34.34]
+Remv linux-headers-7.0.0-34 [7.0.0-34.34]
+Remv linux-modules-nvidia-595-open-7.0.0-34-generic [7.0.0-34.34+1]
+Remv linux-modules-7.0.0-34-generic [7.0.0-34.34] [linux-image-7.0.0-34-generic:amd64 ]
+Remv linux-main-modules-zfs-7.0.0-34-generic [7.0.0-34.34] [linux-image-7.0.0-34-generic:amd64 ]
+Remv linux-image-7.0.0-34-generic [7.0.0-34.34]
+Remv linux-tools-7.0.0-34-generic [7.0.0-34.34]
+Remv linux-tools-7.0.0-34 [7.0.0-34.34]

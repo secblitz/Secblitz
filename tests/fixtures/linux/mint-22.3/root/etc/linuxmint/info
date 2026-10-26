@@ -1,0 +1,10 @@
+RELEASE=22.3
+CODENAME=zena
+EDITION="Cinnamon"
+DESCRIPTION="Linux Mint 22.3 Zena"
+DESKTOP=Gnome
+TOOLKIT=GTK
+NEW_FEATURES_URL=https://www.linuxmint.com/rel_zena_whatsnew.php
+RELEASE_NOTES_URL=https://www.linuxmint.com/rel_zena.php
+USER_GUIDE_URL=https://www.linuxmint.com/documentation.php
+GRUB_TITLE=Linux Mint 22.3 Cinnamon

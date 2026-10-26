@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+# The web protection filter runs as its own account, which has to exist before the unit can start.
+if [ "$1" = "configure" ]; then
+    systemd-sysusers /usr/lib/sysusers.d/secblitz.conf 2>/dev/null || true
+fi
+
+if [ "$1" = "configure" ] && [ -d /run/systemd/system ]; then
+    systemctl daemon-reload || true
+    systemctl reload dbus.service 2>/dev/null || systemctl reload dbus-broker.service 2>/dev/null || true
+    systemctl try-restart secblitz-helper.service 2>/dev/null || true
+    systemctl try-restart secblitz-filter.service 2>/dev/null || true
+fi
+
+exit 0

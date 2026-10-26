@@ -109,15 +109,15 @@ pub enum SummaryKind {
 }
 
 pub const REASON_BLOCKED: &str =
-    "Windows didn't allow this change. Restart your PC, then check again and try once more.";
-pub const REASON_RESTART: &str = "Restart your PC first, then try again.";
+    "Windows didn't allow this change. Restart your computer, then check again and try once more.";
+pub const REASON_RESTART: &str = "Restart your computer first, then try again.";
 pub const REASON_MANAGED: &str =
-    "Your organization manages this setting, so we left it alone. Ask whoever looks after this PC.";
+    "Your organization manages this setting, so we left it alone. Ask whoever looks after this computer.";
 pub const REASON_UNDO_FIRST: &str = "Press Undo to put back your last fixes, then try again.";
 pub const REASON_CHANGED: &str =
     "Something else changed this while we were working. Check again, then try again.";
 pub const REASON_STILL_OPEN: &str =
-    "This still needs attention after the fix. Restart your PC and check again.";
+    "This still needs attention after the fix. Restart your computer and check again.";
 pub const REASON_KEPT: &str = "We kept your current setting to stay safe. Nothing needs doing.";
 pub const REASON_LEFT_AS_IS: &str =
     "It has changed since Secblitz set it, so we left it as it is. Nothing needs doing.";
@@ -127,15 +127,15 @@ pub const REASON_NEEDS_OTHER: &str =
 
 pub const REASON_DISK: &str = "Your disk is full or can't be written to right now, so Secblitz can't save changes safely. Free up some space, then check again.";
 pub const REASON_BUSY: &str = "Secblitz is finishing another job, like an update or a repair. Wait for it to finish, then try again.";
-pub const REASON_EARLIER: &str = "An earlier update or repair didn't finish cleanly, so Secblitz is waiting until it can check it. Restart your PC, then open Secblitz again.";
+pub const REASON_EARLIER: &str = "An earlier update or repair didn't finish cleanly, so Secblitz is waiting until it can check it. Restart your computer, then open Secblitz again.";
 pub const NOTICE_DISK_READ_ONLY: &str =
     "Your disk can't be written to right now, so fixes will wait.";
 pub const NOTICE_DISK_FULL: &str =
     "Your disk is full, so fixes will wait. Free up some space, then check again.";
 
-pub const FAILURE_GENERAL: &str = "Something went wrong, so Secblitz stopped. Close Secblitz and open it again. If it keeps happening, restart your PC or check for a Secblitz update.";
-pub const COULDNT_READ: &str = "We couldn't read this from Windows. Check again in a moment. If it keeps happening, restart your PC.";
-pub const NOT_DONE: &str = "This change did not go through. Restart your PC, then try again.";
+pub const FAILURE_GENERAL: &str = "Something went wrong, so Secblitz stopped. Close Secblitz and open it again. If it keeps happening, restart your computer or check for a Secblitz update.";
+pub const COULDNT_READ: &str = crate::app::os_text::COULDNT_READ;
+pub const NOT_DONE: &str = "This change did not go through. Restart your computer, then try again.";
 
 pub fn plain_failure(raw: &str) -> &'static str {
     let r = raw.to_ascii_lowercase();
@@ -152,11 +152,11 @@ pub fn plain_failure(raw: &str) -> &'static str {
     } else if r.contains("readiness blocks") {
         REASON_DISK
     } else if r.contains("journal") || r.contains("transaction completion") {
-        "Secblitz can't read its record of your earlier changes, so it stopped to stay safe. Restart your PC and try again. If it keeps happening, check for a Secblitz update."
+        "Secblitz can't read its record of your earlier changes, so it stopped to stay safe. Restart your computer and try again. If it keeps happening, check for a Secblitz update."
     } else if r.contains("administrator") || r.contains("elevat") || r.contains("split-token") {
-        "Secblitz needs an account that can make changes to this PC. Sign in with one, then open Secblitz again."
+        "Secblitz needs an account that can make changes to this computer. Sign in with one, then open Secblitz again."
     } else if r.contains("could not be read") || r.contains("could not be collected") {
-        COULDNT_READ
+        crate::app::os_text::here(COULDNT_READ)
     } else if r.contains("engine stopped") {
         "Secblitz stopped unexpectedly. Close it and open it again."
     } else if r.contains("select at least one") {
@@ -192,7 +192,9 @@ pub fn repairs_blocked(report: &Report) -> Option<&'static str> {
 
 pub fn plain_detail(status: &CheckStatus, a: &advice::Advice) -> (&'static str, &'static str) {
     match status {
-        CheckStatus::Unknown | CheckStatus::Error => ("Couldn't check", COULDNT_READ),
+        CheckStatus::Unknown | CheckStatus::Error => {
+            ("Couldn't check", crate::app::os_text::here(COULDNT_READ))
+        }
         CheckStatus::Skipped if a.status == "Needs your choice" => ("Left as it is", REASON_KEPT),
         CheckStatus::Applied
         | CheckStatus::Unchanged
@@ -647,7 +649,11 @@ mod tests {
     #[test]
     fn missing_result_and_restart_detail_reasons() {
         let a = ids(&["uac.enabled", "uac.consent"]);
-        let applied = rep(vec![out("uac.consent", "skipped", "restart the PC first")]);
+        let applied = rep(vec![out(
+            "uac.consent",
+            "skipped",
+            "restart the computer first",
+        )]);
         let s = summarize(Some(&a), &[], Ok(&applied), Ok(&Report::default()));
         assert_eq!(s.not_done[0].1, REASON_BLOCKED);
         assert_eq!(s.not_done[1].1, REASON_RESTART);
@@ -817,7 +823,7 @@ mod tests {
         );
         assert!(plain_failure("Interactive split-token administrator required; service/over-the-shoulder elevation unsupported")
             .contains("Sign in with"));
-        assert!(plain_failure("Journal exceeds size limit").contains("Restart your PC"));
+        assert!(plain_failure("Journal exceeds size limit").contains("Restart your computer"));
     }
 
     #[test]

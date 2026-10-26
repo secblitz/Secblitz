@@ -20,24 +20,26 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
     let header = widgets::page_header(
         p,
         ctx.t("Clean up apps"),
-        Some(ctx.t("Remove apps you don't need. You can bring them back any time.")),
+        Some(ctx.t(if cfg!(windows) {
+            "Remove apps you don't need. You can bring them back any time."
+        } else {
+            "Remove remote-control and file-sharing apps you don't use. You can install them again later."
+        })),
     );
     let removed_label = if state.removed.is_empty() {
         ctx.t("Removed apps")
     } else {
         format!("{} ({})", ctx.t("Removed apps"), state.removed.len())
     };
-    let tabs = widgets::segmented(
-        p,
-        &[
-            (Tab::Apps, ctx.t("Apps to remove")),
-            (Tab::Removed, removed_label),
-            (Tab::Ads, ctx.t("Ads and tips")),
-            (Tab::Space, ctx.t("Free up space")),
-        ],
-        state.tab,
-        |t| wrap(Msg::SetTab(t)),
-    );
+    let mut tab_list = vec![(Tab::Apps, ctx.t("Apps to remove"))];
+    if cfg!(any(windows, target_os = "linux")) {
+        tab_list.push((Tab::Removed, removed_label));
+    }
+    if cfg!(windows) {
+        tab_list.push((Tab::Ads, ctx.t("Ads and tips")));
+    }
+    tab_list.push((Tab::Space, ctx.t("Free up space")));
+    let tabs = widgets::segmented(p, &tab_list, state.tab, |t| wrap(Msg::SetTab(t)));
     let body: Element<'a, Message> = match state.tab {
         Tab::Apps => apps_tab(state, ctx),
         Tab::Removed => removed_tab(state, ctx),
@@ -112,7 +114,7 @@ fn apps_tab<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
             p,
             Icon::CheckCircle,
             ctx.t("Nothing to clean up"),
-            ctx.t("None of the apps we know about are on this PC."),
+            ctx.t("None of the apps we know about are on this computer."),
             None,
         ),
         _ => {
@@ -226,6 +228,16 @@ fn group_text(group: Group) -> (&'static str, &'static str, Icon) {
             Icon::Wrench,
         ),
         Group::Gaming => ("Gaming", "Xbox and Game Bar.", Icon::Gamepad),
+        Group::RemoteAccess => (
+            "Remote control apps",
+            "Apps that let someone control this computer from far away. Remove the ones you did not set up yourself.",
+            Icon::Desktop,
+        ),
+        Group::Sharing => (
+            "Sharing apps",
+            "Apps that share files with the internet or with others on your network. Remove the ones you do not use.",
+            Icon::Desktop,
+        ),
     }
 }
 
@@ -351,6 +363,9 @@ fn removed_tab<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
             None,
         );
     }
+    if cfg!(target_os = "linux") {
+        return linux_removed_rows(state, ctx);
+    }
     let mut rows: Vec<Element<'a, Message>> = Vec::new();
     for &(index, t) in &state.removed {
         let app = app_of(index);
@@ -430,6 +445,46 @@ fn removed_tab<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
         restore_all_view(state, ctx),
         rows,
     )
+}
+
+fn linux_removed_rows<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
+    let p = pal(ctx);
+    let enabled = state.restoring.is_none() && !ctx.busy;
+    let rows = state
+        .linux_removed
+        .iter()
+        .map(|removed| {
+            let app = app_of(removed.index);
+            let (subtitle, trailing): (String, Element<'a, Message>) =
+                if state.reinstalling.as_deref() == Some(removed.package.as_str()) {
+                    (
+                        ctx.t("Installing…"),
+                        anim::spinner(16.0, p.text_muted, state.spin.elapsed_at(state.now)),
+                    )
+                } else {
+                    (
+                        format!("{} · {}", ago(ctx, removed.t), removed.package),
+                        widgets::action(
+                            p,
+                            ButtonKind::Secondary,
+                            ctx.t("Install again"),
+                            None,
+                            enabled.then(|| wrap(Msg::Reinstall(removed.package.clone()))),
+                        ),
+                    )
+                };
+            widgets::row_item_lead(
+                p,
+                Some(app_glyph(p, state, removed.index, theme::ICON_ROW)),
+                ctx.t(app.name),
+                Some(subtitle),
+                trailing,
+                Vec::new(),
+                None,
+            )
+        })
+        .collect();
+    widgets::group(p, ctx.t("Removed apps"), None, None, rows)
 }
 
 fn restore_all_view<'a>(state: &'a State, ctx: &'a Ctx) -> Option<Element<'a, Message>> {
@@ -569,9 +624,9 @@ fn review_sheet<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
         point::text_point(
             p,
             &if n == 1 {
-                ctx.t("This app will be removed for everyone who uses this PC. Your own files are not touched.")
+                ctx.t("This app will be removed for everyone who uses this computer. Your own files are not touched.")
             } else {
-                ctx.t("These apps will be removed for everyone who uses this PC. Your own files are not touched.")
+                ctx.t("These apps will be removed for everyone who uses this computer. Your own files are not touched.")
             },
             Words::Muted,
             state.points.has("review:intro"),
@@ -583,18 +638,19 @@ fn review_sheet<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
     col = col.push(widgets::inline_notice(
         p,
         Tone::Neutral,
-        if n == 1 {
-            ctx.t("Secblitz keeps a copy, so you can bring it back any time from the Removed apps tab, even without internet.")
-        } else {
-            ctx.t("Secblitz keeps a copy, so you can bring them back any time from the Removed apps tab, even without internet.")
+        match (cfg!(windows), n == 1) {
+            (true, true) => ctx.t("Secblitz keeps a copy, so you can bring it back any time from the Removed apps tab, even without internet."),
+            (true, false) => ctx.t("Secblitz keeps a copy, so you can bring them back any time from the Removed apps tab, even without internet."),
+            (false, true) => ctx.t("You can install it again later from Removed apps. That needs the internet."),
+            (false, false) => ctx.t("You can install them again later from Removed apps. That needs the internet."),
         },
     ));
     col = col.push(widgets::small(
         p,
-        if n == 1 {
-            ctx.t("If this app is open, Secblitz closes it first.")
-        } else {
-            ctx.t("If any of these apps are open, Secblitz closes them first.")
+        match (cfg!(windows), n == 1) {
+            (true, true) => ctx.t("If this app is open, Secblitz closes it first."),
+            (true, false) => ctx.t("If any of these apps are open, Secblitz closes them first."),
+            (false, _) => ctx.t("If any of these apps are open, close them first. Secblitz never closes your apps for you."),
         },
     ));
     if indices.iter().any(|i| app_of(*i).group == Group::Gaming) {
@@ -605,6 +661,10 @@ fn review_sheet<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
         ));
     }
     col = col.push(match super::store_blocker(ctx.helper) {
+        _ if !cfg!(windows) => column![widgets::small(
+            p,
+            ctx.t("Your computer will ask for your password first.")
+        )],
         Some(_) => column![widgets::small(p, ctx.t(suggested_blocker(ctx.helper)))],
         None => column![
             widgets::checkbox(
@@ -779,7 +839,7 @@ fn menu_labels(lang: Lang, result: String) -> Labels {
         saving: lang.t("Saving a copy of {name}"),
         removing: lang.t("Removing {name}"),
         refused: lang.t("Couldn't remove {name}"),
-        kept: lang.t("{name} stays on your PC"),
+        kept: lang.t("{name} stays on your computer"),
         protected: lang.t("Windows protects {name}"),
         more_one: lang.t("1 more app"),
         more_many: lang.t("{n} more apps"),
@@ -795,6 +855,9 @@ fn removal_menu<'a>(
     changed: Instant,
     result: String,
 ) -> Element<'a, Message> {
+    if !cfg!(windows) {
+        return space::vertical().height(0).into();
+    }
     start_menu::start_menu(menu_model(
         state,
         pal(ctx),
@@ -842,7 +905,7 @@ fn kept_text(kept: &Kept) -> &'static str {
         Kept::NoSpace => {
             "Kept: not enough free space to save a copy. Free up some space and try again."
         }
-        Kept::NoCopy(_) => "Kept: couldn't save a copy first. Restart your PC and try again.",
+        Kept::NoCopy(_) => "Kept: couldn't save a copy first. Restart your computer and try again.",
     }
 }
 
@@ -1032,7 +1095,7 @@ fn batch_report<'a>(
     if any_failed {
         body.push(widgets::small(
             p,
-            ctx.t("Restart your PC and try again. Nothing else was changed."),
+            ctx.t("Restart your computer and try again. Nothing else was changed."),
         ));
     }
     let mut technical = Vec::new();

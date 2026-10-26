@@ -2,20 +2,20 @@
 pub fn rule_advice(rule_id: &str) -> Option<&'static str> {
     Some(match rule_id {
         "os.feature_release_support" => "Your version of Windows is running out of safety updates. Install the newest version in Windows Update.",
-        "boot.secure_boot_certs" => "Your PC's startup security needs a renewal. Install all Windows updates, then check your PC maker's website.",
+        "boot.secure_boot_certs" => "Your computer's startup security needs a renewal. Install all Windows updates, then check your computer maker's website.",
         "defender.tamper_protection" => "Turn on Tamper Protection so malware can't switch off your virus protection.",
         "defender.threats" => "Windows found something harmful. Secblitz can remove it, and Windows Security usually keeps a copy you can restore.",
         "defender.exclusions_risky" => "Your virus protection skips some risky places. Look at the list in Windows Security.",
-        "defender.scan_age" => "Your PC hasn't been scanned for a while. Run a quick scan in Windows Security.",
+        "defender.scan_age" => "Your computer hasn't been scanned for a while. Run a quick scan in Windows Security.",
         "smartscreen.apps" => "Turn on warnings for unknown downloads in Windows Security.",
-        "smartscreen.browser_policy" => "A setting has switched off your browser's warnings about dangerous sites. Ask whoever set up this PC.",
+        "smartscreen.browser_policy" => "A setting has switched off your browser's warnings about dangerous sites. Ask whoever set up this computer.",
         "update.paused" => "Updates are paused. Resume them in Windows Update.",
-        "update.reboot_overdue" => "Restart your PC to finish installing updates. Save your work first.",
+        "update.reboot_overdue" => "Restart your computer to finish installing updates. Save your work first.",
         "ps.v2_engine" => "A very old Windows tool is still installed. Remove it in Windows Features.",
         "net.hosts_file" => "A hidden file is sending trusted websites somewhere else. Ask someone you trust to check it.",
         "persistence.wmi_subscriptions" => "Something is set to run quietly in the background. Ask someone you trust to look at it.",
         "services.unquoted_paths" => "A background program has a risky setup. Run a virus scan from this page, then ask someone you trust to look at it.",
-        "remote.rdp" => "Remote access lets someone sign in to this PC from elsewhere. Turn it off in Settings if you don't use it.",
+        "remote.rdp" => "Remote access lets someone sign in to this computer from elsewhere. Turn it off in Settings if you don't use it.",
         "smb.v1" => "An old way of sharing files is still on. Turn it off in Windows Features unless an old device needs it.",
         "accounts.stale_enabled" => "Some old accounts are still switched on. Remove the ones nobody uses.",
         "smb.shares_exposed" => "Some folders are shared with everyone on your network. Stop sharing what you don't need.",
@@ -23,8 +23,8 @@ pub fn rule_advice(rule_id: &str) -> Option<&'static str> {
         "accounts.daily_admin" => "You use an administrator account every day. Make a normal account for daily use.",
         "accounts.hello_configured" => "No PIN or Windows Hello is set up. Add one in Sign-in options.",
         "accounts.find_my_device" => "Find my device is off. Turn it on in Settings so you can find a lost laptop.",
-        "vbs.memory_integrity" => "Core system protection (Memory integrity) is off. Protection shows whether this PC can turn it on safely.",
-        "vbs.kernel_stack_protection" => "An extra shield for the core of Windows is off. Protection shows whether this PC can turn it on safely.",
+        "vbs.memory_integrity" => "Core system protection (Memory integrity) is off. Protection shows whether this computer can turn it on safely.",
+        "vbs.kernel_stack_protection" => "An extra shield for the core of Windows is off. Protection shows whether this computer can turn it on safely.",
         "net.dns_encryption" => "Your internet lookups aren't private. Turn on encrypted lookups in your network settings.",
         "net.wifi_security" => "Your Wi-Fi has weak or no protection. Switch to the newest security option on your router.",
         "persistence.run_and_tasks" => "Open Task Manager, Startup apps, and switch off ones you don't know.",
@@ -39,11 +39,11 @@ pub fn rule_advice(rule_id: &str) -> Option<&'static str> {
 pub fn rule_renewal_advice(renewal: secblitz::diagnostics::Renewal) -> Option<&'static str> {
     use secblitz::diagnostics::{Blocker, Renewal};
     Some(match renewal {
-        Renewal::Offer { .. } => "Your PC's startup security certificates need renewing. Secblitz can start this for you.",
-        Renewal::Started => "Renewal started. It finishes after you restart your PC. You can keep working.",
-        Renewal::Blocked(Blocker::MakerUpdate) => "Your PC maker needs to update your PC first. Check their website for a firmware update.",
+        Renewal::Offer { .. } => "Your computer's startup security certificates need renewing. Secblitz can start this for you.",
+        Renewal::Started => "Renewal started. It finishes after you restart your computer. You can keep working.",
+        Renewal::Blocked(Blocker::MakerUpdate) => "Your computer maker needs to update your computer first. Check their website for a firmware update.",
         Renewal::Blocked(Blocker::TaskOff) => "Windows can't renew your startup security because its update job is switched off. Install all Windows updates, then check again.",
-        Renewal::Blocked(Blocker::OtherSystem) => "Your PC also starts another system, such as Linux. Renewing could stop it from starting, so Secblitz leaves this to you. Check that system's website first.",
+        Renewal::Blocked(Blocker::OtherSystem) => "Your computer also starts another system, such as Linux. Renewing could stop it from starting, so Secblitz leaves this to you. Check that system's website first.",
         Renewal::Blocked(Blocker::NotChecked) | Renewal::NotApplicable | Renewal::Done | Renewal::VirtualPc | Renewal::Unknown => return None,
     })
 }
@@ -113,13 +113,13 @@ pub fn rule_remove_threats(rule_id: &str) -> bool {
 pub fn renewal_result_text(outcome: secblitz::actions::RenewalOutcome) -> &'static str {
     use secblitz::actions::{RenewalOutcome, RenewalRefusal};
     match outcome {
-        RenewalOutcome::Started { confirmed: true } => "Renewal started. It finishes after you restart your PC. You can keep working.",
-        RenewalOutcome::Started { confirmed: false } => "Windows has been asked to start the renewal. It finishes after you restart your PC. You can keep working.",
-        RenewalOutcome::Refused(RenewalRefusal::AlreadyStarted) => "The renewal has already started. It finishes after you restart your PC.",
+        RenewalOutcome::Started { confirmed: true } => "Renewal started. It finishes after you restart your computer. You can keep working.",
+        RenewalOutcome::Started { confirmed: false } => "Windows has been asked to start the renewal. It finishes after you restart your computer. You can keep working.",
+        RenewalOutcome::Refused(RenewalRefusal::AlreadyStarted) => "The renewal has already started. It finishes after you restart your computer.",
         RenewalOutcome::Refused(RenewalRefusal::AlreadyUpdated) => "Your startup security is already up to date.",
-        RenewalOutcome::Refused(RenewalRefusal::MakerBlocked) => "Your PC maker needs to update your PC first. Check their website for a firmware update.",
-        RenewalOutcome::Refused(RenewalRefusal::OtherSystem) => "Your PC also starts another system, so Secblitz didn't change anything. Check that system's website first.",
-        RenewalOutcome::Refused(RenewalRefusal::VirtualMachine) => "This is a virtual PC, so Secblitz didn't change anything.",
+        RenewalOutcome::Refused(RenewalRefusal::MakerBlocked) => "Your computer maker needs to update your computer first. Check their website for a firmware update.",
+        RenewalOutcome::Refused(RenewalRefusal::OtherSystem) => "Your computer also starts another system, so Secblitz didn't change anything. Check that system's website first.",
+        RenewalOutcome::Refused(RenewalRefusal::VirtualMachine) => "This is a virtual computer, so Secblitz didn't change anything.",
         RenewalOutcome::Refused(RenewalRefusal::TaskMissing | RenewalRefusal::TaskDisabled) => "Windows can't renew your startup security because its update job is switched off. Install all Windows updates, then try again.",
         RenewalOutcome::Refused(_) => "We couldn't start the renewal, and nothing was changed. Install all Windows updates, then try again.",
     }

@@ -48,6 +48,7 @@ pub enum Request {
     OpenRecoveryKey,
     StartTray,
     OpenDownloadPage,
+    OpenDesktopPrivacy,
     ShowSupportFile,
     /// Followed on the wire by a `FileHeader` and the zip itself; sent with `Client::save_file`.
     SaveSupportFile,
@@ -180,6 +181,7 @@ impl Request {
             | Request::OpenStorage
             | Request::OpenInstalledApps
             | Request::OpenTaskbar
+            | Request::OpenDesktopPrivacy
             | Request::StartTray => false,
         }
     }
@@ -221,6 +223,7 @@ impl Request {
             Request::OpenPrivacyPolicy => Action::OpenPrivacyPolicy,
             Request::OpenRecoveryKey => Action::OpenRecoveryKey,
             Request::OpenDownloadPage => Action::OpenDownloadPage,
+            Request::OpenDesktopPrivacy => Action::OpenDesktopPrivacy,
             Request::InstallBitwarden
             | Request::BlockSuggestedApps
             | Request::ReinstallStoreApp(_)
@@ -272,6 +275,7 @@ impl Request {
             Request::OpenRecoveryKey => (41, 0),
             Request::StartTray => (42, 0),
             Request::OpenDownloadPage => (43, 0),
+            Request::OpenDesktopPrivacy => (47, 0),
             Request::ShowSupportFile => (44, 0),
             Request::SaveSupportFile => (45, 0),
             Request::UserSetting(setting, op) => (
@@ -341,6 +345,7 @@ impl Request {
             41 => Request::OpenRecoveryKey,
             42 => Request::StartTray,
             43 => Request::OpenDownloadPage,
+            47 => Request::OpenDesktopPrivacy,
             44 => Request::ShowSupportFile,
             45 => Request::SaveSupportFile,
             13 => Request::UserSetting(Setting::from_byte(lo)?, Op::from_byte(hi)?),
@@ -396,6 +401,7 @@ pub fn encode_space_reply(reply: Reply, tally: Tally) -> [u8; SPACE_REPLY] {
     out
 }
 
+#[cfg(any(windows, test))]
 pub fn decode_space_reply(bytes: [u8; SPACE_REPLY]) -> Option<(Reply, Tally)> {
     let reply = Reply::decode(bytes[0])?;
     let tally = Tally {
@@ -840,6 +846,7 @@ mod tests {
             Request::OpenRecoveryKey,
             Request::StartTray,
             Request::OpenDownloadPage,
+            Request::OpenDesktopPrivacy,
             Request::ShowSupportFile,
             Request::SaveSupportFile,
             Request::BitwardenStatus,
@@ -967,13 +974,13 @@ mod tests {
 
     #[test]
     fn decode_is_strict() {
-        for kind in [0u8, 47, 100, 255] {
+        for kind in [0u8, 48, 100, 255] {
             assert_eq!(Request::decode_with([kind, 0, 0], 100), None);
         }
         for kind in (1..=6u8)
             .chain(8..=12)
             .chain(20..=38)
-            .chain([17, 41, 42, 43, 44, 45])
+            .chain([17, 41, 42, 43, 44, 45, 47])
         {
             assert_eq!(Request::decode_with([kind, 1, 0], 100), None);
             assert_eq!(Request::decode_with([kind, 0, 1], 100), None);

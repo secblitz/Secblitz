@@ -200,6 +200,7 @@ unsafe extern "system" fn title_bar_hook(
 }
 
 /// Windows colours are 0x00BBGGRR.
+#[cfg(any(windows, test))]
 fn colorref(color: iced::Color) -> u32 {
     let channel = |c: f32| (c.clamp(0.0, 1.0) * 255.0).round() as u32;
     channel(color.r) | channel(color.g) << 8 | channel(color.b) << 16

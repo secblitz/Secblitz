@@ -399,12 +399,12 @@ pub fn note(family: &str) -> Option<&'static str> {
         "MicrosoftCorporationII.MicrosoftFamily" => {
             "Parents may use this to manage family screen time. Leave it alone if you use Family features."
         }
-        "Microsoft.MSPaint" => "This is Paint 3D. The normal Paint app stays on your PC.",
+        "Microsoft.MSPaint" => "This is Paint 3D. The normal Paint app stays on your computer.",
         "Microsoft.Office.OneNote" => {
             "If you still keep notes in this older app, check them before you remove it."
         }
         "Microsoft.M365Companions" => {
-            "If your work or school manages this PC, it may put this app back."
+            "If your work or school manages this computer, it may put this app back."
         }
         "Microsoft.BingFinance"
         | "Microsoft.BingSports"

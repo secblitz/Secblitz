@@ -109,7 +109,7 @@ impl InstallResult {
     pub fn title(self) -> &'static str {
         match self {
             Self::Installed => "Your updates are installed",
-            Self::NeedsRestart => "Almost done. Please restart your PC.",
+            Self::NeedsRestart => "Almost done. Please restart your computer.",
             Self::NotConfirmed => "We couldn't confirm every update",
             Self::Stopped => "You stopped the update",
             Self::CouldNotFinish => "We couldn't finish",
@@ -117,7 +117,7 @@ impl InstallResult {
     }
     pub fn detail(self) -> &'static str {
         match self {
-            Self::Installed => "Your PC has the latest important updates.",
+            Self::Installed => "Your computer has the latest important updates.",
             Self::NeedsRestart => "Windows needs a restart to finish installing.",
             Self::NotConfirmed => "Open Windows Update to see what is left.",
             Self::Stopped => "Nothing else was started. You can run it again any time.",
@@ -312,12 +312,16 @@ pub fn install_why(result: InstallResult, note: Option<&'static str>) -> &'stati
     }
     match result {
         InstallResult::Installed => "Windows confirmed that every update you chose is installed.",
-        InstallResult::NeedsRestart => "The updates are installed. Restart your PC to finish.",
+        InstallResult::NeedsRestart => {
+            "The updates are installed. Restart your computer to finish."
+        }
         InstallResult::NotConfirmed => {
             "Windows didn't confirm every update. Open Windows Update to see what is left."
         }
         InstallResult::Stopped => "You stopped the update. Nothing else was started.",
-        InstallResult::CouldNotFinish => "The update didn't finish. Restart your PC and try again.",
+        InstallResult::CouldNotFinish => {
+            "The update didn't finish. Restart your computer and try again."
+        }
     }
 }
 

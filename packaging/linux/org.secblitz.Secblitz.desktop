@@ -1,0 +1,22 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Secblitz
+GenericName=Computer security check
+GenericName[es]=Revisión de seguridad del equipo
+GenericName[fr]=Contrôle de sécurité de l'ordinateur
+GenericName[de]=Sicherheitsprüfung für den Computer
+GenericName[pt]=Verificação de segurança do computador
+GenericName[it]=Controllo di sicurezza del computer
+Comment=Check your computer's security and privacy settings and fix them if you say yes
+Comment[es]=Revisa la seguridad y la privacidad de tu equipo y corrígelas si dices que sí
+Comment[fr]=Vérifie la sécurité et la confidentialité de votre ordinateur et les corrige si vous dites oui
+Comment[de]=Prüft Sicherheit und Datenschutz Ihres Computers und behebt Probleme, wenn Sie zustimmen
+Comment[pt]=Verifica a segurança e a privacidade do seu computador e corrige se você disser que sim
+Comment[it]=Controlla la sicurezza e la privacy del tuo computer e corregge se dici di sì
+Exec=secblitz
+Icon=org.secblitz.Secblitz
+Terminal=false
+Categories=System;Security;Settings;
+Keywords=security;privacy;firewall;
+StartupWMClass=org.secblitz.Secblitz

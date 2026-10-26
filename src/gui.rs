@@ -1,6 +1,7 @@
 //! The Secblitz window (iced, CPU renderer).
 #[cfg(test)]
 mod bench;
+mod hook;
 pub mod icons;
 pub mod pages;
 mod persist;
@@ -17,7 +18,8 @@ use iced::widget::{button, column, container, row, scrollable, stack, text};
 use iced::{keyboard, Alignment, Background, Border, Element, Length, Subscription, Task};
 use icons::Icon;
 use pages::{
-    app_access, debloat, fixes, fixflow, history, home, recovery, settings, tools, web, welcome,
+    app_access, debloat, fixes, fixflow, history, home, recovery, settings, tools, unavailable,
+    web, welcome,
 };
 use secblitz::engine::Report;
 use secblitz::model::CheckStatus;
@@ -59,6 +61,24 @@ impl Page {
         Page::History,
         Page::Settings,
     ];
+    /// Pages with nothing to offer on a system are left out of the sidebar and every way to reach them.
+    pub fn shown_on(self, os: secblitz::os::Os) -> bool {
+        !(os == secblitz::os::Os::Linux && self == Page::Tools)
+    }
+    /// The page itself where this system has it, Home otherwise.
+    pub fn on(self, os: secblitz::os::Os) -> Page {
+        if self.shown_on(os) {
+            self
+        } else {
+            Page::Home
+        }
+    }
+    pub fn visible(os: secblitz::os::Os) -> Vec<Page> {
+        Page::ALL
+            .into_iter()
+            .filter(|page| page.shown_on(os))
+            .collect()
+    }
     pub fn parse(s: &str) -> Option<Self> {
         Some(match s {
             "home" => Page::Home,
@@ -341,6 +361,7 @@ pub struct App {
     pub settings: settings::State,
     pub app_access: app_access::State,
     privacy_shown: bool,
+    hook: hook::Hook,
     whats_new: bool,
     toast_gen: u32,
     toast_leaving: bool,
@@ -399,13 +420,32 @@ impl App {
         };
         let worker = worker::Worker::spawn(
             || {
-                let engine = secblitz::engine::Engine::open(
-                    secblitz::platform::state_dir()?,
-                    secblitz::permissions::with_permissions(secblitz::platform::backend()?),
-                )?;
-                Ok(Box::new(engine) as Box<dyn worker::Session>)
+                #[cfg(windows)]
+                {
+                    let engine = secblitz::engine::Engine::open(
+                        secblitz::platform::state_dir()?,
+                        secblitz::permissions::with_permissions(secblitz::platform::backend()?),
+                    )?;
+                    Ok(Box::new(engine) as Box<dyn worker::Session>)
+                }
+                #[cfg(target_os = "linux")]
+                {
+                    Ok(Box::new(app::composite::Composite {
+                        system: Box::new(crate::linux_bus::client::session()?),
+                        person: Box::new(secblitz::linux::person::open_engine()?),
+                    }) as Box<dyn worker::Session>)
+                }
+                #[cfg(not(any(windows, target_os = "linux")))]
+                {
+                    anyhow::bail!(crate::launcher::NOT_INSTALLED)
+                }
             },
             || {
+                #[cfg(target_os = "linux")]
+                {
+                    start_fresh_on_linux()
+                }
+                #[cfg(not(target_os = "linux"))]
                 secblitz::engine::recover::start_fresh(
                     &secblitz::platform::state_dir()?,
                     secblitz::permissions::with_permissions(secblitz::platform::backend()?),
@@ -480,6 +520,7 @@ impl App {
             settings: Default::default(),
             app_access: Default::default(),
             privacy_shown: false,
+            hook: hook::Hook::from_env(),
             whats_new,
             toast_gen: 0,
             toast_leaving: false,
@@ -544,7 +585,7 @@ impl App {
         }
         let privacy = self.page == Page::Fixes
             && fixes::topic_on_show(&self.fixes) == Some(crate::app::topics::Topic::Privacy);
-        if privacy && !self.privacy_shown {
+        if privacy && !self.privacy_shown && fixes::app_access_applies() {
             task = Task::batch([
                 task,
                 app_access::on_enter(&mut self.app_access, &mut self.ctx),
@@ -556,12 +597,21 @@ impl App {
         if self.ctx.busy && !was_busy {
             self.ctx.forget_check();
         }
+        self.hook.after_update(
+            self.page,
+            self.ctx.checking.is_some(),
+            self.ctx.report.as_ref(),
+        );
         task
     }
 
     fn handle(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Navigate(page) => {
+                if page == self.page {
+                    return Task::none();
+                }
+                let page = page.on(secblitz::os::Os::CURRENT);
                 if page == self.page {
                     return Task::none();
                 }
@@ -1046,6 +1096,9 @@ impl App {
     }
 
     fn enter_page(&mut self, page: Page) -> Task<Message> {
+        if unavailable::applies(secblitz::os::Os::CURRENT, page) {
+            return Task::none();
+        }
         match page {
             Page::History => self.revisit(WARM_HISTORY),
             Page::Debloat => self.revisit(WARM_DEBLOAT),
@@ -1067,6 +1120,9 @@ impl App {
     }
 
     fn warm(&mut self, which: usize) -> Task<Message> {
+        if which == WARM_DEBLOAT && unavailable::applies(secblitz::os::Os::CURRENT, Page::Debloat) {
+            return Task::none();
+        }
         if self.flight[which] {
             return Task::none();
         }
@@ -1179,7 +1235,9 @@ impl App {
         if let Some(state) = &self.welcome {
             return welcome::view(state, &self.ctx);
         }
+        let gone = unavailable::applies(secblitz::os::Os::CURRENT, self.page);
         let content: Element<'_, Message> = match self.page {
+            _ if gone => unavailable::view(&self.ctx, self.page),
             Page::Home => home::view(&self.home, &self.ctx),
             Page::Fixes => fixes::view(&self.fixes, &self.ctx, &self.app_access),
             Page::Debloat => debloat::view(&self.debloat, &self.ctx),
@@ -1207,7 +1265,7 @@ impl App {
             p.bg,
         );
         let footer = match self.page {
-            Page::Debloat => debloat::footer(&self.debloat, &self.ctx),
+            Page::Debloat if !gone => debloat::footer(&self.debloat, &self.ctx),
             _ => None,
         };
         let footer_bar: Element<'_, Message> = match footer {
@@ -1257,6 +1315,7 @@ impl App {
         let body: Element<'_, Message> = row![self.sidebar(), main].into();
         let none = || -> Element<'_, Message> { iced::widget::space().into() };
         let modal = match self.page {
+            _ if gone => None,
             Page::Debloat => debloat::modal(&self.debloat, &self.ctx),
             Page::Tools => tools::modal(&self.tools, &self.ctx),
             Page::Settings => settings::modal(&self.settings, &self.ctx),
@@ -1368,7 +1427,8 @@ impl App {
         .align_y(Alignment::Center)
         .padding([0.0, theme::S3]);
         let mut nav = column![].spacing(NAV_GAP);
-        for page in Page::ALL {
+        let pages = Page::visible(secblitz::os::Os::CURRENT);
+        for &page in &pages {
             let active = self.page == page;
             let fg = if active { p.text } else { p.text_muted };
             let glyph = if active {
@@ -1434,9 +1494,9 @@ impl App {
                     }),
             ));
         }
-        let index = Page::ALL.iter().position(|q| *q == self.page).unwrap_or(0);
+        let index = pages.iter().position(|q| *q == self.page).unwrap_or(0);
         let nav = stack![
-            widgets::slide_marker(p, index, Page::ALL.len(), theme::CONTROL, NAV_GAP),
+            widgets::slide_marker(p, index, pages.len(), theme::CONTROL, NAV_GAP),
             nav
         ]
         .width(Length::Fill);
@@ -1536,6 +1596,21 @@ impl App {
             self.on_page(Page::Tools, tools::subscription(&self.tools, &self.ctx)),
             self.on_page(Page::Settings, settings::subscription(&self.settings)),
         ])
+    }
+}
+
+/// The person's own history is tried first: it needs no password. The system's history is only reset when the
+/// person's was not the damaged one.
+#[cfg(target_os = "linux")]
+fn start_fresh_on_linux() -> anyhow::Result<()> {
+    match secblitz::linux::person::start_fresh() {
+        Err(e)
+            if e.downcast_ref::<secblitz::engine::recover::NotDamaged>()
+                .is_some() =>
+        {
+            crate::linux_bus::client::start_fresh()
+        }
+        other => other,
     }
 }
 
@@ -1693,6 +1768,11 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             )),
             exit_on_close_request: false,
             icon: window_icon(),
+            #[cfg(target_os = "linux")]
+            platform_specific: iced::window::settings::PlatformSpecific {
+                application_id: "org.secblitz.Secblitz".into(),
+                ..Default::default()
+            },
             ..Default::default()
         })
         .run()

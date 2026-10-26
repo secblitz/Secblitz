@@ -1,6 +1,6 @@
 //! Checks that ask first, and what choosing them changes.
 pub fn is_choice_check_id(id: &str) -> bool {
-    crate::hardening::is_ask_check_id(id)
+    crate::hardening::is_ask_check_id(id) || crate::linux::catalog::spec(id).is_some_and(|s| s.ask)
 }
 
 pub fn choice_consequence(id: &str) -> &'static str {
@@ -18,7 +18,7 @@ pub fn choice_consequence(id: &str) -> &'static str {
             "Plugging in a USB stick or disc will no longer pop up a menu. Open it from File Explorer instead. Needs a restart."
         }
         "clickfix.run_box" => {
-            "Win+R and Run in the Start menu stop working for everyone on this PC."
+            "Win+R and Run in the Start menu stop working for everyone on this computer."
         }
         "wifi.risky_profiles" => {
             "Saved risky Wi-Fi networks stop joining by themselves. You can still connect by hand."
@@ -27,7 +27,7 @@ pub fn choice_consequence(id: &str) -> &'static str {
             "Very old devices may stop showing your shared folders. Needs a restart."
         }
         "remote_assistance.disabled" => {
-            "Nobody can invite a helper to control this PC this way. Quick Assist still works."
+            "Nobody can invite a helper to control this computer this way. Quick Assist still works."
         }
         "wsh.disabled" => "Old .vbs and .js script files will stop running when you open them.",
         "update.auto_policy_disabled" => {
@@ -39,7 +39,7 @@ pub fn choice_consequence(id: &str) -> &'static str {
         "accounts.builtin_administrator" => {
             "Switches off the built-in Administrator account. Your own account keeps working."
         }
-        "privacy.activity_history" => "Windows stops keeping a list of what you did on this PC.",
+        "privacy.activity_history" => "Windows stops keeping a list of what you did on this computer.",
         "privacy.advertising_id" => "Apps will show less relevant ads. Nothing else changes.",
         "defender.asr.office" => {
             "Office files that try to start other programs are blocked. Macro-heavy files may stop working."
@@ -84,12 +84,12 @@ pub fn choice_consequence(id: &str) -> &'static str {
             "Very old scripts that need the old version stop working. Removing it can take a minute."
         }
         "printer.spooler_remote" => {
-            "Other computers can no longer print through this PC. Printing restarts for a moment."
+            "Other computers can no longer print through this computer. Printing restarts for a moment."
         }
         "services.legacy_remote" => {
             "Remote tools that use these services stop working until you turn them back on."
         }
-        "session.lock_on_wake" => "You will type your password each time the PC wakes from sleep.",
+        "session.lock_on_wake" => "You will type your password each time the computer wakes from sleep.",
         "update.store_autoupdate_policy" => "Store apps will go back to updating by themselves.",
         "update.paused" => "Windows will start downloading updates again and may ask you to restart.",
         "smartscreen.apps" => {
@@ -100,7 +100,7 @@ pub fn choice_consequence(id: &str) -> &'static str {
             "Windows sends only the basic diagnostic data it needs. Nothing stops working."
         }
         "privacy.delivery_optimization" => {
-            "Updates still come from Microsoft. This PC just stops sharing them with others."
+            "Updates still come from Microsoft. This computer just stops sharing them with others."
         }
         "privacy.online_speech" => {
             "Voice typing and dictation stop working. Nothing else changes."
@@ -112,18 +112,18 @@ pub fn choice_consequence(id: &str) -> &'static str {
             "Messages no longer show on the lock screen. You still see them after you sign in."
         }
         "privacy.wifi_random_address" => {
-            "Wi-Fi networks stop recognising this PC. One for known devices only may ask you to approve it again."
+            "Wi-Fi networks stop recognising this computer. One for known devices only may ask you to approve it again."
         }
         "privacy.signin_email" => {
             "The sign-in screen no longer shows your email address."
         }
         "privacy.clipboard_sync" => {
-            "What you copy stays on this PC and no longer appears on your other devices."
+            "What you copy stays on this computer and no longer appears on your other devices."
         }
         "ai.click_to_do" => "Click to Do stops offering actions on what is on your screen.",
         "ai.paint" => "Paint's AI drawing tools turn off. Normal drawing works as before.",
         "ai.notepad" => "Notepad's AI writing tools turn off. Normal typing and saving work as before.",
-        "debloat.widgets_policy" => "The Widgets button and news board go away for everyone on this PC.",
+        "debloat.widgets_policy" => "The Widgets button and news board go away for everyone on this computer.",
         "debloat.device_companion_apps" => {
             "Device pictures and details stop downloading. Your devices still work as before."
         }
@@ -131,10 +131,10 @@ pub fn choice_consequence(id: &str) -> &'static str {
             "Skipped places are scanned again, so some games or work tools may scan slower."
         }
         "accounts.autologon" => {
-            "Your PC will ask for your password or PIN at startup. Make sure you know it."
+            "Your computer will ask for your password or PIN at startup. Make sure you know it."
         }
         "remote_desktop.disabled" => {
-            "Other devices can no longer connect to this PC with Remote Desktop. You can turn it back on."
+            "Other devices can no longer connect to this computer with Remote Desktop. You can turn it back on."
         }
         "smb1.disabled" => {
             "Very old network drives or printers that only use the old sharing may stop working. Needs a restart."
@@ -181,6 +181,6 @@ pub fn choice_consequence(id: &str) -> &'static str {
         "browser.dns_bypass" => {
             "Keep Web protection on. Browsers will say they are managed by your organization, which only means a setting was made."
         }
-        _ => "",
+        _ => super::linux::consequence(id).unwrap_or(""),
     }
 }

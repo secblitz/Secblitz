@@ -43,6 +43,8 @@ HISTORICAL = (
     "secblitz-0.11.1-windows-arm64-setup.exe",
     "secblitz-1.0.0-windows-x64-setup.exe",
     "secblitz-1.0.0-windows-arm64-setup.exe",
+    "secblitz-1.1.0-windows-x64-setup.exe",
+    "secblitz-1.1.0-windows-arm64-setup.exe",
 )
 
 
@@ -97,6 +99,16 @@ def check_content(relative, data):
             raise ValueError("download is not a supported Windows PE image")
         if not relative.endswith("-setup.exe") and machine != (0xaa64 if "-windows-arm64" in relative else 0x8664):
             raise ValueError("portable download does not match its architecture")
+    elif relative.endswith(".deb"):
+        if data[:8] != b"!<arch>\n" or b"debian-binary" not in data[:64]:
+            raise ValueError("download is not a Debian package")
+    elif relative.endswith(".rpm"):
+        if data[:4] != b"\xed\xab\xee\xdb":
+            raise ValueError("download is not an RPM package")
+    elif relative == "install.sh":
+        text = data.decode("utf-8", errors="strict")
+        if not text.startswith("#!/usr/bin/env bash\n") or re.search(r"@[A-Z0-9_]+@", text):
+            raise ValueError("install.sh is not a finished bash script")
     elif relative.endswith(".woff2"):
         if len(data) < 48 or data[:4] != b"wOF2" or struct.unpack_from(">I", data, 8)[0] != len(data):
             raise ValueError("invalid WOFF2 font")
@@ -116,14 +128,22 @@ def check_content(relative, data):
 def allowed_files(version):
     if not re.fullmatch(gate.VERSION, version):
         raise ValueError("expected version must be canonical X.Y.Z")
-    downloads = (*HISTORICAL, *(f"secblitz-{version}-{info['tag']}-setup.exe" for info in gate.ARCHES.values()))
-    return set(STATIC) | {"downloads/" + name for name in downloads}
+    downloads = [*HISTORICAL, *(f"secblitz-{version}-{info['tag']}-setup.exe" for info in gate.ARCHES.values())]
+    names = set(STATIC)
+    if gate.has_linux(version):
+        downloads += gate.linux_package_names(version).values()
+        names |= {"install.sh"} | {feed for arch in ("linux-x64", "linux-arm64") for feed in gate.PACKAGES[arch]["feeds"].values()}
+    return names | {"downloads/" + name for name in downloads}
 
 
 def validate_snapshot(site, version, origin, references):
     payload = gate.verify_feed(site, version)
     arm_payload = gate.verify_feed(site, version, arch="arm64")
-    gate.verify_site_references(site, origin, version, payload, arm_payload)
+    linux_payloads = None
+    if gate.has_linux(version):
+        linux_payloads = gate.verify_linux_feeds(site, version)
+        gate.verify_install_script(site, version)
+    gate.verify_site_references(site, origin, version, payload, arm_payload, linux_payloads)
     gate.verify_not_found_page(site)
     css = (site / "styles.css").read_text(encoding="utf-8")
     if "\\" in css or re.search(r"@import\b", css, re.I):
@@ -173,10 +193,10 @@ def stage(source, output, version, reference_dir):
             raise ValueError("staging output must be a directory")
         check_existing_output(output, names | set(FONT_LICENSES) | LEGACY_ASSETS)
     output.parent.mkdir(parents=True, exist_ok=True)
-    references = {
-        f"secblitz-{version}-{info['tag']}-setup.exe": reference_dir / f"secblitz-{version}-{info['tag']}-setup.exe"
-        for info in gate.ARCHES.values()
-    }
+    built = [f"secblitz-{version}-{info['tag']}-setup.exe" for info in gate.ARCHES.values()]
+    if gate.has_linux(version):
+        built += gate.linux_package_names(version).values()
+    references = {name: reference_dir / name for name in built}
     with tempfile.TemporaryDirectory(prefix=".pages-stage-", dir=output.parent) as temporary:
         work = Path(temporary)
         snapshot = work / "site"

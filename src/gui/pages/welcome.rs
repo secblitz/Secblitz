@@ -157,8 +157,8 @@ pub fn view<'a>(state: &State, ctx: &Ctx) -> Element<'a, Message> {
     let p = ctx.palette;
     let (title, text) = match state.step {
         0 => (
-            "Secblitz checks how your PC is set up",
-            "It looks at the security and privacy settings of Windows and your browsers. Checking never changes anything.",
+            "Secblitz checks how your computer is set up",
+            crate::app::os_text::WELCOME_CHECKS,
         ),
         1 => (
             "You decide what changes",
@@ -172,7 +172,7 @@ pub fn view<'a>(state: &State, ctx: &Ctx) -> Element<'a, Message> {
     let button = |kind, label: &str, msg| widgets::action(p, kind, ctx.t(label), None, Some(msg));
     let mut words = column![
         widgets::h1(p, ctx.t(title)),
-        widgets::muted_centred(p, ctx.t(text)),
+        widgets::muted_centred(p, ctx.t(crate::app::os_text::here(text))),
     ]
     .spacing(theme::S2)
     .align_x(Alignment::Center);
@@ -200,7 +200,7 @@ pub fn view<'a>(state: &State, ctx: &Ctx) -> Element<'a, Message> {
             .push(iced::widget::space::vertical().height(theme::S2))
             .push(
                 column![
-                    widgets::h2(p, ctx.t("Check your PC now?")),
+                    widgets::h2(p, ctx.t("Check your computer now?")),
                     widgets::muted(p, ctx.t("It takes about a minute.")),
                 ]
                 .spacing(theme::S1)
@@ -214,7 +214,7 @@ pub fn view<'a>(state: &State, ctx: &Ctx) -> Element<'a, Message> {
         buttons.push(widgets::action(
             p,
             ButtonKind::Primary,
-            ctx.t("Check my PC"),
+            ctx.t("Check my computer"),
             Some(Icon::Refresh),
             Some(Message::Welcome(Msg::Check)),
         ));
@@ -279,21 +279,21 @@ mod tests {
     fn every_welcome_text_is_translated_into_every_language() {
         use crate::i18n::Lang;
         let texts = [
-            "Secblitz checks how your PC is set up",
-            "It looks at the security and privacy settings of Windows and your browsers. Checking never changes anything.",
+            "Secblitz checks how your computer is set up",
+            crate::app::os_text::WELCOME_CHECKS,
             "You decide what changes",
             "Secblitz explains what it found and fixes only what you agree to.",
             "You can undo anything",
             "Every fix can be put back from History, and Secblitz says first if one can't.",
-            "Check your PC now?",
+            "Check your computer now?",
             "It takes about a minute.",
             "Next",
             "Skip",
             "Back",
             "Not now",
-            "Check my PC",
+            "Check my computer",
             "Not checked yet",
-            "Check your PC to see what's protected. Nothing is changed.",
+            "Check your computer to see what's protected. Nothing is changed.",
         ];
         for lang in [Lang::Es, Lang::Fr, Lang::De, Lang::Pt, Lang::It] {
             for text in texts {

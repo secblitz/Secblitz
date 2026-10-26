@@ -21,10 +21,65 @@ ARCHES = {
     "x64": dict(target="windows-x86_64", tag="windows-x64", feed="releases/stable.json", sha="sha"),
     "arm64": dict(target="windows-aarch64", tag="windows-arm64", feed="releases/stable-arm64.json", sha="sha-arm64"),
 }
+# Linux and macOS feeds, apart from ARCHES so the Windows download checks never see them.
+PACKAGES = {
+    "linux-x64": dict(target="linux-x86_64", tag="linux-x64", suffixes=(".deb", ".rpm"),
+                  feeds=dict(deb="releases/stable-linux-x64-deb.json", rpm="releases/stable-linux-x64-rpm.json")),
+    "linux-arm64": dict(target="linux-aarch64", tag="linux-arm64", suffixes=(".deb", ".rpm"),
+                    feeds=dict(deb="releases/stable-linux-arm64-deb.json", rpm="releases/stable-linux-arm64-rpm.json")),
+    "macos": dict(target="macos-universal", tag="macos-universal", suffixes=(".dmg",), feed="releases/stable-macos.json"),
+}
+LINUX_FIRST = (1, 5, 0)
+LINUX_KINDS = ("deb", "rpm")
+INSTALL_VARIABLES = {
+    "SECBLITZ_VERSION": None,
+    "SHA256_X64_DEB": ("linux-x64", "deb"),
+    "SHA256_X64_RPM": ("linux-x64", "rpm"),
+    "SHA256_ARM64_DEB": ("linux-arm64", "deb"),
+    "SHA256_ARM64_RPM": ("linux-arm64", "rpm"),
+}
 SECRET_MARKERS = re.compile(
     rb"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----|[\"']?(?:CLOUDFLARE_API_TOKEN|CLOUDFLARE_API_KEY|CF_API_KEY|CF_API_TOKEN|X-Auth-Key|X-Auth-Email|CLOUDFLARE_EMAIL|CF_API_EMAIL)[\"']?\s*[:=]|Authorization\s*:\s*Bearer\s+",
     re.IGNORECASE,
 )
+
+
+def has_linux(version):
+    """Releases from 1.5.0 carry the Linux packages and feeds; older ones never did."""
+    return tuple(int(part) for part in version.split(".")) >= LINUX_FIRST
+
+
+def linux_package_names(version):
+    """Package file name by (architecture, kind), for the four Linux downloads."""
+    return {(arch, kind): f"secblitz-{version}-{PACKAGES[arch]['tag']}.{kind}"
+            for arch in ("linux-x64", "linux-arm64") for kind in LINUX_KINDS}
+
+
+def verify_linux_feeds(site, version):
+    payloads = {}
+    for (arch, kind) in linux_package_names(version):
+        if not (site / PACKAGES[arch]["feeds"][kind]).is_file():
+            raise ValueError(f"signed {arch} {kind} feed is missing")
+        payloads[(arch, kind)] = verify_feed(site, version, arch=arch, package=kind)
+    return payloads
+
+
+def verify_install_script(site, version):
+    """install.sh must carry this version and the real hash of each package it will download."""
+    text = (site / "install.sh").read_text(encoding="utf-8")
+    for name, package in INSTALL_VARIABLES.items():
+        found = re.findall(rf'^{name}="([^"]*)"$', text, re.M)
+        if len(found) != 1:
+            raise ValueError("install.sh must set each version and checksum exactly once")
+        if package is None:
+            expected = version
+        else:
+            expected = hashlib.sha256((site / "downloads" / linux_package_names(version)[package]).read_bytes()).hexdigest()
+        if found[0] != expected:
+            raise ValueError("install.sh does not match the Linux packages it installs")
+    if re.search(r"@[A-Z0-9_]+@", text):
+        raise ValueError("install.sh still has an unfilled placeholder")
+    print("install.sh version and package checksums verified.")
 
 
 def local_reference(value):
@@ -61,10 +116,13 @@ def unique_object(pairs):
     return result
 
 
-def verify_feed(site, expected_version=None, feed_path=None, installer_directory=None, arch="x64"):
+def verify_feed(site, expected_version=None, feed_path=None, installer_directory=None, arch="x64", package=None):
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-    info = ARCHES[arch]
-    feed_bytes = (feed_path or site / info["feed"]).read_bytes()
+    info = ARCHES[arch] if arch in ARCHES else PACKAGES[arch]
+    if ("feeds" in info) != (package is not None):
+        raise ValueError("a package kind is needed for linux feeds and not allowed for the others")
+    feed = info["feeds"][package] if package else info["feed"]
+    feed_bytes = (feed_path or site / feed).read_bytes()
     if len(feed_bytes) > 16384:
         raise ValueError("feed exceeds 16 KiB")
     envelope = json.loads(feed_bytes, object_pairs_hook=unique_object)
@@ -85,7 +143,8 @@ def verify_feed(site, expected_version=None, feed_path=None, installer_directory
         raise ValueError("invalid stable version")
     if expected_version and payload["version"] != expected_version:
         raise ValueError("signed feed version does not match expected release version")
-    if payload["filename"] != f"secblitz-{payload['version']}-{info['tag']}-setup.exe":
+    suffixes = (f".{package}",) if package else info.get("suffixes", ("-setup.exe",))
+    if payload["filename"] not in {f"secblitz-{payload['version']}-{info['tag']}{suffix}" for suffix in suffixes}:
         raise ValueError("invalid installer filename")
     if any(type(payload[k]) is not int for k in ("size", "published_at", "expires_at")):
         raise ValueError("size and timestamps must be integers")
@@ -139,7 +198,7 @@ class SiteReferences(HTMLParser):
             self.hash_parts.setdefault(self.hash_id, []).append(data)
 
 
-def verify_site_references(site, origin, expected_version=None, payload=None, arm_payload=None):
+def verify_site_references(site, origin, expected_version=None, payload=None, arm_payload=None, linux_payloads=None):
     page = SiteReferences()
     page.feed((site / "index.html").read_text(encoding="utf-8"))
     if page.canonicals:
@@ -186,6 +245,11 @@ def verify_site_references(site, origin, expected_version=None, payload=None, ar
             raise ValueError("HTML displayed SHA-256 does not match its installer")
         if signed and (relative != "downloads/" + signed["filename"] or digest != signed["sha256"]):
             raise ValueError("HTML download does not match the signed stable feed")
+    if linux_payloads is not None:
+        linked = {unquote(urlsplit(r).path) for r in page.references if re.search(r"-linux-(?:x64|arm64)\.(?:deb|rpm)$", urlsplit(r).path)}
+        wanted = {"downloads/" + signed["filename"] for signed in linux_payloads.values()}
+        if linked != wanted:
+            raise ValueError("HTML must link exactly the four current Linux packages")
     print("HTML assets, installer links and displayed SHA-256 verified.")
 
 
@@ -269,7 +333,8 @@ def main():
     parser.add_argument("--site", type=Path, default=ROOT / "website", help="static directory to validate (default: website; production: dist/pages)")
     parser.add_argument("--require-feed", action="store_true", help="require a verified signed stable feed")
     parser.add_argument("--expected-version", help="require this exact release version (release gate defaults to Cargo.toml)")
-    parser.add_argument("--arch", choices=sorted(ARCHES), default="x64", help="architecture of the feed given to --verify-feed")
+    parser.add_argument("--arch", choices=sorted({**ARCHES, **PACKAGES}), default="x64", help="architecture of the feed given to --verify-feed")
+    parser.add_argument("--package", choices=("deb", "rpm"), help="package kind of the feed given to --verify-feed, for linux architectures")
     parser.add_argument("--verify-feed", type=Path, help="verify a separately downloaded feed locally, without modifying files")
     parser.add_argument("--installer-directory", type=Path, help="directory containing the downloaded installer for --verify-feed")
     args = parser.parse_args()
@@ -287,7 +352,7 @@ def main():
     if args.verify_feed:
         if not args.installer_directory or args.origin or args.require_feed:
             parser.error("--verify-feed requires --installer-directory and cannot configure origin or use --require-feed")
-        verify_feed(site, expected, args.verify_feed, args.installer_directory, args.arch)
+        verify_feed(site, expected, args.verify_feed, args.installer_directory, args.arch, args.package)
         return
     if args.installer_directory:
         parser.error("--installer-directory requires --verify-feed")
@@ -335,7 +400,12 @@ def main():
     configured = (ROOT / "assets/update-origin.txt").read_text().strip()
     effective_origin = origin or (origin_value(configured) if configured else None)
     arm_payload = verify_feed(site, expected, arch="arm64") if (site / ARCHES["arm64"]["feed"]).exists() else None
-    verify_site_references(site, effective_origin, expected, payload, arm_payload)
+    linux_payloads = None
+    if expected and has_linux(expected) and (args.require_feed or any(
+            (site / info["feeds"][kind]).exists() for info in (PACKAGES["linux-x64"], PACKAGES["linux-arm64"]) for kind in LINUX_KINDS)):
+        linux_payloads = verify_linux_feeds(site, expected)
+        verify_install_script(site, expected)
+    verify_site_references(site, effective_origin, expected, payload, arm_payload, linux_payloads)
     if (site / "404.html").exists():
         verify_not_found_page(site)
     if (site / "privacy.html").exists():

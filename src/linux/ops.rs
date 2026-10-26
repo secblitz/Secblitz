@@ -1,0 +1,606 @@
+//! What the root helper does for Free up space and Clean up apps. Each request names fixed items or catalog apps; nothing here runs a command a person typed.
+use crate::app::remote::{AppStep, AppWire, Event, RemovedWire, Reply, Request};
+use secblitz::debloat::linux as apps;
+use secblitz::linux::cmd::Sys;
+use secblitz::linux::web;
+use secblitz::space::linux as space;
+use secblitz::space::{Fs, CLEAN_BUDGET, MEASURE_BUDGET};
+use std::time::Instant;
+
+pub fn handles(request: &Request) -> bool {
+    matches!(
+        request,
+        Request::SpaceMeasure { .. }
+            | Request::SpaceClean { .. }
+            | Request::Apps
+            | Request::RemoveApps { .. }
+            | Request::RemovedApps
+            | Request::ReinstallApp { .. }
+            | Request::WebState
+            | Request::WebApply { .. }
+            | Request::WebPause { .. }
+            | Request::WebResume
+            | Request::WebAllow { .. }
+            | Request::WebAllowOnce { .. }
+            | Request::WebRemoveAllowed { .. }
+    )
+}
+
+fn clock() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+/// The sentences web protection writes pass through; anything else goes to the log and the person gets a plain one.
+fn web_reply(result: anyhow::Result<()>) -> Reply {
+    match result {
+        Ok(()) => Reply::Ok,
+        Err(error) => {
+            let text = error.to_string();
+            if web::SENTENCES.contains(&text.as_str()) {
+                return Reply::Failed(text);
+            }
+            eprintln!("A web protection step failed: {error:#}");
+            Reply::Failed(secblitz::linux::controls::CHANGE_FAILED.to_owned())
+        }
+    }
+}
+
+fn web_request(sys: &dyn Sys, now: u64, request: Request) -> Reply {
+    match request {
+        Request::WebState => Reply::Web(Box::new(web::state(sys, now))),
+        Request::WebApply { config } => web_reply(web::apply(sys, config, clock)),
+        Request::WebPause { length } => web_reply(web::pause_web(sys, length, now)),
+        Request::WebResume => web_reply(web::resume(sys, now)),
+        Request::WebAllow { site } => web_reply(web::allow_site(sys, &site, now)),
+        Request::WebAllowOnce { site } => web_reply(web::allow_site_once(sys, &site, now)),
+        Request::WebRemoveAllowed { site } => web_reply(web::remove_allowed(sys, &site, now)),
+        _ => Reply::Failed(apps::NOT_INSTALLED.to_owned()),
+    }
+}
+
+/// A sentence for the screen: the ones Secblitz wrote pass through, anything else goes to the log and the person gets a plain one.
+fn plain(error: &anyhow::Error) -> String {
+    let text = error.to_string();
+    let known = [
+        space::CANNOT_CLEAN,
+        space::NOT_ON_THIS_SYSTEM,
+        space::TRASH_NOT_EMPTIED,
+        space::KERNELS_KEPT,
+    ];
+    if known.contains(&text.as_str()) || apps::plain(&text).is_some() {
+        return text;
+    }
+    eprintln!("A clean up step failed: {error:#}");
+    space::CANNOT_CLEAN.to_owned()
+}
+
+/// Answers one clean up request, streaming what each item or app came to before the final reply.
+pub fn run(sys: &dyn Sys, fs: &dyn Fs, now: u64, request: Request, emit: &mut dyn FnMut(Event)) {
+    let reply = match request {
+        Request::SpaceMeasure { items } => {
+            for wire in items {
+                let outcome = space::measure_machine(
+                    sys,
+                    fs,
+                    wire.item(),
+                    now,
+                    Instant::now() + MEASURE_BUDGET,
+                )
+                .map_err(|e| plain(&e));
+                emit(Event::Space {
+                    item: wire,
+                    outcome,
+                });
+            }
+            Reply::Ok
+        }
+        Request::SpaceClean { items } => {
+            for wire in items {
+                let outcome =
+                    space::clean_machine(sys, fs, wire.item(), now, Instant::now() + CLEAN_BUDGET)
+                        .map_err(|e| plain(&e));
+                emit(Event::Space {
+                    item: wire,
+                    outcome,
+                });
+            }
+            Reply::Ok
+        }
+        Request::Apps => match apps::listable(sys) {
+            Ok(found) => Reply::Apps(
+                found
+                    .into_iter()
+                    .map(|i| AppWire {
+                        index: i.index,
+                        package: i.package,
+                        version: i.version,
+                    })
+                    .collect(),
+            ),
+            Err(e) => Reply::Failed(match apps::plain(&e.to_string()) {
+                Some(sentence) => sentence.to_owned(),
+                None => {
+                    eprintln!("Could not list the apps: {e:#}");
+                    apps::LIST_FAILED.to_owned()
+                }
+            }),
+        },
+        Request::RemoveApps { packages } => {
+            for package in packages {
+                emit(Event::App {
+                    package: package.clone(),
+                    step: AppStep::Started,
+                });
+                let step = match apps::remove_recorded(sys, &package, now) {
+                    secblitz::debloat::PackageOutcome::Removed => AppStep::Removed,
+                    secblitz::debloat::PackageOutcome::Protected => {
+                        AppStep::Failed(apps::REFUSED.to_owned())
+                    }
+                    secblitz::debloat::PackageOutcome::Failed(reason) => AppStep::Failed(reason),
+                };
+                emit(Event::App { package, step });
+            }
+            Reply::Ok
+        }
+        Request::RemovedApps => match apps::removed(sys) {
+            Ok(found) => Reply::RemovedApps(
+                found
+                    .into_iter()
+                    .map(|r| RemovedWire {
+                        index: r.index,
+                        package: r.package,
+                        t: r.t,
+                    })
+                    .collect(),
+            ),
+            Err(e) => Reply::Failed(match apps::plain(&e.to_string()) {
+                Some(sentence) => sentence.to_owned(),
+                None => {
+                    eprintln!("Could not list the removed apps: {e:#}");
+                    apps::LIST_FAILED.to_owned()
+                }
+            }),
+        },
+        Request::ReinstallApp { package } => match apps::reinstall_package(sys, &package) {
+            Ok(()) => Reply::Ok,
+            Err(e) => Reply::Failed(match apps::plain(&e.to_string()) {
+                Some(sentence) => sentence.to_owned(),
+                None => {
+                    eprintln!("Could not install {package} again: {e:#}");
+                    apps::INSTALL_FAILED.to_owned()
+                }
+            }),
+        },
+        request => web_request(sys, now, request),
+    };
+    emit(Event::Done(reply));
+}
+
+#[cfg(test)]
+pub(crate) mod tests_support {
+    use super::*;
+    use secblitz::linux::cmd::Output;
+    use secblitz::space::Entry;
+    use std::collections::BTreeMap;
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+
+    /// Files and program replies held in memory; a program nobody planned for is an error.
+    #[derive(Default)]
+    pub struct Machine {
+        pub files: BTreeMap<PathBuf, Vec<u8>>,
+        pub replies: BTreeMap<String, Output>,
+        pub calls: Mutex<Vec<String>>,
+        pub written: Mutex<BTreeMap<PathBuf, Vec<u8>>>,
+    }
+
+    impl Machine {
+        pub fn reply(&mut self, program: &str, args: &[&str], status: i32, stdout: &str) {
+            let key = std::iter::once(program)
+                .chain(args.iter().copied())
+                .collect::<Vec<_>>()
+                .join(" ");
+            self.replies.insert(
+                key,
+                Output {
+                    status,
+                    stdout: stdout.into(),
+                    stderr: String::new(),
+                },
+            );
+        }
+    }
+
+    impl Sys for Machine {
+        fn run(&self, program: &'static str, args: &[&str]) -> anyhow::Result<Output> {
+            let key = std::iter::once(program)
+                .chain(args.iter().copied())
+                .collect::<Vec<_>>()
+                .join(" ");
+            self.calls.lock().unwrap().push(key.clone());
+            self.replies
+                .get(&key)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("Unexpected program: {key}"))
+        }
+        fn read(&self, path: &Path) -> anyhow::Result<Option<Vec<u8>>> {
+            let written = self.written.lock().unwrap();
+            Ok(written.get(path).or(self.files.get(path)).cloned())
+        }
+        fn write_atomic(&self, path: &Path, bytes: &[u8], _: u32) -> anyhow::Result<()> {
+            self.written
+                .lock()
+                .unwrap()
+                .insert(path.to_owned(), bytes.to_vec());
+            Ok(())
+        }
+        fn remove(&self, _: &Path) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
+
+    pub struct Nothing;
+
+    impl Fs for Nothing {
+        fn list(&self, dir: &Path, _max: usize) -> std::io::Result<Vec<Entry>> {
+            if dir == Path::new("/var/crash") {
+                Ok(vec![Entry {
+                    path: "/var/crash/a.crash".into(),
+                    is_dir: false,
+                    reparse: false,
+                    size: 2048,
+                    created: 0,
+                    written: 0,
+                }])
+            } else {
+                Err(std::io::Error::from(std::io::ErrorKind::NotFound))
+            }
+        }
+        fn delete_checked(
+            &self,
+            _: &Path,
+            _: bool,
+            check: &dyn Fn(&Entry) -> bool,
+        ) -> std::io::Result<bool> {
+            Ok(check(&Entry {
+                path: "/var/crash/a.crash".into(),
+                is_dir: false,
+                reparse: false,
+                size: 2048,
+                created: 0,
+                written: 0,
+            }))
+        }
+        fn remove_empty_dir(
+            &self,
+            _: &Path,
+            _: bool,
+            _: &dyn Fn(&Entry) -> bool,
+        ) -> std::io::Result<bool> {
+            Ok(false)
+        }
+    }
+
+    impl Machine {
+        pub fn ubuntu() -> Machine {
+            let mut m = Machine::default();
+            m.files.insert(
+                "/etc/os-release".into(),
+                b"ID=ubuntu\nID_LIKE=debian\n".to_vec(),
+            );
+            m
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tests_support::{Machine, Nothing};
+    use super::*;
+    use crate::app::remote::SpaceWire;
+
+    fn ubuntu() -> Machine {
+        Machine::ubuntu()
+    }
+
+    fn collect(machine: &Machine, request: Request) -> (Vec<String>, Reply) {
+        let mut lines = Vec::new();
+        let mut last = None;
+        run(
+            machine,
+            &Nothing,
+            100 * 86_400,
+            request,
+            &mut |event| match event {
+                Event::Space { item, outcome } => lines.push(format!("{item:?} {outcome:?}")),
+                Event::App { package, step } => lines.push(format!("{package} {step:?}")),
+                Event::Progress { .. } => lines.push("progress".into()),
+                Event::Done(reply) => last = Some(reply),
+            },
+        );
+        (lines, last.expect("a final reply"))
+    }
+
+    #[test]
+    fn web_protection_state_is_answered_even_where_nothing_is_set_up() {
+        let (lines, reply) = collect(&Machine::default(), Request::WebState);
+        assert!(lines.is_empty());
+        let Reply::Web(state) = reply else {
+            panic!("expected the web protection state");
+        };
+        assert!(!state.available && !state.routed);
+        assert_eq!(state.config, secblitz::filter::config::Config::default());
+        assert_eq!(state.now, 100 * 86_400);
+    }
+
+    #[test]
+    fn web_protection_sentences_reach_the_window_and_anything_else_becomes_a_plain_one() {
+        let on = secblitz::filter::config::Config {
+            ads: true,
+            ..Default::default()
+        };
+        let (_, reply) = collect(&Machine::default(), Request::WebApply { config: on });
+        assert!(
+            matches!(&reply, Reply::Failed(m) if m == web::NOT_AVAILABLE),
+            "{}",
+            describe(&reply)
+        );
+        let (_, reply) = collect(
+            &Machine::default(),
+            Request::WebAllow {
+                site: "not a site".into(),
+            },
+        );
+        assert!(
+            matches!(&reply, Reply::Failed(m) if m == secblitz::filter::control::NOT_A_SITE),
+            "{}",
+            describe(&reply)
+        );
+        let reply = web_reply(Err(anyhow::anyhow!("systemctl said something odd")));
+        assert!(
+            matches!(&reply, Reply::Failed(m) if m == secblitz::linux::controls::CHANGE_FAILED),
+            "{}",
+            describe(&reply)
+        );
+        assert!(matches!(web_reply(Ok(())), Reply::Ok));
+    }
+
+    fn describe(reply: &Reply) -> String {
+        match reply {
+            Reply::Failed(m) => m.clone(),
+            _ => "another reply".into(),
+        }
+    }
+
+    #[test]
+    fn the_helper_takes_every_web_protection_request() {
+        use secblitz::filter::config::Config;
+        use secblitz::linux::web::PauseFor;
+        for request in [
+            Request::WebState,
+            Request::WebApply {
+                config: Config::default(),
+            },
+            Request::WebPause {
+                length: PauseFor::Quarter,
+            },
+            Request::WebResume,
+            Request::WebAllow { site: "a.b".into() },
+            Request::WebAllowOnce { site: "a.b".into() },
+            Request::WebRemoveAllowed { site: "a.b".into() },
+        ] {
+            assert!(handles(&request), "{request:?}");
+        }
+    }
+
+    #[test]
+    fn measuring_answers_each_item_then_ends_with_ok() {
+        let machine = ubuntu();
+        let (lines, reply) = collect(
+            &machine,
+            Request::SpaceMeasure {
+                items: vec![SpaceWire::CrashReports, SpaceWire::PackageCaches],
+            },
+        );
+        assert!(matches!(reply, Reply::Ok));
+        assert_eq!(lines.len(), 2);
+        assert!(lines[0].starts_with("CrashReports Ok(Tally { bytes: 2048, files: 1"));
+        assert!(lines[1].starts_with("PackageCaches Ok("), "{}", lines[1]);
+    }
+
+    #[test]
+    fn a_failing_item_does_not_stop_the_others_and_never_shows_a_path() {
+        let machine = Machine::default();
+        let (lines, reply) = collect(
+            &machine,
+            Request::SpaceMeasure {
+                items: vec![SpaceWire::FlatpakRuntimes, SpaceWire::CrashReports],
+            },
+        );
+        assert!(matches!(reply, Reply::Ok));
+        assert!(lines[0].contains(space::CANNOT_CLEAN), "{}", lines[0]);
+        assert!(!lines[0].contains("/usr/bin"));
+        assert!(lines[1].starts_with("CrashReports Ok("));
+    }
+
+    #[test]
+    fn cleaning_runs_the_package_manager_for_the_cache_only() {
+        let mut machine = ubuntu();
+        machine.reply("/usr/bin/apt-get", &["clean"], 0, "");
+        let (lines, reply) = collect(
+            &machine,
+            Request::SpaceClean {
+                items: vec![SpaceWire::PackageCaches],
+            },
+        );
+        assert!(matches!(reply, Reply::Ok));
+        assert!(lines[0].starts_with("PackageCaches Ok("));
+        assert_eq!(
+            machine.calls.lock().unwrap().as_slice(),
+            ["/usr/bin/apt-get clean"]
+        );
+    }
+
+    #[test]
+    fn a_refused_old_version_removal_reaches_the_screen_as_its_own_sentence() {
+        let mut machine = ubuntu();
+        let dpkg = [
+            "-W",
+            "-f=${Package}\t${Installed-Size}\t${db:Status-Abbrev}\n",
+        ];
+        machine.reply("/usr/bin/uname", &["-r"], 0, "7.0.0-38-generic\n");
+        machine.reply(
+            "/usr/bin/dpkg-query",
+            &dpkg,
+            0,
+            "linux-image-7.0.0-34-generic\t16920\tii \nlinux-image-7.0.0-38-generic\t16936\tii \n",
+        );
+        machine.reply(
+            "/usr/bin/apt-get",
+            &["-s", "autoremove"],
+            0,
+            "Remv linux-image-7.0.0-34-generic [7.0.0-34.34]\n",
+        );
+        machine.reply(
+            "/usr/bin/apt-get",
+            &["-s", "remove", "linux-image-7.0.0-34-generic"],
+            0,
+            "Remv linux-image-7.0.0-34-generic [7.0.0-34.34]\nRemv linux-generic [1]\n",
+        );
+        let (lines, reply) = collect(
+            &machine,
+            Request::SpaceClean {
+                items: vec![SpaceWire::OldKernels],
+            },
+        );
+        assert!(matches!(reply, Reply::Ok));
+        assert!(lines[0].contains(space::KERNELS_KEPT), "{}", lines[0]);
+        assert!(!machine
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|c| c.contains(" remove -y")));
+    }
+
+    #[test]
+    fn apps_are_listed_without_the_ones_whose_removal_would_take_more() {
+        let mut machine = ubuntu();
+        let dpkg = ["-W", "-f=${Package}\t${Version}\t${db:Status-Abbrev}\n"];
+        machine.reply(
+            "/usr/bin/dpkg-query",
+            &dpkg,
+            0,
+            "anydesk\t7\tii \nrustdesk\t1\tii \n",
+        );
+        machine.reply(
+            "/usr/bin/apt-get",
+            &["-s", "remove", "anydesk"],
+            0,
+            "Remv anydesk [7]\n",
+        );
+        machine.reply(
+            "/usr/bin/apt-get",
+            &["-s", "remove", "rustdesk"],
+            0,
+            "Remv rustdesk [1]\nRemv ubuntu-desktop [1]\n",
+        );
+        let (_, reply) = collect(&machine, Request::Apps);
+        let Reply::Apps(found) = reply else {
+            panic!("expected apps")
+        };
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].package, "anydesk");
+    }
+
+    #[test]
+    fn removing_apps_reports_each_one_as_it_starts_and_ends() {
+        let mut machine = ubuntu();
+        machine.reply(
+            "/usr/bin/apt-get",
+            &["-s", "remove", "anydesk"],
+            0,
+            "Remv anydesk [7]\nRemv ubuntu-desktop [1]\n",
+        );
+        machine.reply(
+            "/usr/bin/dpkg-query",
+            &["-W", "-f=${db:Status-Abbrev}", "anydesk"],
+            0,
+            "ii ",
+        );
+        let (lines, reply) = collect(
+            &machine,
+            Request::RemoveApps {
+                packages: vec!["anydesk".into()],
+            },
+        );
+        assert!(matches!(reply, Reply::Ok));
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], "anydesk Started");
+        assert!(lines[1].starts_with("anydesk Failed("));
+        assert!(lines[1].contains("other programs your computer needs"));
+        assert!(!machine
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|c| c.contains("remove -y")));
+    }
+
+    #[test]
+    fn a_removed_app_is_listed_and_reinstalled_through_the_helper() {
+        let mut machine = ubuntu();
+        let status = ["-W", "-f=${db:Status-Abbrev}", "xrdp"];
+        machine.files.insert(
+            "/var/lib/secblitz/Linux/removed-apps.txt".into(),
+            b"xrdp\t77\n".to_vec(),
+        );
+        machine.reply("/usr/bin/dpkg-query", &status, 1, "");
+        let (_, reply) = collect(&machine, Request::RemovedApps);
+        let Reply::RemovedApps(found) = reply else {
+            panic!("expected removed apps")
+        };
+        assert_eq!(found.len(), 1);
+        assert_eq!((found[0].package.as_str(), found[0].t), ("xrdp", 77));
+
+        machine.reply(
+            "/usr/bin/apt-get",
+            &["-s", "install", "xrdp"],
+            0,
+            "Remv vino [1]\n",
+        );
+        let (_, reply) = collect(
+            &machine,
+            Request::ReinstallApp {
+                package: "xrdp".into(),
+            },
+        );
+        let Reply::Failed(text) = reply else {
+            panic!("expected a refusal")
+        };
+        assert_eq!(text, apps::INSTALL_REFUSED);
+        let (_, reply) = collect(
+            &machine,
+            Request::ReinstallApp {
+                package: "anydesk".into(),
+            },
+        );
+        assert!(matches!(reply, Reply::Failed(t) if t == apps::NOT_RECORDED));
+    }
+
+    #[test]
+    fn this_module_only_takes_the_clean_up_requests() {
+        assert!(handles(&Request::Apps));
+        assert!(handles(&Request::RemovedApps));
+        assert!(handles(&Request::ReinstallApp {
+            package: "xrdp".into()
+        }));
+        assert!(!handles(&Request::Audit));
+        assert!(!handles(&Request::Undo));
+        let machine = Machine::default();
+        let (_, reply) = collect(&machine, Request::Audit);
+        assert!(matches!(reply, Reply::Failed(_)));
+    }
+}

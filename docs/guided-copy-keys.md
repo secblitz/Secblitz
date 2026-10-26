@@ -6,7 +6,7 @@ Localization changes are confined to `src/i18n.rs` and this note. The catalog ke
 
 ## Voice and shared labels
 
-The current CLI heading is **A safer PC. Without headaches.** The report's **Less worry. More protection.** also has complete translations. Both are presentation copy, not guarantees that every finding is fixed. The old technical heading remains a legacy catalog key; the main application now requests the new heading.
+The current CLI heading is **A safer computer. Without headaches.** The report's **Less worry. More protection.** also has complete translations. Both are presentation copy, not guarantees that every finding is fixed. The old technical heading remains a legacy catalog key; the main application now requests the new heading.
 
 `Lang::control` uses `ui::advice::control_label`, so the selection menu, progress and friendly report use the same translated name. Examples include live virus protection, suspicious app detection, home/work/public network protection, account name privacy, sign-in secret protection and Windows Update tamper protection. Unknown control IDs remain verbatim. Technical control IDs and JSON fields/values are not renamed.
 

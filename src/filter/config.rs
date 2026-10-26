@@ -12,10 +12,10 @@ use super::gaps::Gap;
 use super::lists::valid_hostname;
 use super::matcher::{Kind, Switches, KINDS};
 
-const MAX_CONFIG: u64 = 16 * 1024;
-const MAX_STATUS: u64 = 16 * 1024;
-const MAX_RECENT: u64 = 64 * 1024;
-const MAX_STATS: u64 = 64 * 1024;
+pub const MAX_CONFIG: u64 = 16 * 1024;
+pub const MAX_STATUS: u64 = 16 * 1024;
+pub const MAX_RECENT: u64 = 64 * 1024;
+pub const MAX_STATS: u64 = 64 * 1024;
 const FRESH_SECONDS: u64 = 120;
 /// Boot time comes from uptime, which drifts when the clock is corrected. The service ends the pause at start, which
 /// holds with Fast Startup, which keeps the uptime counting across a shutdown.
@@ -24,7 +24,7 @@ pub const MAX_ALLOWED: usize = 200;
 pub const MAX_ALLOWED_ONCE: usize = 20;
 pub const ALLOW_ONCE_SECONDS: u64 = 10 * 60;
 
-#[derive(Serialize, Deserialize, Default, Clone, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Default, Clone, PartialEq, Eq, Debug)]
 pub struct Config {
     pub ads: bool,
     pub tracking: bool,
@@ -343,14 +343,18 @@ pub fn load_config(path: &Path) -> Config {
         .unwrap_or_default()
 }
 
-/// Never written when too big: the service would refuse it and switch everything off.
-pub fn save_config(path: &Path, c: &Config) -> Result<()> {
+pub const ALLOWED_TOO_LONG: &str =
+    "The list of allowed sites is too long. Remove a site you no longer need and try again.";
+
+/// The file's bytes, or why it cannot be written. Never too big: the service would refuse it and switch everything off.
+pub fn config_bytes(c: &Config) -> Result<Vec<u8>> {
     let bytes = serde_json::to_vec_pretty(&c.clone().sanitized())?;
-    ensure!(
-        bytes.len() as u64 <= MAX_CONFIG,
-        "The list of allowed sites is too long. Remove a site you no longer need and try again."
-    );
-    write_atomic(path, &bytes)
+    ensure!(bytes.len() as u64 <= MAX_CONFIG, ALLOWED_TOO_LONG);
+    Ok(bytes)
+}
+
+pub fn save_config(path: &Path, c: &Config) -> Result<()> {
+    write_atomic(path, &config_bytes(c)?)
 }
 
 pub fn load_status(path: &Path) -> Option<Status> {
@@ -378,9 +382,16 @@ pub fn fresh(status: &Status, now: u64) -> bool {
 /// known-folder API, never from the inherited environment; the `ProgramData`
 /// variable is only the fallback for the portable (test) build.
 pub fn dir() -> Result<PathBuf> {
-    Ok(program_data()?
-        .join("Secblitz")
-        .join(crate::platform::WEB_PROTECTION))
+    #[cfg(all(target_os = "linux", not(test)))]
+    {
+        Ok(PathBuf::from(crate::linux::web::DIR))
+    }
+    #[cfg(not(all(target_os = "linux", not(test))))]
+    {
+        Ok(program_data()?
+            .join("Secblitz")
+            .join(crate::platform::WEB_PROTECTION))
+    }
 }
 
 #[cfg(windows)]
@@ -407,7 +418,7 @@ fn program_data() -> Result<PathBuf> {
         .context("ProgramData is not available")
 }
 
-#[cfg(not(windows))]
+#[cfg(all(not(windows), any(test, not(target_os = "linux"))))]
 fn program_data() -> Result<PathBuf> {
     std::env::var_os("ProgramData")
         .map(PathBuf::from)

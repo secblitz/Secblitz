@@ -24,12 +24,17 @@ bump PR -> merge -> tag -> release build (tests, installer tests, attestations) 
 | `.github/workflows/ci.yml` | Tests, lints, tool tests and the workflow security audit (zizmor) on every pull request; the app tests and license check are skipped when only the website or prose changed |
 | `.github/workflows/bump-version.yml` | Runs the bump script and opens a pull request |
 | `.github/workflows/tag-release.yml` | Tags a merged "Release X.Y.Z" commit and starts the release build on that tag |
-| `.github/workflows/release.yml` | Builds, tests the installer, optionally signs, attests and drafts the GitHub Release |
+| `.github/workflows/release.yml` | Builds the Windows files and the Linux packages, tests the installer, optionally signs, attests and drafts the GitHub Release |
 | `.github/workflows/publish-website.yml` | After you publish: verifies the release, deploys the website, checks the live site |
 | `.github/workflows/windows.yml` | RustSec audit and the installer harnesses on every pull request, skipped when only the website or prose changed (the release always runs the harnesses) |
 | `scripts/build-release.ps1` | The build itself (`-Stage Exe`, `-Stage Setup` or both) |
+| `scripts/build-linux-packages.py` | Builds the Linux program and the `.deb` and `.rpm` of one architecture |
+| `scripts/linux-install-check.py` | Installs the real built packages in distro containers before they are uploaded |
+| `scripts/release-files.py` | Lists the files a release build must produce for a version (the Linux packages from 1.5.0) |
 | `scripts/assemble-site.py` | Builds the exact site tree to deploy from the verified release files |
-| `scripts/finalize-site.py` | Writes the real checksum and size into the staged page |
+| `scripts/finalize-site.py` | Writes the real checksum and size into the staged page, and the version and package checksums into `install.sh` |
+| `website/install.sh` | The one-line Linux installer, a template until the site is built |
+| `scripts/install-script-tests.py` | Runs `install.sh` against stand-in tools: both package kinds, a wrong checksum, unsupported systems, colors |
 | `scripts/historical-downloads.py` | Older installers that every deploy must carry, with pinned hashes |
 | `scripts/historical-downloads.sha256` | The pinned hashes of those older downloads |
 | `scripts/verify-live-site.py` | Compares the live site with the deployed files |
@@ -81,6 +86,7 @@ is `secblitz/Secblitz`.
   request) lets the built-in token approve pull requests, so once you require
   approvals, an approval from `github-actions[bot]` counts. Review what you merge.
 - Require status checks to pass: `Rust tests and lints (Windows, MSVC)`,
+  `Rust tests and lints (Linux x64)`,
   `Locales, release tools, version bump and website tests`,
   `Workflow security audit (zizmor)`. Require branches to be up to date.
 - Block force pushes. Restrict deletions.
@@ -277,15 +283,28 @@ is drafted.
    codes) and `installer/test-lifecycle.ps1` (install, upgrade with a running
    monitor, uninstall preservation). A broken installer stops the release here,
    before any attestation or draft exists.
-7. `attest`: writes `SHA256SUMS`, creates build provenance attestations for
-   the exe and the setup of each architecture, writes the parts list
+7. `build-linux`: runs beside the Windows jobs, for x86_64 on `ubuntu-24.04`
+   and for aarch64 natively on `ubuntu-24.04-arm`. It runs the tests and clippy,
+   builds the program in `debian:12` (so it runs on older systems), builds the
+   `.deb` and the `.rpm` with `build-linux-packages.py --build-binary
+   --without-repository`, names them `secblitz-X.Y.Z-linux-x64.deb`, `.rpm`,
+   `secblitz-X.Y.Z-linux-arm64.deb` and `.rpm`, and then installs those exact
+   files with `linux-install-check.py` in Ubuntu 24.04 and 26.04, Debian 12 and
+   13, and Fedora 43 and 44 (install, check, remove). The packages have no
+   repository entry or key, because the repository signing key never reaches
+   CI. A broken package stops the release here.
+8. `attest`: writes `SHA256SUMS`, creates build provenance attestations for
+   the exe and the setup of each architecture and for the four Linux
+   packages, writes the parts list
    (`secblitz-X.Y.Z-windows-x64.cdx.json` and `...-windows-arm64.cdx.json`,
    CycloneDX, from the tagged source by `scripts/make-sbom.py`) and attests each
-   one to the portable exe of its architecture.
-8. `draft-release`: creates a **draft** GitHub Release named "Secblitz X.Y.Z"
-   with the changelog section as text and the setup, the portable exe and
-   `SHA256SUMS` and the two parts lists attached. `SHA256SUMS` still lists only
-   the four programs.
+   one to the portable exe of its architecture. It then checks the file list
+   with `release-files.py`.
+9. `draft-release`: creates a **draft** GitHub Release named "Secblitz X.Y.Z"
+   with the changelog section as text and the setup, the portable exe, the four
+   Linux packages, `SHA256SUMS` and the two parts lists attached. `SHA256SUMS`
+   still lists only the four Windows programs; the Linux packages are covered
+   by their attestations and by the signed feeds.
 
 Only one release build runs at a time (`concurrency`). To rebuild an existing
 tag: Actions, Release, Run workflow, tag chosen under "Use workflow from" and
@@ -316,6 +335,10 @@ git fetch origin && git merge-base --is-ancestor "$(git rev-parse origin/main)" 
 Use the commit of the "Release X.Y.Z" merge as the digest (check it in the
 Actions run, and `git log origin/main`), not just any commit. A tag someone else
 created on a different commit fails the digest check.
+
+The four Linux packages are attested the same way. Check them with the same
+command, one `secblitz-0.8.1-linux-x64.deb`, `.rpm`, `-linux-arm64.deb` and
+`.rpm` at a time (from 1.5.0 on).
 
 Each draft also carries the two parts lists. To check that one is the parts list
 attested for its program (the website deploy checks the same):
@@ -354,6 +377,20 @@ python3 scripts/prepare-pages.py --verify-feed check/stable-arm64.json --arch ar
   --installer-directory check --expected-version 0.8.1
 ```
 
+From 1.5.0 on, sign the four Linux feeds too, one per package, from the
+packages in the draft:
+
+```sh
+for arch in linux-x64 linux-arm64; do
+  for package in deb rpm; do
+    python3 scripts/sign-release.py --key /path/to/secret.pem --arch $arch --package $package \
+      --public-key assets/update-public-key.hex --version 1.5.0 \
+      --installer check/secblitz-1.5.0-$arch.$package \
+      --output check/stable-$arch-$package.json
+  done
+done
+```
+
 Sign only the final bytes you will publish. If the setup changes later (for
 example it is re-signed), sign again. The feed is valid for 90 days by default:
 do not sign it long before you publish.
@@ -365,10 +402,14 @@ Attach the signed feeds to the draft **under the exact names `stable.json` and
 
 ```sh
 gh release upload v0.8.1 check/stable.json check/stable-arm64.json
+# From 1.5.0 on, also the four Linux feeds:
+gh release upload v1.5.0 check/stable-linux-x64-deb.json check/stable-linux-x64-rpm.json \
+  check/stable-linux-arm64-deb.json check/stable-linux-arm64-rpm.json
 ```
 
 The release must then carry exactly nine files: the setup and the portable exe
-for x64 and for arm64, the two parts lists, `SHA256SUMS` and the two feeds. Anything else, or a missing file, stops the
+for x64 and for arm64, the two parts lists, `SHA256SUMS` and the two feeds. From 1.5.0 it also carries the four
+Linux packages and the four Linux feeds, seventeen files in all. Anything else, or a missing file, stops the
 website deploy. Edit the notes if needed, then press Publish (a normal release,
 not a pre-release).
 
@@ -378,7 +419,7 @@ Publishing starts `publish-website.yml` on the tag.
 
 1. `verify` (no secrets): the run is on the tag, the commit is on `main`,
    `Cargo.toml`, the changelog and the website version all equal the tag, the
-   release is final and has exactly the nine files, `SHA256SUMS` matches, all
+   release is final and has exactly the expected files, `SHA256SUMS` matches, all
    four build files pass `gh attestation verify` bound to this repository, to
    `release.yml` as the signer, to `refs/tags/vX.Y.Z` and to the tagged commit,
    the two portable exes also carry a parts list attestation (predicate type
@@ -412,6 +453,32 @@ Installed copies pick the new version up from the live `releases/stable.json`
 (x64 builds) or `releases/stable-arm64.json` (native ARM builds), verified with
 the pinned key inside the app.
 
+### Linux downloads and `install.sh` (from 1.5.0)
+
+From 1.5.0 each release also carries four Linux packages
+(`secblitz-X.Y.Z-linux-x64.deb`, `-linux-x64.rpm`, `-linux-arm64.deb`,
+`-linux-arm64.rpm`), each with a build attestation, and you attach four more
+signed feeds next to `stable.json`: `stable-linux-x64-deb.json`,
+`stable-linux-x64-rpm.json`, `stable-linux-arm64-deb.json` and
+`stable-linux-arm64-rpm.json` (sign each with `sign-release.py --arch
+linux-x64|linux-arm64 --package deb|rpm`). The release then has seventeen
+files. The workflow checks the packages and feeds exactly like the Windows ones
+(`SHA256SUMS` may list the packages too), and `assemble-site.py` puts the
+packages under `downloads/` and the feeds under `releases/`. Releases before
+1.5.0 have none of this and are checked as before. A package over 25 MiB stops
+the build with a message, because Cloudflare Pages cannot host it.
+
+`website/install.sh` in git is a template. Its version and the SHA-256 of the
+four packages are placeholders (`@SECBLITZ_VERSION@`, `@SHA256_X64_DEB@` and so
+on). `finalize-site.py --packages` fills them from the verified release files on
+the staged copy only, and `stage-pages.py` refuses a script that still has one.
+`prepare-pages.py` then proves the version and every checksum in the script
+equal the packages on the site, and the live check compares the served
+`/install.sh` byte for byte. The script downloads from
+`https://secblitz.lol/downloads/`, checks the pinned checksum and refuses to
+install on a mismatch. `_headers` serves it as plain text. After editing it, run
+`python3 scripts/install-script-tests.py` (and shellcheck if you have it).
+
 ### Staged rollouts and renewals
 
 `scripts/release-authorize.py` (candidate and delivery files) and
@@ -428,6 +495,55 @@ machine. Do not leave the live feed to expire.
 Publishing is refused for any tag that is not the latest release, so a re-run on
 an old tag can never roll the website back. The verified site is kept for 30
 days, the longest an approval can wait.
+
+## Linux packages and repositories
+
+Linux ships as a `.deb` and an `.rpm`, served from a signed APT and DNF
+repository at `https://secblitz.lol/linux/apt` and `https://secblitz.lol/linux/rpm`.
+The release build in CI makes the `.deb` and `.rpm` for x86_64 and aarch64,
+tests them, attests them and attaches them to the draft release (step 4.7). Those
+packages have no repository entry. The signed repository below is an optional
+owner step on top, done on the owner's own machine. The owner also signs the
+four Linux update feeds (step 7) and uploads them with `stable.json` (step 8).
+The package tests in CI use a throwaway key.
+
+Optional, and only for a signed repository. One-time: create the repository signing key (separate from the update feed key),
+keep it on your machine only, and export the public half:
+
+```sh
+gpg --quick-generate-key "Secblitz Packages <support@secblitz.lol>" ed25519 sign 5y
+gpg --armor --export <KEY_ID> > secblitz-packages.asc   # public key, safe to publish
+```
+
+Each release, after the version is bumped and the Linux binary exists:
+
+```sh
+# Builds in debian:12 (glibc 2.36). Fails if the binary needs a newer GLIBC_ symbol.
+python3 scripts/build-linux-packages.py X.Y.Z target/linux/secblitz target/linux/pkgs \
+    --build-binary --key secblitz-packages.asc
+# Signs InRelease, Release.gpg and repomd.xml.asc with your key. Refuses to run in CI.
+python3 scripts/build-linux-repo.py target/linux/site target/linux/pkgs/*.deb target/linux/pkgs/*.rpm \
+    --local-user <KEY_ID>
+```
+
+Publish `target/linux/site/apt` and `target/linux/site/rpm` under `/linux/` on
+the website, and publish `secblitz-packages.asc` next to them. Keep the older
+packages in the repository so people can still roll back.
+
+Package facts worth knowing:
+
+- Removing the package stops the services, removes the repository entry and its
+  keyring, and keeps `/var/lib/secblitz` so a reinstall can still undo changes.
+- The daily background check (`secblitz-monitor.timer`) is installed but not
+  switched on. The app turns it on only when the person chooses it.
+- RPM packages are not signed one by one. The repository metadata is signed
+  (`repo_gpgcheck=1`) and it carries each package's checksum.
+
+Test the packages locally with `python3 scripts/linux-packaging-tests.py --containers`
+(needs Docker and Pillow). That run installs, upgrades, removes and purges the
+packages in Ubuntu 24.04 and 26.04, Debian 12 and 13, and Fedora 43 and 44,
+checks the units with `systemd-analyze verify`, and checks the signed
+repositories with `apt` and `dnf`.
 
 ## The portable exe
 

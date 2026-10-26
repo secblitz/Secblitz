@@ -53,7 +53,7 @@ fn protected_packages_are_protected_and_never_in_the_catalog() {
             "{name} matched by catalog"
         );
     }
-    for app in catalog() {
+    for app in catalog::CATALOG {
         let stem = app.family.trim_end_matches('*');
         assert!(
             !is_protected(stem),
@@ -568,7 +568,7 @@ fn the_catalog_only_grows_at_the_end() {
 
 #[test]
 fn newer_apps_are_exact_names_never_patterns() {
-    for app in &catalog()[56..] {
+    for app in &catalog::CATALOG[56..] {
         assert!(!app.family.contains('*'), "{}", app.family);
         assert_eq!(catalog::owner(app.family), Some(idx(app.family)));
         assert!(!is_protected(app.family), "{}", app.family);

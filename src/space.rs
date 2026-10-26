@@ -13,6 +13,8 @@ pub use windows::{
     clean_machine, clean_user, machine_roots, measure_machine, measure_user, user_roots,
 };
 
+pub mod linux;
+
 #[cfg(test)]
 mod tests;
 
@@ -22,15 +24,75 @@ pub enum Item {
     UpdateLeftovers,
     CrashDumps,
     Thumbnails,
+    PackageCaches,
+    CrashReports,
+    ThumbnailCache,
+    FlatpakRuntimes,
+    Trash,
+    OldSnaps,
+    OldKernels,
 }
 
 impl Item {
+    /// The Windows set.
     pub const ALL: [Item; 4] = [
         Item::Temp,
         Item::UpdateLeftovers,
         Item::CrashDumps,
         Item::Thumbnails,
     ];
+    pub const LINUX: [Item; 7] = [
+        Item::PackageCaches,
+        Item::OldKernels,
+        Item::OldSnaps,
+        Item::CrashReports,
+        Item::ThumbnailCache,
+        Item::FlatpakRuntimes,
+        Item::Trash,
+    ];
+    /// Every item of every system, for state that is indexed by item.
+    pub const EVERY: [Item; 11] = [
+        Item::Temp,
+        Item::UpdateLeftovers,
+        Item::CrashDumps,
+        Item::Thumbnails,
+        Item::PackageCaches,
+        Item::CrashReports,
+        Item::ThumbnailCache,
+        Item::FlatpakRuntimes,
+        Item::Trash,
+        Item::OldSnaps,
+        Item::OldKernels,
+    ];
+
+    /// The items this system offers, in the order they are shown.
+    pub fn here() -> &'static [Item] {
+        match crate::os::Os::CURRENT {
+            crate::os::Os::Windows => &Item::ALL,
+            crate::os::Os::Linux => &Item::LINUX,
+            crate::os::Os::Macos => &[],
+        }
+    }
+
+    /// The items of [`Item::here`] that make sense on this computer, so a row is never shown for something it does not have.
+    pub fn offered() -> Vec<Item> {
+        let exists = |path: &str| std::path::Path::new(path).exists();
+        Item::here()
+            .iter()
+            .copied()
+            .filter(|item| item.applies(&exists))
+            .collect()
+    }
+
+    /// Whether the programs this item works through are on the computer, as `exists` tells.
+    pub fn applies(self, exists: &dyn Fn(&str) -> bool) -> bool {
+        match self {
+            Item::OldSnaps => exists(linux::SNAP),
+            Item::OldKernels => exists(linux::APT_GET) && exists(linux::DPKG_QUERY),
+            Item::FlatpakRuntimes => exists(linux::FLATPAK),
+            _ => true,
+        }
+    }
 
     pub fn id(self) -> &'static str {
         match self {
@@ -38,6 +100,13 @@ impl Item {
             Item::UpdateLeftovers => "space.update_leftovers",
             Item::CrashDumps => "space.crash_dumps",
             Item::Thumbnails => "space.thumbnails",
+            Item::PackageCaches => "space.package_caches",
+            Item::CrashReports => "space.crash_reports",
+            Item::ThumbnailCache => "space.thumbnail_cache",
+            Item::FlatpakRuntimes => "space.flatpak_runtimes",
+            Item::Trash => "space.trash",
+            Item::OldSnaps => "space.old_snaps",
+            Item::OldKernels => "space.old_kernels",
         }
     }
 }
@@ -48,6 +117,9 @@ pub enum UserArea {
     Temp,
     CrashDumps,
     Thumbnails,
+    ThumbnailCache,
+    FlatpakUser,
+    Trash,
 }
 
 impl UserArea {
@@ -56,6 +128,9 @@ impl UserArea {
             UserArea::Temp => 0,
             UserArea::CrashDumps => 1,
             UserArea::Thumbnails => 2,
+            UserArea::ThumbnailCache => 16,
+            UserArea::FlatpakUser => 17,
+            UserArea::Trash => 18,
         }
     }
 
@@ -64,12 +139,15 @@ impl UserArea {
             0 => Some(UserArea::Temp),
             1 => Some(UserArea::CrashDumps),
             2 => Some(UserArea::Thumbnails),
+            16 => Some(UserArea::ThumbnailCache),
+            17 => Some(UserArea::FlatpakUser),
+            18 => Some(UserArea::Trash),
             _ => None,
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub struct Tally {
     pub bytes: u64,
     pub files: u64,
@@ -333,10 +411,11 @@ fn component_cleanup_outcome(reply: &serde_json::Value) -> anyhow::Result<()> {
 
 pub fn size_phrase(bytes: u64) -> String {
     const MB: u64 = 1024 * 1024;
+    let mb = ((bytes + MB / 2) / MB).max(1);
     if bytes == 0 {
         String::new()
-    } else if bytes < 1024 * MB {
-        format!("{} MB", ((bytes + MB / 2) / MB).max(1))
+    } else if mb < 1024 {
+        format!("{mb} MB")
     } else {
         format!("{:.1} GB", bytes as f64 / (1024.0 * MB as f64))
     }

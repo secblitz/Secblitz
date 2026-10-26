@@ -1,19 +1,23 @@
 //! Plain-words explanations for the raw reasons the app clean-up records.
+use crate::os::Os;
 
 pub fn removal_failure(raw: &str) -> &'static str {
+    if let Some(plain) = super::linux::plain(raw) {
+        return plain;
+    }
     let r = raw.to_lowercase();
     let has = |words: &[&str]| words.iter().any(|w| r.contains(w));
     if has(&["still installed"]) {
-        "Windows removed this app for some accounts but not all. Restart your PC and try again."
+        "Windows removed this app for some accounts but not all. Restart your computer and try again."
     } else if has(&["took too long"]) {
-        "Windows took too long to answer. Restart your PC and try again."
+        "Windows took too long to answer. Restart your computer and try again."
     } else if has(&[
         "access is denied",
         "0x80070005",
         "administrator",
         "permission",
     ]) {
-        "Windows did not allow the change. Sign in with an account that can make changes to this PC, then open Secblitz again."
+        "Windows did not allow the change. Sign in with an account that can make changes to this computer, then open Secblitz again."
     } else if has(&[
         "in use",
         "0x80073d02",
@@ -23,11 +27,11 @@ pub fn removal_failure(raw: &str) -> &'static str {
     ]) {
         "The app was open or in use. Close it, then try again."
     } else if has(&["0x80073cf", "another", "pending", "reboot"]) {
-        "Windows is busy with another change. Restart your PC and try again."
+        "Windows is busy with another change. Restart your computer and try again."
     } else if has(&["not enough space", "0x80070070", "disk full"]) {
-        "There is not enough free space on this PC. Free up some space, then try again."
+        "There is not enough free space on this computer. Free up some space, then try again."
     } else {
-        "Windows couldn't remove this app. Restart your PC and try again. If it still fails, check for a Secblitz update."
+        "Windows couldn't remove this app. Restart your computer and try again. If it still fails, check for a Secblitz update."
     }
 }
 
@@ -37,37 +41,58 @@ pub fn no_copy(raw: &str) -> &'static str {
     if has(&["not enough space", "disk full", "0x80070070", "no space"]) {
         "There is not enough free space to save a copy. Free up some space, then try again."
     } else if has(&["being used by another process", "0x80070020"]) {
-        "The app is still running, so Secblitz couldn't save a copy. Restart your PC and try again."
+        "The app is still running, so Secblitz couldn't save a copy. Restart your computer and try again."
     } else if has(&["access is denied", "0x80070005", "permission"]) {
-        "Windows did not let Secblitz save a copy. Sign in with an account that can make changes to this PC, then open Secblitz again."
+        "Windows did not let Secblitz save a copy. Sign in with an account that can make changes to this computer, then open Secblitz again."
     } else if has(&["encryption", "damaged saved data key"]) {
-        "Secblitz couldn't protect the saved copy on this PC. Restart your PC and try again."
+        "Secblitz couldn't protect the saved copy on this computer. Restart your computer and try again."
     } else if has(&["took too long"]) {
-        "Windows took too long to answer. Restart your PC and try again."
+        "Windows took too long to answer. Restart your computer and try again."
     } else {
-        "Secblitz couldn't save a copy first, so the app was left in place. Restart your PC and try again. If it still fails, check for a Secblitz update."
+        "Secblitz couldn't save a copy first, so the app was left in place. Restart your computer and try again. If it still fails, check for a Secblitz update."
     }
 }
 
 pub fn run_failure(raw: &str) -> &'static str {
+    run_failure_on(Os::CURRENT, raw)
+}
+
+/// Every reason the list could not be read with on `os`; on Linux only Secblitz's own sentences are ever shown.
+fn run_failure_on(os: Os, raw: &str) -> &'static str {
+    if let Some(plain) = super::linux::plain(raw) {
+        return plain;
+    }
+    if os != Os::Windows {
+        return super::linux::LIST_FAILED;
+    }
     let r = raw.to_lowercase();
     if r.contains("took too long") {
-        "Windows took too long to answer. Restart your PC and try again."
+        "Windows took too long to answer. Restart your computer and try again."
     } else if r.contains("only available on windows") || r.contains("only available") {
         "This works on Windows only."
     } else {
-        "Windows didn't give Secblitz the list of apps. Restart your PC and try again. If it still fails, check for a Secblitz update."
+        "Windows didn't give Secblitz the list of apps. Restart your computer and try again. If it still fails, check for a Secblitz update."
     }
 }
 
 pub fn removal_run_failure(raw: &str) -> &'static str {
+    removal_run_failure_on(Os::CURRENT, raw)
+}
+
+fn removal_run_failure_on(os: Os, raw: &str) -> &'static str {
+    if let Some(plain) = super::linux::plain(raw) {
+        return plain;
+    }
+    if os != Os::Windows {
+        return super::linux::RUN_FAILED;
+    }
     let r = raw.to_lowercase();
     if r.contains("took too long") {
-        "Windows took too long to answer. Restart your PC and try again."
+        "Windows took too long to answer. Restart your computer and try again."
     } else if r.contains("only available") {
         "This works on Windows only."
     } else {
-        "Windows couldn't remove the apps. Restart your PC and try again. If it still fails, check for a Secblitz update."
+        "Windows couldn't remove the apps. Restart your computer and try again. If it still fails, check for a Secblitz update."
     }
 }
 
@@ -79,7 +104,7 @@ mod tests {
     fn known_reasons_get_a_fix() {
         assert!(
             removal_failure("The app is still installed for at least one account.")
-                .contains("Restart your PC")
+                .contains("Restart your computer")
         );
         assert!(removal_failure("Access is denied. (0x80070005)").contains("Sign in"));
         assert!(no_copy("not enough space").contains("Free up"));
@@ -87,16 +112,18 @@ mod tests {
             "The process cannot access the file because it is being used by another process."
         )
         .contains("still running"));
-        assert!(run_failure("Windows took too long to answer").contains("too long"));
-        assert!(removal_run_failure("Windows took too long to answer").contains("too long"));
-        assert!(removal_run_failure("odd failure").contains("remove the apps"));
-        assert!(!run_failure("odd failure").contains("remove the apps"));
+        let run = |raw| run_failure_on(Os::Windows, raw);
+        let removal = |raw| removal_run_failure_on(Os::Windows, raw);
+        assert!(run("Windows took too long to answer").contains("too long"));
+        assert!(removal("Windows took too long to answer").contains("too long"));
+        assert!(removal("odd failure").contains("remove the apps"));
+        assert!(!run("odd failure").contains("remove the apps"));
         assert_eq!(
-            run_failure("Only available on Windows"),
+            run("Only available on Windows"),
             "This works on Windows only."
         );
         assert_eq!(
-            removal_run_failure("Only available on Windows"),
+            removal("Only available on Windows"),
             "This works on Windows only."
         );
         for out in [
@@ -104,16 +131,44 @@ mod tests {
             no_copy("Only available on Windows"),
         ] {
             assert!(!out.contains("Only available"));
-            assert!(out.contains("Restart your PC"));
+            assert!(out.contains("Restart your computer"));
+        }
+    }
+
+    #[test]
+    fn linux_sentences_are_shown_as_they_are() {
+        use super::super::linux;
+        for sentence in linux::SENTENCES {
+            assert_eq!(removal_failure(sentence), sentence);
+            assert_eq!(run_failure(sentence), sentence);
+            assert_eq!(removal_run_failure(sentence), sentence);
+        }
+    }
+
+    #[test]
+    fn other_systems_never_get_a_sentence_that_names_windows() {
+        use super::super::linux;
+        for raw in [
+            "Secblitz is busy with another task. Try again in a moment.",
+            "took too long",
+            "Only available on Windows",
+            "",
+        ] {
+            assert_eq!(run_failure_on(Os::Linux, raw), linux::LIST_FAILED);
+            assert_eq!(removal_run_failure_on(Os::Linux, raw), linux::RUN_FAILED);
         }
     }
 
     #[test]
     fn unknown_reasons_never_echo_raw_text() {
         let raw = "Deployment failed with HRESULT: 0x8007ZZZZ, Add-AppxPackage";
-        for out in [removal_failure(raw), no_copy(raw), run_failure(raw)] {
+        for out in [
+            removal_failure(raw),
+            no_copy(raw),
+            run_failure_on(Os::Windows, raw),
+        ] {
             assert!(!out.contains("HRESULT") && !out.contains("Appx"));
-            assert!(out.contains("Restart your PC"));
+            assert!(out.contains("Restart your computer"));
         }
     }
 

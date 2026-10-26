@@ -2,6 +2,7 @@
 //! The same table drives the engine, the platform wire validation and the PowerShell backend, which receives the spec as JSON from [`Spec::script_json`] so Rust and PowerShell cannot disagree about what is safe.
 //! A write only moves a key between an unsafe original and its fixed value ([`fix_of`]); safe keys are never touched and a key that drifted to anything else blocks the write. Absent values equal to Windows' own safe default count as protected. Journal data names only keys of this table (or, for dynamic controls, keys that pass a strict name check and exist at write time).
 mod specs;
+pub(crate) use specs::{set, text};
 #[cfg(test)]
 mod tests;
 
@@ -279,6 +280,86 @@ pub fn item_fix(rule: Rule, v: &Item) -> Item {
             _ => fix_of(rule, None).map_or(Item::Absent, Item::Num),
         },
     }
+}
+
+/// The fixed values of a control whose keys are all known ahead of time.
+pub(crate) fn fixed_target(keys: &[Key]) -> Value {
+    let mut items = Map::new();
+    for k in keys {
+        let fixed = match k.rule {
+            Rule::Set { fix, .. } => fix.map_or(Value::Null, Value::from),
+            Rule::Text { fix, .. } => fix.map_or(Value::Null, Value::from),
+            Rule::Exposure => Value::Null,
+        };
+        items.insert(k.name.into(), fixed);
+    }
+    json!({ "items": items })
+}
+
+/// Reads a control's `{"items": {...}}` value, rejecting anything that is not a legal setting of one of its keys.
+/// With `required` set, exactly that many keys must be present.
+pub(crate) fn parse_items<'k>(
+    id: &str,
+    value: &Value,
+    key: impl Fn(&str) -> Option<&'k Key>,
+    required: Option<usize>,
+) -> anyhow::Result<Vec<(String, Item)>> {
+    use anyhow::{ensure, Context};
+    let obj = value
+        .as_object()
+        .context("Invalid hardening state: expected an object")?;
+    ensure!(
+        obj.len() == 1,
+        "Invalid hardening state: expected exactly one items field"
+    );
+    let items = obj
+        .get("items")
+        .and_then(Value::as_object)
+        .context("Invalid hardening state: items must be an object")?;
+    ensure!(items.len() <= 256, "Too many hardening items");
+    let mut out = Vec::new();
+    for (name, v) in items {
+        let key = key(name).with_context(|| format!("Unknown hardening item for {id}"))?;
+        let parsed = Item::from_json(v)?;
+        match (&parsed, key.rule) {
+            (Item::Absent, Rule::Exposure) => anyhow::bail!("Exposure state cannot be absent"),
+            (Item::Absent, _) => {}
+            (Item::Text(t), Rule::Text { .. }) => {
+                ensure!(text_ok(t, key.max), "Hardening text is not a legal setting");
+            }
+            (Item::Text(_), _) | (Item::Num(_), Rule::Text { .. }) => {
+                anyhow::bail!("Hardening item has the wrong kind of value")
+            }
+            (Item::Num(n), _) => {
+                ensure!(*n <= key.max, "Hardening value out of range");
+                ensure!(
+                    key.allowed.is_empty() || key.allowed.contains(n),
+                    "Hardening value is not a legal setting"
+                );
+            }
+        }
+        out.push((name.clone(), parsed));
+    }
+    if let Some(count) = required {
+        ensure!(
+            out.len() == count,
+            "Hardening state must contain every item"
+        );
+    }
+    Ok(out)
+}
+
+/// The value a before-image moves to: each unsafe key to its fix, safe keys unchanged.
+pub(crate) fn derive_items<'k>(
+    parsed: Vec<(String, Item)>,
+    key: impl Fn(&str) -> Option<&'k Key>,
+) -> anyhow::Result<Value> {
+    let mut items = Map::new();
+    for (name, v) in parsed {
+        let key = key(&name).expect("parsed key exists");
+        items.insert(name, item_fix(key.rule, &v).to_json());
+    }
+    Ok(json!({ "items": items }))
 }
 
 /// Plain single-line text, so a journaled original can be written back exactly.
@@ -585,64 +666,16 @@ impl Spec {
         if self.dynamic() {
             return json!("derived-items-v1");
         }
-        let mut items = Map::new();
-        for k in self.keys {
-            let fixed = match k.rule {
-                Rule::Set { fix, .. } => fix.map_or(Value::Null, Value::from),
-                Rule::Text { fix, .. } => fix.map_or(Value::Null, Value::from),
-                Rule::Exposure => Value::Null,
-            };
-            items.insert(k.name.into(), fixed);
-        }
-        json!({ "items": items })
+        fixed_target(self.keys)
     }
 
     fn parse(&self, value: &Value) -> anyhow::Result<Vec<(String, Item)>> {
-        use anyhow::{ensure, Context};
-        let obj = value
-            .as_object()
-            .context("Invalid hardening state: expected an object")?;
-        ensure!(
-            obj.len() == 1,
-            "Invalid hardening state: expected exactly one items field"
-        );
-        let items = obj
-            .get("items")
-            .and_then(Value::as_object)
-            .context("Invalid hardening state: items must be an object")?;
-        ensure!(items.len() <= 256, "Too many hardening items");
-        let mut out = Vec::new();
-        for (name, v) in items {
-            let key = self
-                .key(name)
-                .with_context(|| format!("Unknown hardening item for {}", self.id))?;
-            let parsed = Item::from_json(v)?;
-            match (&parsed, key.rule) {
-                (Item::Absent, Rule::Exposure) => anyhow::bail!("Exposure state cannot be absent"),
-                (Item::Absent, _) => {}
-                (Item::Text(t), Rule::Text { .. }) => {
-                    ensure!(text_ok(t, key.max), "Hardening text is not a legal setting");
-                }
-                (Item::Text(_), _) | (Item::Num(_), Rule::Text { .. }) => {
-                    anyhow::bail!("Hardening item has the wrong kind of value")
-                }
-                (Item::Num(n), _) => {
-                    ensure!(*n <= key.max, "Hardening value out of range");
-                    ensure!(
-                        key.allowed.is_empty() || key.allowed.contains(n),
-                        "Hardening value is not a legal setting"
-                    );
-                }
-            }
-            out.push((name.clone(), parsed));
-        }
-        if !self.dynamic() {
-            ensure!(
-                out.len() == self.keys.len(),
-                "Hardening state must contain every item"
-            );
-        }
-        Ok(out)
+        parse_items(
+            self.id,
+            value,
+            |name| self.key(name),
+            (!self.dynamic()).then_some(self.keys.len()),
+        )
     }
 
     pub fn validate(&self, value: &Value) -> anyhow::Result<()> {
@@ -658,12 +691,7 @@ impl Spec {
     }
 
     pub fn derive_target(&self, before: &Value) -> anyhow::Result<Value> {
-        let mut items = Map::new();
-        for (name, v) in self.parse(before)? {
-            let key = self.key(&name).expect("parsed key exists");
-            items.insert(name, item_fix(key.rule, &v).to_json());
-        }
-        Ok(json!({ "items": items }))
+        derive_items(self.parse(before)?, |name| self.key(name))
     }
 
     /// Controls whose recorded items are compared exactly as journaled (never
