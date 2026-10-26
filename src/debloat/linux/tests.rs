@@ -477,7 +477,11 @@ impl Sys for Seen<'_> {
             let installed = self.2[n.min(self.2.len() - 1)];
             return Ok(crate::linux::cmd::Output {
                 status: i32::from(!installed),
-                stdout: if installed { "ii ".into() } else { String::new() },
+                stdout: if installed {
+                    "ii ".into()
+                } else {
+                    String::new()
+                },
                 stderr: String::new(),
             });
         }
@@ -523,7 +527,12 @@ fn the_record_keeps_only_the_newest_lines_and_skips_bad_ones() {
 #[test]
 fn a_successful_removal_is_recorded() {
     let sys = ubuntu();
-    sys.reply("/usr/bin/apt-get", &["-s", "remove", "xrdp"], 0, "Remv xrdp [1]\n");
+    sys.reply(
+        "/usr/bin/apt-get",
+        &["-s", "remove", "xrdp"],
+        0,
+        "Remv xrdp [1]\n",
+    );
     sys.reply("/usr/bin/apt-get", &["remove", "-y", "xrdp"], 0, "");
     let seen = Seen(&sys, std::cell::Cell::new(0), &[true, true, false]);
     assert_eq!(remove_recorded(&seen, "xrdp", 50), PackageOutcome::Removed);
