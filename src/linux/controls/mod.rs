@@ -8,6 +8,7 @@ pub mod ini;
 pub mod kernel;
 pub mod privacy;
 pub mod remote;
+pub mod services;
 pub mod units;
 pub mod updates;
 

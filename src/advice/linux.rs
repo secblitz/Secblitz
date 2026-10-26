@@ -28,6 +28,11 @@ pub(super) fn label(id: &str) -> Option<&'static str> {
         "linux.recent_files" => "Recent files list",
         "linux.lock_previews" => "Messages on the lock screen",
         "linux.ubuntu_insights" => "Ubuntu usage reports",
+        "linux.time_sync" => "Automatic clock",
+        "linux.printer_sharing" => "Printer sharing",
+        "linux.printer_discovery" => "Network printer finder",
+        "linux.ubuntu_news" => "Ubuntu news downloads",
+        "linux.snap_updates" => "App store updates",
         _ => return None,
     })
 }
@@ -70,6 +75,19 @@ pub(super) fn impact(id: &str) -> Option<&'static str> {
         "linux.ubuntu_insights" => {
             "Details about your computer and software being sent to Ubuntu's makers"
         }
+        "linux.time_sync" => "Secure connections failing because your computer has the wrong time",
+        "linux.printer_sharing" => {
+            "Other computers on the network using your printers or changing how printing works"
+        }
+        "linux.printer_discovery" => {
+            "A stranger on the network adding a fake printer that attacks your computer"
+        }
+        "linux.ubuntu_news" => {
+            "Ubuntu's makers learning that your computer is online while they show you news"
+        }
+        "linux.snap_updates" => {
+            "Apps from Ubuntu's app store staying out of date with known security holes"
+        }
         _ => return None,
     })
 }
@@ -95,6 +113,13 @@ pub(super) fn repair(id: &str) -> Option<&'static str> {
         "linux.remote_desktop" => "Screen sharing from other computers will be switched off.",
         "linux.lock_previews" => "The text of messages will be hidden while the screen is locked.",
         "linux.ubuntu_insights" => "Sending usage reports to Ubuntu will be switched off.",
+        "linux.time_sync" => "The clock will set itself from the internet.",
+        "linux.printer_sharing" => "Sharing printers with other computers will be switched off.",
+        "linux.printer_discovery" => {
+            "Printers announced by other computers the old way will be ignored."
+        }
+        "linux.ubuntu_news" => "Ubuntu will stop downloading news and advertising.",
+        "linux.snap_updates" => "The hold on app store updates will end.",
         _ => return None,
     })
 }
@@ -169,6 +194,10 @@ pub(super) fn not_offered(reason: &str) -> Option<&'static str> {
         c::REMOTE_SIGN_IN_OFF,
         c::REMOTE_SIGN_IN_UNREADABLE,
         c::NO_NETWORK_MANAGER,
+        c::services::NO_TIME_SYNC,
+        c::services::NO_PRINTING,
+        c::services::NO_PRINTER_FINDER,
+        c::services::NO_SNAP_STORE,
         c::UNRECOGNISED,
         crate::linux::person::UNAVAILABLE,
     ]

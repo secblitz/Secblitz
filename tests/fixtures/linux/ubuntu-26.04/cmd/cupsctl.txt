@@ -1,0 +1,16 @@
+_debug_logging=0
+_remote_admin=0
+_remote_any=0
+_share_printers=0
+_user_cancel_any=0
+BrowseLocalProtocols=dnssd
+DefaultAuthType=Basic
+ErrorPolicy=retry-job
+IdleExitTimeout=60
+JobPrivateAccess=default
+JobPrivateValues=default
+MaxLogSize=0
+PageLogFormat=
+SubscriptionPrivateAccess=default
+SubscriptionPrivateValues=default
+WebInterface=Yes

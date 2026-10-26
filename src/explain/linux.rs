@@ -97,6 +97,31 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             "The reports hold no files, but they describe your computer and software in detail.",
             "No more reports are sent. Ubuntu works exactly as before, and you can turn this back on.",
         ),
+        "linux.time_sync" => e(
+            "Your computer can set its clock from the internet by itself. This checks that it does.",
+            "A wrong clock makes secure connections fail and hides expired security certificates.",
+            "The clock keeps itself right using internet time servers. Nothing else changes, and you can undo this.",
+        ),
+        "linux.printer_sharing" => e(
+            "Your printing service can share your printers with the network and let other computers manage it. This checks that it does not.",
+            "Anyone on the same network may use your printers, read what you print or change how printing works.",
+            "Your printers are used from this computer only. Sharing stops, and you can undo this.",
+        ),
+        "linux.printer_discovery" => e(
+            "Your computer can add printers that other computers announce on the network, using an old method. This checks that the old method is off.",
+            "A stranger on the network can announce a fake printer that attacks your computer as soon as it is added.",
+            "Printers announced the old way are ignored. Printers you add yourself keep working, and you can undo this.",
+        ),
+        "linux.ubuntu_news" => e(
+            "Ubuntu downloads news and advertising from its makers to show in update messages and in the text at sign-in.",
+            "Each download tells the company that your computer is online and which version of Ubuntu it runs.",
+            "Those messages stop. Updates still install as before, and you can undo this.",
+        ),
+        "linux.snap_updates" => e(
+            "Apps from Ubuntu's app store update by themselves. Their updates can be held back for a long time, and this checks for that.",
+            "Apps that are held back keep known security holes open, even when the fixes are already out.",
+            "The hold ends and the apps update on their own again. You can undo this to put the hold back as it was.",
+        ),
         "Linux disk encryption" => e(
             "Disk encryption scrambles everything on your drive so it can only be read after you sign in. It is off on this computer.",
             "Anyone who finds or steals your computer can take out the drive and read your files without a password.",

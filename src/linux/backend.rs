@@ -19,7 +19,7 @@ pub struct LinuxBackend<S: Sys> {
     memo: PathBuf,
 }
 
-const TEXT: [(&str, &str, &str); 13] = [
+const TEXT: [(&str, &str, &str); 18] = [
     (
         "linux.firewall",
         "Firewall",
@@ -85,6 +85,31 @@ const TEXT: [(&str, &str, &str); 13] = [
         "Wi-Fi address",
         "Whether new Wi-Fi connections show the real hardware address of this computer to the network.",
     ),
+    (
+        "linux.time_sync",
+        "Clock",
+        "Sets the clock from the internet so it stays correct.",
+    ),
+    (
+        "linux.printer_sharing",
+        "Printer sharing",
+        "Lets other computers on the network use your printers or manage printing here.",
+    ),
+    (
+        "linux.printer_discovery",
+        "Network printer finder",
+        "Adds printers that other computers announce on the network without asking you.",
+    ),
+    (
+        "linux.ubuntu_news",
+        "Ubuntu news",
+        "Downloads news and advertising from Ubuntu's makers to show in update messages and when you sign in.",
+    ),
+    (
+        "linux.snap_updates",
+        "App store updates",
+        "Whether updates of apps from Ubuntu's app store are held back.",
+    ),
 ];
 
 /// Every title and description a person can read, for the translation tests.
@@ -120,6 +145,7 @@ impl<S: Sys> LinuxBackend<S> {
         match id {
             "linux.fedora_open_ports" | "linux.countme" => self.distro.family == Family::Fedora,
             "linux.crash_reports" => self.distro.family == Family::Debian,
+            "linux.ubuntu_news" => self.distro.id == "ubuntu",
             _ => true,
         }
     }
@@ -199,6 +225,11 @@ impl<S: Sys> Backend for LinuxBackend<S> {
             "linux.countme" => controls::privacy::observe_countme(&cx),
             "linux.connectivity_check" => controls::privacy::observe_connectivity(&cx),
             "linux.wifi_mac" => controls::privacy::observe_wifi_mac(&cx),
+            "linux.time_sync" => controls::services::observe_time_sync(&cx),
+            "linux.printer_sharing" => controls::services::observe_printer_sharing(&cx),
+            "linux.printer_discovery" => controls::services::observe_printer_discovery(&cx),
+            "linux.ubuntu_news" => controls::services::observe_ubuntu_news(&cx),
+            "linux.snap_updates" => controls::services::observe_snap_updates(&cx),
             _ => bail!("Unknown control id: {id}"),
         };
         result.map_err(|e| detail(id, &e, READ_FAILED))
@@ -223,6 +254,11 @@ impl<S: Sys> Backend for LinuxBackend<S> {
             "linux.countme" => controls::privacy::write_countme(&cx, &want),
             "linux.connectivity_check" => controls::privacy::write_connectivity(&cx, &want),
             "linux.wifi_mac" => controls::privacy::write_wifi_mac(&cx, &want),
+            "linux.time_sync" => controls::services::write_time_sync(&cx, &want),
+            "linux.printer_sharing" => controls::services::write_printer_sharing(&cx, &want),
+            "linux.printer_discovery" => controls::services::write_printer_discovery(&cx, &want),
+            "linux.ubuntu_news" => controls::services::write_ubuntu_news(&cx, &want),
+            "linux.snap_updates" => controls::services::write_snap_updates(&cx, &want),
             _ => bail!("Unknown control id: {id}"),
         };
         result.map_err(|e| detail(id, &e, CHANGE_FAILED))

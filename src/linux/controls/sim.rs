@@ -10,6 +10,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+mod services;
+
 #[derive(Default)]
 pub struct Inner {
     pub files: RefCell<BTreeMap<PathBuf, Vec<u8>>>,
@@ -61,6 +63,7 @@ impl Sim {
             .join(name)
             .join("root");
         read_tree(&root, &root, &mut sim.files.borrow_mut());
+        services::load_recordings(&sim, &root.with_file_name("cmd"));
         for tool in ["/usr/bin/ls", "/usr/bin/systemctl"] {
             sim.tools.borrow_mut().insert(tool.into());
         }
@@ -371,6 +374,9 @@ impl Sim {
     }
 
     fn dispatch(&self, program: &str, args: &[&str]) -> Result<Output> {
+        if let Some(done) = services::dispatch(self, program, args) {
+            return done;
+        }
         match program {
             "/usr/bin/ls" => self.ls(args[1]),
             "/usr/bin/systemctl" => self.systemctl(args),
