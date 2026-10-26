@@ -37,9 +37,68 @@ mod os_catalogs {
     }
 
     #[test]
-    fn linux_and_macos_have_no_checks_yet() {
-        assert!(ids(Os::Linux).is_empty());
+    fn macos_has_no_checks_yet() {
         assert!(ids(Os::Macos).is_empty());
+    }
+
+    #[test]
+    fn the_linux_catalog_lists_the_linux_ids_and_none_of_windows() {
+        let linux = ids(Os::Linux);
+        assert!(linux.contains(&"linux.firewall"));
+        let windows = ids(Os::Windows);
+        for id in &linux {
+            assert!(!windows.contains(id), "{id}");
+            assert!(target_in(Os::Linux, id).is_ok(), "{id}");
+            assert!(target_in(Os::Windows, id).is_err(), "{id}");
+            assert!(target_in(Os::Macos, id).is_err(), "{id}");
+        }
+        for id in &windows {
+            assert!(target_in(Os::Linux, id).is_err(), "{id}");
+        }
+    }
+
+    #[test]
+    fn a_linux_engine_checks_fixes_and_undoes_a_linux_control() {
+        const SSH: &str = "linux.ssh_server";
+        let dir = tempfile::tempdir().unwrap();
+        let state = Rc::new(RefCell::new(FakeState::default()));
+        let on = json!({"items": {"enabled": 1}});
+        let off = json!({"items": {"enabled": 0}});
+        state.borrow_mut().values.insert(SSH.into(), on.clone());
+        state.borrow_mut().catalog_target = Some(target_in(Os::Linux, SSH).unwrap());
+        let open = || {
+            Engine::open_for(Os::Linux, dir.path().into(), backend(&state, &[SSH], "machine-a"))
+                .unwrap()
+        };
+        let mut e = open();
+        assert_eq!(e.audit().unwrap().results[0].status, CheckStatus::Attention);
+        e.apply(|_| {}).unwrap();
+        assert_eq!(state.borrow().values[SSH], off);
+        assert_eq!(e.audit().unwrap().results[0].status, CheckStatus::Compliant);
+        drop(e);
+        let mut e = open();
+        e.revert(|_| {}).unwrap();
+        assert_eq!(state.borrow().values[SSH], on);
+    }
+
+    #[test]
+    fn a_linux_engine_refuses_a_value_that_is_not_a_legal_setting() {
+        const SSH: &str = "linux.ssh_server";
+        let dir = tempfile::tempdir().unwrap();
+        let state = Rc::new(RefCell::new(FakeState::default()));
+        state
+            .borrow_mut()
+            .values
+            .insert(SSH.into(), json!({"items": {"enabled": 7}}));
+        state.borrow_mut().catalog_target = Some(target_in(Os::Linux, SSH).unwrap());
+        let mut e = Engine::open_for(
+            Os::Linux,
+            dir.path().into(),
+            backend(&state, &[SSH], "machine-a"),
+        )
+        .unwrap();
+        assert!(e.apply(|_| {}).is_err());
+        assert!(state.borrow().writes.is_empty());
     }
 
     #[test]

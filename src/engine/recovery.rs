@@ -13,7 +13,10 @@ use std::{fs, io::Write};
 /// original cannot be inferred; it requires review. COW staging has
 /// an independent committed snapshot and handles ACLs separately.
 fn finite_before_values(id: &str) -> Result<Vec<Value>> {
-    if permission_control(id) || crate::hardening::is_hardening_check_id(id) {
+    if permission_control(id)
+        || crate::hardening::is_hardening_check_id(id)
+        || crate::linux::catalog::spec(id).is_some()
+    {
         return Ok(Vec::new());
     }
     let expected = target(id)?;

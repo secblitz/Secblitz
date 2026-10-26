@@ -27,7 +27,7 @@ const WINDOWS_FIXED_IDS: [&str; 18] = [
     "permissions.service.wuauserv",
 ];
 
-/// Every control id compiled in for `os`. Linux and macOS have none yet.
+/// Every control id compiled in for `os`. macOS has none yet.
 pub fn ids(os: Os) -> Vec<&'static str> {
     match os {
         Os::Windows => crate::hardening::all()
@@ -35,7 +35,11 @@ pub fn ids(os: Os) -> Vec<&'static str> {
             .map(|s| s.id)
             .chain(WINDOWS_FIXED_IDS)
             .collect(),
-        Os::Linux | Os::Macos => Vec::new(),
+        Os::Linux => crate::linux::catalog::specs()
+            .iter()
+            .map(|s| s.id)
+            .collect(),
+        Os::Macos => Vec::new(),
     }
 }
 
@@ -43,7 +47,11 @@ pub fn ids(os: Os) -> Vec<&'static str> {
 pub(super) fn target_in(os: Os, id: &str) -> Result<Value> {
     match os {
         Os::Windows => target(id),
-        Os::Linux | Os::Macos => bail!("Unknown control id: {id}"),
+        Os::Linux => match crate::linux::catalog::spec(id) {
+            Some(spec) => Ok(spec.catalog_target()),
+            None => bail!("Unknown control id: {id}"),
+        },
+        Os::Macos => bail!("Unknown control id: {id}"),
     }
 }
 
@@ -99,6 +107,9 @@ pub(super) fn machine_registry_control(id: &str) -> bool {
 /// Catalog targets are fixed. Only the two compiled service IDs derive a write
 /// value from an exact, validated before-image; the sentinel is never written.
 pub(super) fn target_for(id: &str, before: &Value) -> Result<Value> {
+    if let Some(spec) = crate::linux::catalog::spec(id) {
+        return spec.derive_target(before);
+    }
     if let Some(spec) = crate::hardening::spec(id) {
         return spec.derive_target(before);
     }
@@ -114,6 +125,9 @@ pub(super) fn target_for(id: &str, before: &Value) -> Result<Value> {
 }
 
 pub(super) fn validate_value(id: &str, value: &Value) -> Result<()> {
+    if let Some(spec) = crate::linux::catalog::spec(id) {
+        return spec.validate(value);
+    }
     if let Some(spec) = crate::hardening::spec(id) {
         return spec.validate(value);
     }
@@ -215,6 +229,18 @@ pub(super) fn firewall_protected(o: &Observation) -> Result<bool> {
 }
 
 pub(super) fn assessment_status(id: &str, o: &Observation) -> Result<CheckStatus> {
+    if let Some(spec) = crate::linux::catalog::spec(id) {
+        if spec.nothing_to_protect(&o.value) {
+            return Ok(CheckStatus::Skipped);
+        }
+        return Ok(if !spec.any_unsafe(&o.value) {
+            CheckStatus::Compliant
+        } else if apply_eligible(id, o) {
+            CheckStatus::Attention
+        } else {
+            CheckStatus::Skipped
+        });
+    }
     if firewall_control(id) {
         return Ok(if firewall_protected(o)? {
             CheckStatus::Compliant
@@ -251,6 +277,9 @@ pub(super) fn assessment_status(id: &str, o: &Observation) -> Result<CheckStatus
 pub(super) fn apply_eligible(id: &str, o: &Observation) -> bool {
     if !o.eligible {
         return false;
+    }
+    if let Some(spec) = crate::linux::catalog::spec(id) {
+        return spec.any_unsafe(&o.value);
     }
     if firewall_control(id) {
         return o.authority == Some(Authority::Local) && matches!(firewall_protected(o), Ok(false));
