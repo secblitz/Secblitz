@@ -4,9 +4,9 @@
 
 use super::Cx;
 use crate::advice::{
-    ACCOUNTS_WITHOUT_PASSWORD, ADMIN_WITHOUT_PASSWORD, DISK_ENCRYPTION, HARDWARE_UPDATES,
-    LINUX_SECURE_BOOT, PROGRAM_LIMITS, RESTART_NEEDED, SECURITY_SUPPORT, UNCHECKED_SOURCES,
-    UPDATES_WAITING,
+    ACCOUNTS_WITHOUT_PASSWORD, ADMIN_WITHOUT_PASSWORD, DISK_ENCRYPTION, EXTRA_ADMIN_ACCOUNTS,
+    HARDWARE_UPDATES, LINUX_SECURE_BOOT, PROGRAM_LIMITS, RESTART_NEEDED, SECURITY_SUPPORT,
+    UNCHECKED_SOURCES, UPDATES_WAITING,
 };
 use crate::linux::cmd::Output;
 use crate::linux::distro::{field, Family};
@@ -45,7 +45,11 @@ pub const SUPPORT_ENDED: &str = "Security updates for your version of Linux have
 pub const NO_HARDWARE_UPDATES: &str = "No updates are waiting for the parts inside your computer.";
 pub const HARDWARE_WAITING: &str = "Updates are waiting for the parts inside your computer.";
 
-pub const SENTENCES: [&str; 27] = [
+pub const ONE_ALL_POWERFUL: &str =
+    "Only the main administrator account has full control of this computer.";
+pub const EXTRA_ALL_POWERFUL: &str = "At least one more account has full control of this computer.";
+
+pub const SENTENCES: [&str; 29] = [
     ENCRYPTED,
     NOT_ENCRYPTED,
     ENCRYPTION_UNKNOWN,
@@ -73,9 +77,11 @@ pub const SENTENCES: [&str; 27] = [
     SUPPORT_ENDED,
     NO_HARDWARE_UPDATES,
     HARDWARE_WAITING,
+    ONE_ALL_POWERFUL,
+    EXTRA_ALL_POWERFUL,
 ];
 
-pub const TITLES: [&str; 10] = [
+pub const TITLES: [&str; 11] = [
     DISK_ENCRYPTION,
     LINUX_SECURE_BOOT,
     UPDATES_WAITING,
@@ -86,6 +92,7 @@ pub const TITLES: [&str; 10] = [
     UNCHECKED_SOURCES,
     SECURITY_SUPPORT,
     HARDWARE_UPDATES,
+    EXTRA_ADMIN_ACCOUNTS,
 ];
 
 const SECURE_BOOT_VARIABLE: &str =
@@ -272,6 +279,16 @@ fn admin_never_asks(cx: &Cx) -> Option<bool> {
         }
     }
     Some(texts.iter().any(|t| t.lines().any(rule_never_asks)))
+}
+
+/// Whether an account other than root has user id 0 in the account list.
+fn extra_all_powerful(cx: &Cx) -> Option<bool> {
+    let passwd = cx.text("/etc/passwd").ok()??;
+    Some(passwd.lines().any(|l| {
+        let mut fields = l.split(':');
+        let name = fields.next();
+        name.is_some_and(|n| !n.is_empty() && n != "root") && fields.nth(1) == Some("0")
+    }))
 }
 
 fn is_yes(value: &str) -> bool {
@@ -514,6 +531,15 @@ pub fn collect(cx: &Cx) -> Vec<Finding> {
             Some(checked),
             SOURCES_CHECKED,
             SOURCES_UNCHECKED,
+            "",
+        ));
+    }
+    if let Some(none) = extra_all_powerful(cx).map(|any| !any) {
+        found.push(finding(
+            TITLES[10],
+            Some(none),
+            ONE_ALL_POWERFUL,
+            EXTRA_ALL_POWERFUL,
             "",
         ));
     }

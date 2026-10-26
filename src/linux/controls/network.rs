@@ -220,9 +220,9 @@ const LLMNR_FOLDER_MEMO: &str = "llmnr-folder";
 const RESOLVED_UNIT: &str = "systemd-resolved.service";
 const RESOLVECTL: &str = "/usr/bin/resolvectl";
 const SYSTEMCTL: &str = "/usr/bin/systemctl";
-const TEST: &str = "/usr/bin/test";
-const MKDIR: &str = "/usr/bin/mkdir";
-const RMDIR: &str = "/usr/bin/rmdir";
+pub(super) const TEST: &str = "/usr/bin/test";
+pub(super) const MKDIR: &str = "/usr/bin/mkdir";
+pub(super) const RMDIR: &str = "/usr/bin/rmdir";
 
 /// The word systemd uses for the setting; `None` when the text is not one it knows.
 fn llmnr_word(value: &str) -> Option<&'static str> {

@@ -97,6 +97,51 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             "On a page that is not protected, anyone on the same network can read what you type or change what you see.",
             "Firefox warns you first, and you can still open the page. It will say your organization manages it, which only means a setting was made here.",
         ),
+        "linux.memory_shuffle" => e(
+            "The system can place each program's memory in a different spot every time it runs, so attacks that count on a fixed spot fail.",
+            "Without it, a harmful program can find the pieces it wants to attack much more easily.",
+            "Each program gets a different layout every time it starts. Programs work as before, and you can undo this.",
+        ),
+        "linux.bpf_hardening" => e(
+            "The system lets small programs run inside it for speed. Ordinary users should not be able to add their own, and the ones that run should be guarded.",
+            "Flaws here are a common way for a harmful program to gain far more control than it should have.",
+            "Small programs inside the system are guarded better. Everything you use works as before, and you can undo this.",
+        ),
+        "linux.terminal_drivers" => e(
+            "Any program can make the system load old drivers for text terminals, even ones you never use.",
+            "Some of these old drivers have flaws that let a harmful program take over the computer.",
+            "Old terminal drivers only load when an administrator asks. Normal use is not affected, and you can undo this.",
+        ),
+        "linux.crash_memory" => e(
+            "When a program that runs with extra rights crashes, the system can save a copy of its memory, which may hold secrets.",
+            "Passwords and other secrets from that program can end up in a file on your disk.",
+            "Such programs no longer leave a copy of their memory. Tools for finding faults may see less, and you can undo this.",
+        ),
+        "linux.crash_files" => e(
+            "When a program crashes, the system can keep a copy of what it held in memory on your disk, to help find the fault.",
+            "That copy can hold passwords and private text, and it stays on the disk until it is cleaned up.",
+            "New crashes no longer save a copy. Files saved earlier stay where they are, and you can undo this.",
+        ),
+        "linux.rare_protocols" => e(
+            "Your computer knows a few rarely used ways of talking over the network that almost nobody needs, yet any program can switch them on.",
+            "Flaws in these rarely used features have been used to attack computers, so they are best left off.",
+            "These features no longer start by themselves. Anything already running is left alone, and you can undo this.",
+        ),
+        "linux.app_sandbox_limits" => e(
+            "Apps can make a private box for themselves to run in. Ubuntu asks for permission first, and this checks that it does.",
+            "A harmful app can use such a box to get around the limits placed on it.",
+            "Apps need permission to make a private box. A few apps from outside the store may ask for it, and you can undo this.",
+        ),
+        "linux.processor_updates" => e(
+            "Processor makers send fixes for security flaws in their chips. Your computer loads them each time it starts.",
+            "Without the fixes, flaws in the processor itself stay open, and no setting can close them.",
+            "The processor update is installed from your software sources. Nothing else changes, and you can undo this.",
+        ),
+        "linux.root_account" => e(
+            "The main administrator account can change everything on this computer. It is normally locked, so nobody can sign in to it with a password.",
+            "An account with a password can be guessed from the network or the sign-in screen, and it has no limits at all.",
+            "The account is locked and your other administrators keep working. You can undo this.",
+        ),
         "linux.screen_lock" => e(
             "Your screen should lock when you walk away. This checks that locking is on and that it does not wait forever.",
             "Anyone who walks past can read your screen and use your accounts while you are gone.",
@@ -227,6 +272,11 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             "Those updates fix weak spots in parts such as the startup software, which other updates do not reach.",
             "We leave updating to you. Open your software app and install them. Some need a restart afterwards.",
         ),
+        crate::advice::EXTRA_ADMIN_ACCOUNTS => e(
+            "Some accounts have full control of this computer, with no limits. Only the main administrator account should.",
+            "An extra account like that can change anything on this computer, and it is a common way for attackers to stay hidden.",
+            "We leave it as it is. Ask whoever set up this computer why the extra account is there, and remove it if it is not needed.",
+        ),
         _ => return None,
     })
 }
@@ -235,7 +285,7 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
 mod tests {
     use super::*;
 
-    const FINDINGS: [&str; 10] = [
+    const FINDINGS: [&str; 11] = [
         crate::advice::DISK_ENCRYPTION,
         crate::advice::LINUX_SECURE_BOOT,
         crate::advice::UPDATES_WAITING,
@@ -246,6 +296,7 @@ mod tests {
         crate::advice::UNCHECKED_SOURCES,
         crate::advice::SECURITY_SUPPORT,
         crate::advice::HARDWARE_UPDATES,
+        crate::advice::EXTRA_ADMIN_ACCOUNTS,
     ];
 
     #[test]

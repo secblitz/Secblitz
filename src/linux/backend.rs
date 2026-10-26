@@ -19,7 +19,7 @@ pub struct LinuxBackend<S: Sys> {
     memo: PathBuf,
 }
 
-const TEXT: [(&str, &str, &str); 23] = [
+const TEXT: [(&str, &str, &str); 32] = [
     (
         "linux.firewall",
         "Firewall",
@@ -135,6 +135,51 @@ const TEXT: [(&str, &str, &str); 23] = [
         "Secure connections only",
         "Whether Firefox warns you before it opens a page that is not protected.",
     ),
+    (
+        "linux.memory_shuffle",
+        "Memory layout",
+        "Whether the system places each program's memory in a different spot every time, which makes attacks harder.",
+    ),
+    (
+        "linux.bpf_hardening",
+        "Small programs inside the system",
+        "Whether ordinary users can load their own small programs into the system and how well those are guarded.",
+    ),
+    (
+        "linux.terminal_drivers",
+        "Old terminal drivers",
+        "Whether any program can make the system load old drivers for text terminals.",
+    ),
+    (
+        "linux.crash_memory",
+        "Memory of crashed programs",
+        "Whether programs that run with extra rights can leave a copy of their memory behind when they crash.",
+    ),
+    (
+        "linux.crash_files",
+        "Saved crash files",
+        "Whether the memory of a crashed program is kept on the disk.",
+    ),
+    (
+        "linux.rare_protocols",
+        "Rarely used network protocols",
+        "Whether rarely used ways of talking over the network can be switched on by any program.",
+    ),
+    (
+        "linux.app_sandbox_limits",
+        "Private boxes for apps",
+        "Whether apps need permission before they make a private box for themselves.",
+    ),
+    (
+        "linux.processor_updates",
+        "Processor updates",
+        "Whether the fixes for your computer's processor are installed.",
+    ),
+    (
+        "linux.root_account",
+        "Main administrator account",
+        "Whether the account that can change everything on this computer can be signed in to with a password.",
+    ),
 ];
 
 /// Every title and description a person can read, for the translation tests.
@@ -170,7 +215,8 @@ impl<S: Sys> LinuxBackend<S> {
         match id {
             "linux.fedora_open_ports" | "linux.countme" => self.distro.family == Family::Fedora,
             "linux.crash_reports" => self.distro.family == Family::Debian,
-            "linux.ubuntu_news" => self.distro.id == "ubuntu",
+            "linux.ubuntu_news" | "linux.app_sandbox_limits" => self.distro.id == "ubuntu",
+            "linux.crash_files" => self.distro.id != "ubuntu",
             _ => true,
         }
     }
@@ -265,6 +311,15 @@ impl<S: Sys> Backend for LinuxBackend<S> {
             "linux.snap_updates" => controls::services::observe_snap_updates(&cx),
             "linux.browser_data_collection" => controls::browsers::observe_data_collection(&cx),
             "linux.browser_https_only" => controls::browsers::observe_https_only(&cx),
+            "linux.memory_shuffle" => controls::hardening::observe_memory_shuffle(&cx),
+            "linux.bpf_hardening" => controls::hardening::observe_bpf(&cx),
+            "linux.terminal_drivers" => controls::hardening::observe_terminal_drivers(&cx),
+            "linux.crash_memory" => controls::hardening::observe_crash_memory(&cx),
+            "linux.crash_files" => controls::hardening::observe_crash_files(&cx),
+            "linux.rare_protocols" => controls::hardening::observe_rare_protocols(&cx),
+            "linux.app_sandbox_limits" => controls::hardening::observe_app_sandbox(&cx),
+            "linux.processor_updates" => controls::hardening::observe_processor_updates(&cx),
+            "linux.root_account" => controls::hardening::observe_root_account(&cx),
             _ => bail!("Unknown control id: {id}"),
         };
         result.map_err(|e| detail(id, &e, READ_FAILED))
@@ -301,6 +356,15 @@ impl<S: Sys> Backend for LinuxBackend<S> {
                 controls::browsers::write_data_collection(&cx, &want)
             }
             "linux.browser_https_only" => controls::browsers::write_https_only(&cx, &want),
+            "linux.memory_shuffle" => controls::hardening::write_memory_shuffle(&cx, &want),
+            "linux.bpf_hardening" => controls::hardening::write_bpf(&cx, &want),
+            "linux.terminal_drivers" => controls::hardening::write_terminal_drivers(&cx, &want),
+            "linux.crash_memory" => controls::hardening::write_crash_memory(&cx, &want),
+            "linux.crash_files" => controls::hardening::write_crash_files(&cx, &want),
+            "linux.rare_protocols" => controls::hardening::write_rare_protocols(&cx, &want),
+            "linux.app_sandbox_limits" => controls::hardening::write_app_sandbox(&cx, &want),
+            "linux.processor_updates" => controls::hardening::write_processor_updates(&cx, &want),
+            "linux.root_account" => controls::hardening::write_root_account(&cx, &want),
             _ => bail!("Unknown control id: {id}"),
         };
         result.map_err(|e| detail(id, &e, CHANGE_FAILED))

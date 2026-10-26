@@ -381,6 +381,84 @@ const SPECS: &[LinuxSpec] = &[
         reboot: false,
         keys: &[flag("firefox", true)],
     },
+    // randomize_va_space: how randomly the system places a program's memory, 0 not at all, 1 partly, 2 fully; null when unreadable.
+    LinuxSpec {
+        id: "linux.memory_shuffle",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[set("randomize_va_space", "", &[2], true, Some(2), 2)],
+    },
+    // unprivileged_bpf_disabled: 0 when anyone may load small programs into the system, 1 when that is shut for good until a restart,
+    // 2 when it is shut but an administrator can open it again; jit_harden: 0 off, 1 for ordinary users, 2 for everyone; null when unreadable.
+    LinuxSpec {
+        id: "linux.bpf_hardening",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[
+            set("unprivileged_bpf_disabled", "", &[1, 2], true, Some(2), 2),
+            set("jit_harden", "", &[2], true, Some(2), 2),
+        ],
+    },
+    // ldisc_autoload: 1 when any program may make the system load old terminal drivers on demand; null when unreadable.
+    LinuxSpec {
+        id: "linux.terminal_drivers",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[set("ldisc_autoload", "", &[0], true, Some(0), 1)],
+    },
+    // suid_dumpable: 0 when programs that run with extra rights never leave a memory dump, 1 or 2 when they may; null when unreadable
+    // or when Ubuntu's crash reports are on and need it.
+    LinuxSpec {
+        id: "linux.crash_memory",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[set("suid_dumpable", "", &[0], true, Some(0), 2)],
+    },
+    // stored: 1 when systemd-coredump keeps a program's memory on disk after it crashes; null when it does not handle crashes.
+    LinuxSpec {
+        id: "linux.crash_files",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[flag("stored", true)],
+    },
+    // open: 1 when a rarely used network protocol that this computer has (dccp, sctp, rds or tipc) can be loaded on demand;
+    // null when that cannot be told.
+    LinuxSpec {
+        id: "linux.rare_protocols",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[flag("open", true)],
+    },
+    // restricted: 1 when AppArmor limits programs that make a private sandbox for themselves; null when the setting does not exist.
+    LinuxSpec {
+        id: "linux.app_sandbox_limits",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[set("restricted", "", &[1], true, Some(1), 1)],
+    },
+    // installed: 1 when the package that carries processor fixes for this computer's processor is installed; null when unknown.
+    LinuxSpec {
+        id: "linux.processor_updates",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[set("installed", "", &[1], true, Some(1), 1)],
+    },
+    // usable: 1 when the main administrator account can sign in with a password, 0 when that account is locked; null when unknown.
+    LinuxSpec {
+        id: "linux.root_account",
+        scope: Scope::System,
+        ask: true,
+        reboot: false,
+        keys: &[flag("usable", true)],
+    },
 ];
 
 /// The only words these keys can hold. Other text keys hold names or ranges, so they are only kept to plain ASCII.
@@ -486,7 +564,7 @@ mod tests {
         for windows in crate::engine::catalog::ids(Os::Windows) {
             assert!(spec(windows).is_none(), "{windows}");
         }
-        assert_eq!(specs().len(), 34);
+        assert_eq!(specs().len(), 43);
     }
 
     #[test]
@@ -513,6 +591,7 @@ mod tests {
             "linux.app_usage",
             "linux.old_files",
             "linux.browser_https_only",
+            "linux.root_account",
         ];
         for s in specs() {
             let want = if person.contains(&s.id) {

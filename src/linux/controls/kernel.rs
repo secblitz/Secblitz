@@ -14,10 +14,10 @@ pub const NOTE: &str = "# Written by Secblitz. Delete this file to go back to ho
 pub const SYSCTL: &str = "/usr/sbin/sysctl";
 
 /// A control made of running kernel settings, each kept after a restart in the control's own file.
-struct Def {
-    id: &'static str,
-    dropin: &'static str,
-    keys: &'static [(&'static str, &'static str)],
+pub(super) struct Def {
+    pub id: &'static str,
+    pub dropin: &'static str,
+    pub keys: &'static [(&'static str, &'static str)],
 }
 
 const PROTECTIONS: Def = Def {
@@ -43,7 +43,7 @@ fn proc_path(sysctl: &str) -> String {
     format!("/proc/sys/{}", sysctl.replace('.', "/"))
 }
 
-fn running(cx: &Cx, sysctl: &str) -> Result<Item> {
+pub(super) fn running(cx: &Cx, sysctl: &str) -> Result<Item> {
     Ok(match cx.text(&proc_path(sysctl))? {
         Some(text) => text.trim().parse::<u32>().map_or(Item::Absent, Item::Num),
         None => Item::Absent,
@@ -59,7 +59,7 @@ pub fn observe_ptrace(cx: &Cx) -> Result<Observation> {
     observe_def(cx, &PTRACE)
 }
 
-fn observe_def(cx: &Cx, def: &Def) -> Result<Observation> {
+pub(super) fn observe_def(cx: &Cx, def: &Def) -> Result<Observation> {
     let mut pairs = Vec::new();
     for (key, sysctl) in def.keys {
         pairs.push((*key, running(cx, sysctl)?));
@@ -98,7 +98,7 @@ pub fn write_ptrace(cx: &Cx, want: &Items) -> Result<()> {
     write_def(cx, want, &PTRACE)
 }
 
-fn write_def(cx: &Cx, want: &Items, def: &Def) -> Result<()> {
+pub(super) fn write_def(cx: &Cx, want: &Items, def: &Def) -> Result<()> {
     let catalog = spec(def.id).ok_or_else(|| plain(UNRECOGNISED))?;
     let mut persist = kept(cx, def)?;
     let mut apply: Vec<(&'static str, u32)> = Vec::new();
