@@ -15,6 +15,11 @@ name: Release
 # installer -> checksums, parts lists and build attestations -> draft release. A broken
 # installer stops the run before anything is drafted.
 #
+# The Linux .deb and .rpm for x86_64 and aarch64 are built beside the Windows
+# jobs (tests first, then an install check of the real packages in distro
+# containers) and are attested and drafted with the rest. They carry no
+# repository entry: the repository signing key never reaches CI.
+#
 # The run is always on the tag itself (push of the tag, or started by
 # tag-release.yml with --ref <tag>), so the workflow code, the built source and
 # the commit named in the attestations are the same commit.
@@ -509,10 +514,86 @@ jobs:
           if ($setup.Count -ne 1) { throw 'Expected exactly one built installer.' }
           ./installer/test-lifecycle.ps1 -SetupPath $setup[0].FullName
 
+  build-linux:
+    name: Build the ${{ matrix.arch }} Linux packages from source (tests first)
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            os: ubuntu-24.04
+            package-arch: x86_64
+          - arch: arm64
+            os: ubuntu-24.04-arm
+            package-arch: aarch64
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+          persist-credentials: false
+      # No build or download cache here: a poisoned cache must never reach a release.
+      - name: Install the pinned Rust toolchain
+        run: |
+          set -euo pipefail
+          channel=$(sed -n 's/^channel *= *"\([^"]*\)".*/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$channel" --profile minimal --component clippy
+          rustc --version --verbose
+      - name: Test and lint
+        run: |
+          set -euo pipefail
+          cargo test --locked --all-targets
+          cargo clippy --locked --all-targets -- -D warnings
+      - name: Install Pillow for the icons (hash-pinned)
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/tools"
+          "$RUNNER_TEMP/tools/bin/pip" install --disable-pip-version-check --require-hashes --only-binary=:all: -r scripts/requirements-art.txt
+          echo "$RUNNER_TEMP/tools/bin" >> "$GITHUB_PATH"
+      - name: Build the program and the packages (debian:12 for older systems, fedora:44 for the rpm)
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          PACKAGE_ARCH: ${{ matrix.package-arch }}
+        run: |
+          set -euo pipefail
+          python3 scripts/build-linux-packages.py "$VERSION" target/linux/secblitz target/linux/pkgs \
+            --arch "$PACKAGE_ARCH" --build-binary --without-repository
+          ls -l target/linux/pkgs
+      - name: Name the packages as the update feed expects
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          mkdir dist
+          debs=(target/linux/pkgs/*.deb)
+          rpms=(target/linux/pkgs/*.rpm)
+          test "${#debs[@]}" -eq 1
+          test "${#rpms[@]}" -eq 1
+          cp "${debs[0]}" "dist/secblitz-$VERSION-linux-$ARCH.deb"
+          cp "${rpms[0]}" "dist/secblitz-$VERSION-linux-$ARCH.rpm"
+          ls -l dist
+      - name: Install the real packages in each distro, check them, remove them
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          ARCH: ${{ matrix.arch }}
+        run: python3 scripts/linux-install-check.py dist "$VERSION" "$ARCH"
+      - name: Upload the packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-packages-${{ matrix.arch }}
+          path: dist/secblitz-*-linux-${{ matrix.arch }}.*
+          if-no-files-found: error
+          retention-days: 14
+
   attest:
     name: Checksums and build provenance
-    needs: [verify, build-exe, build-setup, sign-exe, sign-setup, build-exe-arm64, build-setup-arm64, sign-exe-arm64, sign-setup-arm64, test-installer]
-    if: ${{ !cancelled() && needs.test-installer.result == 'success' && needs.build-setup.result == 'success' && (needs.sign-setup.result == 'success' || needs.sign-setup.result == 'skipped') && needs.build-setup-arm64.result == 'success' && (needs.sign-setup-arm64.result == 'success' || needs.sign-setup-arm64.result == 'skipped') }}
+    needs: [verify, build-exe, build-setup, sign-exe, sign-setup, build-exe-arm64, build-setup-arm64, sign-exe-arm64, sign-setup-arm64, test-installer, build-linux]
+    if: ${{ !cancelled() && needs.test-installer.result == 'success' && needs.build-linux.result == 'success' && needs.build-setup.result == 'success' && (needs.sign-setup.result == 'success' || needs.sign-setup.result == 'skipped') && needs.build-setup-arm64.result == 'success' && (needs.sign-setup-arm64.result == 'success' || needs.sign-setup-arm64.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Only this job may mint attestations. It cannot write to the repository.
@@ -541,6 +622,12 @@ jobs:
         with:
           name: ${{ needs.verify.outputs.signing == 'true' && 'setup-signed-arm64' || 'setup-unsigned-arm64' }}
           path: release
+      - name: Get the Linux packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: linux-packages-*
+          merge-multiple: true
+          path: release
       - name: Write SHA256SUMS
         env:
           VERSION: ${{ needs.verify.outputs.version }}
@@ -548,11 +635,16 @@ jobs:
         run: |
           set -euo pipefail
           ls -l
+          for kind in x64.deb x64.rpm arm64.deb arm64.rpm; do
+            test -f "secblitz-$VERSION-linux-$kind"
+          done
           test -f "secblitz-$VERSION-windows-x64.exe"
           test -f "secblitz-$VERSION-windows-x64-setup.exe"
           test -f "secblitz-$VERSION-windows-arm64.exe"
           test -f "secblitz-$VERSION-windows-arm64-setup.exe"
-          test "$(ls | wc -l)" -eq 4
+          test "$(ls | wc -l)" -eq 8
+          # SHA256SUMS lists the four Windows programs only. The Linux packages
+          # are covered by their attestations and by the signed update feeds.
           sha256sum "secblitz-$VERSION-windows-x64.exe" "secblitz-$VERSION-windows-x64-setup.exe" \
             "secblitz-$VERSION-windows-arm64.exe" "secblitz-$VERSION-windows-arm64-setup.exe" > SHA256SUMS
           cat SHA256SUMS
@@ -572,7 +664,7 @@ jobs:
           python3 scripts/make-sbom.py --target x86_64-pc-windows-msvc --output "../release/secblitz-$VERSION-windows-x64.cdx.json"
           python3 scripts/make-sbom.py --target aarch64-pc-windows-msvc --output "../release/secblitz-$VERSION-windows-arm64.cdx.json"
           ls -l ../release
-          test "$(ls ../release | wc -l)" -eq 7
+          python3 scripts/release-files.py "$VERSION" --check ../release
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
@@ -581,6 +673,10 @@ jobs:
             release/secblitz-*-windows-x64-setup.exe
             release/secblitz-*-windows-arm64.exe
             release/secblitz-*-windows-arm64-setup.exe
+            release/secblitz-*-linux-x64.deb
+            release/secblitz-*-linux-x64.rpm
+            release/secblitz-*-linux-arm64.deb
+            release/secblitz-*-linux-arm64.rpm
       - name: Attest the x64 parts list
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
         with:
@@ -641,4 +737,8 @@ jobs:
             release/secblitz-"$VERSION"-windows-arm64.exe \
             release/secblitz-"$VERSION"-windows-x64.cdx.json \
             release/secblitz-"$VERSION"-windows-arm64.cdx.json \
+            release/secblitz-"$VERSION"-linux-x64.deb \
+            release/secblitz-"$VERSION"-linux-x64.rpm \
+            release/secblitz-"$VERSION"-linux-arm64.deb \
+            release/secblitz-"$VERSION"-linux-arm64.rpm \
             release/SHA256SUMS

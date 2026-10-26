@@ -38,6 +38,7 @@ def load(name, file):
 
 
 build = load("build_linux_packages", "build-linux-packages.py")
+install_check = load("linux_install_check", "linux-install-check.py")
 repo = load("build_linux_repo", "build-linux-repo.py")
 
 
@@ -286,6 +287,27 @@ class Glibc(unittest.TestCase):
     def test_baseline(self):
         self.assertEqual(build.GLIBC_BASELINE, (2, 36))
         self.assertLess(build.newest_glibc("GLIBC_2.36"), (2, 37))
+
+
+class BuildBinaryHost(unittest.TestCase):
+    def test_a_binary_is_built_only_for_the_machine_it_runs_on(self):
+        from unittest import mock
+        for machine, other in (("x86_64", "aarch64"), ("aarch64", "x86_64"), ("arm64", "x86_64")):
+            with mock.patch.object(build.platform, "machine", return_value=machine), self.assertRaises(SystemExit):
+                build.build_binary("/nonexistent/secblitz", other)
+
+    def test_host_names_map_to_the_two_architectures(self):
+        self.assertEqual(build.HOST_ARCH["arm64"], "aarch64")
+        self.assertEqual(build.HOST_ARCH["AMD64"], "x86_64")
+
+
+class InstallCheckScripts(unittest.TestCase):
+    def test_install_errors_stay_visible_in_the_failure_log(self):
+        for script in (install_check.DEB_SCRIPT, install_check.RPM_SCRIPT):
+            self.assertNotIn("2>&1", script)
+
+    def test_version_is_matched_as_plain_text(self):
+        self.assertIn('grep -qF "$VERSION"', install_check.CHECKS)
 
 
 class RepoTool(unittest.TestCase):

@@ -18,6 +18,7 @@ import gzip
 import hashlib
 import io
 import os
+import platform
 from pathlib import Path
 import re
 import shutil
@@ -30,6 +31,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PKG = ROOT / "packaging" / "linux"
 GLIBC_BASELINE = (2, 36)
 ARCHES = {"x86_64": ("amd64", "x86_64"), "aarch64": ("arm64", "aarch64")}
+HOST_ARCH = {"x86_64": "x86_64", "AMD64": "x86_64", "aarch64": "aarch64", "arm64": "aarch64"}
 ICON_SIZES = (16, 24, 32, 48, 64, 128, 256)
 APP_ID = "org.secblitz.Secblitz"
 RPM_IMAGE = "fedora:44"
@@ -70,8 +72,8 @@ def check_glibc(binary):
 
 
 def build_binary(output, arch):
-    if arch != "x86_64":
-        die("the debian:12 build runs on this machine's architecture; build aarch64 on an aarch64 host")
+    if HOST_ARCH.get(platform.machine()) != arch:
+        die("the debian:12 build runs on this machine's architecture; build %s on a %s host" % (arch, arch))
     output = Path(output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     script = (
@@ -302,7 +304,7 @@ def main(argv=None):
     parser.add_argument("--arch", choices=sorted(ARCHES), default="x86_64")
     parser.add_argument("--key", help="the owner's public signing key, ASCII armored")
     parser.add_argument("--without-repository", action="store_true",
-                        help="leave the repository entry and key out (test builds only)")
+                        help="leave the repository entry and key out (CI and release builds)")
     parser.add_argument("--skip-glibc-check", action="store_true", help="for placeholder binaries in tests")
     parser.add_argument("--build-binary", action="store_true", help="compile BINARY inside debian:12 first")
     parser.add_argument("--formats", default="deb,rpm")
