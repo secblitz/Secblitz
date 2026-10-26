@@ -479,6 +479,8 @@ fn size_phrase_reads_plainly() {
     assert_eq!(size_phrase(1), "1 MB");
     assert_eq!(size_phrase(300 * 1024 * 1024), "300 MB");
     assert_eq!(size_phrase(3 * 1024 * 1024 * 1024), "3.0 GB");
+    assert_eq!(size_phrase(1024 * 1024 * 1024 - 1000), "1.0 GB");
+    assert_eq!(size_phrase(1023 * 1024 * 1024), "1023 MB");
 }
 
 #[test]

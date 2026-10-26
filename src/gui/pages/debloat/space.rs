@@ -431,6 +431,11 @@ fn finish(state: &mut State, ctx: &mut Ctx) -> Task<Message> {
     measure_all(state, ctx)
 }
 
+/// Whole megabytes, rounded the way `size_phrase` rounds, so History says the same size as the result did.
+fn history_mb(bytes: u64) -> usize {
+    ((bytes + (1 << 19)) >> 20).max(1) as usize
+}
+
 fn record_history(ctx: &Ctx, bytes: u64) {
     if let Some(dir) = &ctx.state_dir {
         let _ = crate::app::history::record(
@@ -440,7 +445,7 @@ fn record_history(ctx: &Ctx, bytes: u64) {
                 kind: crate::app::history::Kind::FreedSpace,
                 protected: 0,
                 total: 0,
-                n: bytes.div_ceil(1 << 20) as usize,
+                n: history_mb(bytes),
             },
         );
     }
@@ -1009,6 +1014,15 @@ fn result_sheet<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn history_shows_the_size_the_result_showed() {
+        use secblitz::space::size_phrase;
+        for bytes in [1, 524_287, 524_288, 168_296_448, 168_820_735, 1_073_741_000] {
+            let mb = history_mb(bytes) as u64;
+            assert_eq!(size_phrase(mb << 20), size_phrase(bytes), "{bytes}");
+        }
+    }
 
     #[test]
     fn nothing_is_ticked_when_the_tab_opens() {

@@ -411,10 +411,11 @@ fn component_cleanup_outcome(reply: &serde_json::Value) -> anyhow::Result<()> {
 
 pub fn size_phrase(bytes: u64) -> String {
     const MB: u64 = 1024 * 1024;
+    let mb = ((bytes + MB / 2) / MB).max(1);
     if bytes == 0 {
         String::new()
-    } else if bytes < 1024 * MB {
-        format!("{} MB", ((bytes + MB / 2) / MB).max(1))
+    } else if mb < 1024 {
+        format!("{mb} MB")
     } else {
         format!("{:.1} GB", bytes as f64 / (1024.0 * MB as f64))
     }
