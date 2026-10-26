@@ -90,9 +90,9 @@ pub trait Host {
     }
 }
 
-#[cfg(any(windows, test))]
 /// True when `installed` holds `full` or a newer version of the same package
 /// (same name, architecture and publisher).
+#[cfg(any(windows, test))]
 pub(crate) fn same_or_newer<'a>(full: &str, installed: impl IntoIterator<Item = &'a str>) -> bool {
     let Ok(want) = backup::parse_full_name(full) else {
         return false;
@@ -270,9 +270,9 @@ pub(crate) fn backup_family_with(
     }
 }
 
-#[cfg(any(windows, test))]
 /// The package's own permissions, if they pass the same checks restore
 /// applies (otherwise restore falls back to a live app's permissions).
+#[cfg(any(windows, test))]
 fn recorded_sddl(host: &dyn Host, full: &str) -> Option<Template> {
     let family = backup::parse_full_name(full).ok()?.family();
     let s = host.package_sddl(full).ok()?;
