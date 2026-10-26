@@ -67,7 +67,13 @@ impl Topic {
                 | "linux.file_sharing"
                 | "linux.remote_desktop"
                 | "linux.network_redirects"
-                | "linux.llmnr",
+                | "linux.llmnr"
+                | "linux.fake_sources"
+                | "linux.flood_protection"
+                | "linux.source_routing"
+                | "linux.broadcast_pings"
+                | "linux.announce_name"
+                | "linux.old_network_services",
             ) => Topic::Network,
             (
                 "linux",
@@ -86,6 +92,9 @@ impl Topic {
                 | "linux.countme"
                 | "linux.connectivity_check"
                 | "linux.wifi_mac"
+                | "linux.ipv6_privacy"
+                | "linux.computer_name_sent"
+                | "linux.encrypted_dns"
                 | "linux.recent_files"
                 | "linux.lock_previews"
                 | "linux.ubuntu_insights"
@@ -326,6 +335,15 @@ mod tests {
             ("linux.ptrace", Windows),
             ("linux.network_redirects", Network),
             ("linux.llmnr", Network),
+            ("linux.fake_sources", Network),
+            ("linux.flood_protection", Network),
+            ("linux.source_routing", Network),
+            ("linux.broadcast_pings", Network),
+            ("linux.announce_name", Network),
+            ("linux.old_network_services", Network),
+            ("linux.ipv6_privacy", Privacy),
+            ("linux.computer_name_sent", Privacy),
+            ("linux.encrypted_dns", Privacy),
             ("linux.crash_reports", Privacy),
             ("linux.countme", Privacy),
             ("linux.connectivity_check", Privacy),

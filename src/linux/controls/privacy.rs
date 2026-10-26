@@ -165,7 +165,7 @@ pub fn write_countme(cx: &Cx, want: &Items) -> Result<()> {
 
 /// The network program's files from the lowest to the highest priority, or `None` when it is not installed: the main
 /// file, then the files of the three folders by name, where a file in a later folder replaces one of the same name.
-fn nm_files(cx: &Cx) -> Result<Option<Vec<String>>> {
+pub(super) fn nm_files(cx: &Cx) -> Result<Option<Vec<String>>> {
     let Some(main) = cx.text(NM_MAIN)? else {
         return Ok(None);
     };
@@ -186,7 +186,7 @@ fn nm_files(cx: &Cx) -> Result<Option<Vec<String>>> {
     Ok(Some(texts))
 }
 
-fn nm_get(texts: &[String], section: &str, key: &str) -> Option<String> {
+pub(super) fn nm_get(texts: &[String], section: &str, key: &str) -> Option<String> {
     texts
         .iter()
         .rev()
@@ -205,7 +205,7 @@ fn connectivity_on(texts: &[String]) -> bool {
         && interval.trim() != "0"
 }
 
-fn reload_network_manager(cx: &Cx) -> Result<()> {
+pub(super) fn reload_network_manager(cx: &Cx) -> Result<()> {
     match units::probe(cx, NM_UNIT) {
         Some(unit) if unit.active => units::reload(cx, NM_UNIT),
         _ => Ok(()),

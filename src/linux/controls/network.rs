@@ -32,7 +32,7 @@ fn families(both: bool) -> &'static [(&'static str, &'static str)] {
     }
 }
 
-fn interface_ok(name: &str) -> bool {
+pub(super) fn interface_ok(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 64
         && name != "."
@@ -215,11 +215,11 @@ const RESOLVED_DIRS: [&str; 3] = [
 ];
 const LLMNR_FOLDER: &str = "/etc/systemd/resolved.conf.d";
 const LLMNR_DROPIN: &str = "/etc/systemd/resolved.conf.d/90-secblitz.conf";
-/// Written when Secblitz made the folder for its file, so the undo takes the folder away too.
+/// Written when Secblitz made the folder for its files, so the last undo takes the folder away too.
 const LLMNR_FOLDER_MEMO: &str = "llmnr-folder";
-const RESOLVED_UNIT: &str = "systemd-resolved.service";
+pub(super) const RESOLVED_UNIT: &str = "systemd-resolved.service";
 const RESOLVECTL: &str = "/usr/bin/resolvectl";
-const SYSTEMCTL: &str = "/usr/bin/systemctl";
+pub(super) const SYSTEMCTL: &str = "/usr/bin/systemctl";
 const TEST: &str = "/usr/bin/test";
 const MKDIR: &str = "/usr/bin/mkdir";
 const RMDIR: &str = "/usr/bin/rmdir";
@@ -234,15 +234,20 @@ fn llmnr_word(value: &str) -> Option<&'static str> {
     })
 }
 
-/// What the running resolver does. Distributions build it with different defaults (Ubuntu's never answers, Fedora's
-/// does), so this is the only way to learn the value when no file sets it.
-fn running_llmnr(cx: &Cx) -> Result<Option<&'static str>> {
-    let out = cx.run_ok(RESOLVECTL, &["llmnr"])?;
+/// What the running resolver does for one setting (`llmnr`, `dnsovertls`), as the word it prints. Distributions build it
+/// with different defaults (Ubuntu's never answers, Fedora's does), so this is the only way to learn the value when no file
+/// sets it.
+pub(super) fn running_setting(cx: &Cx, setting: &str) -> Result<Option<String>> {
+    let out = cx.run_ok(RESOLVECTL, &[setting])?;
     Ok(out
         .stdout
         .lines()
         .find_map(|l| l.trim().strip_prefix("Global:"))
-        .and_then(llmnr_word))
+        .map(|w| w.trim().to_ascii_lowercase()))
+}
+
+fn running_llmnr(cx: &Cx) -> Result<Option<&'static str>> {
+    Ok(running_setting(cx, "llmnr")?.and_then(|w| llmnr_word(&w)))
 }
 
 /// What systemd-resolved is told to do: the main file, then the files of the three folders by name, where a file in a
@@ -256,6 +261,11 @@ fn effective_llmnr(cx: &Cx) -> Result<Option<&'static str>> {
 
 /// The value the files give, or `None` when no file sets one.
 fn filed_llmnr(cx: &Cx) -> Result<Option<Option<&'static str>>> {
+    Ok(filed_setting(cx, "LLMNR")?.map(|v| llmnr_word(&v)))
+}
+
+/// The last value any file gives a `[Resolve]` setting, or `None` when no file sets it.
+pub(super) fn filed_setting(cx: &Cx, key: &str) -> Result<Option<String>> {
     let mut by_name = std::collections::BTreeMap::new();
     for dir in RESOLVED_DIRS {
         for name in cx.list(dir) {
@@ -273,16 +283,16 @@ fn filed_llmnr(cx: &Cx) -> Result<Option<Option<&'static str>>> {
             texts.push(text);
         }
     }
-    let mut word = None;
+    let mut found = None;
     for text in &texts {
-        if let Some(value) = ini::get(text, &["Resolve"], "LLMNR") {
-            word = Some(llmnr_word(&value));
+        if let Some(value) = ini::get(text, &["Resolve"], key) {
+            found = Some(value);
         }
     }
-    Ok(word)
+    Ok(found)
 }
 
-fn resolver_active(cx: &Cx) -> bool {
+pub(super) fn resolver_active(cx: &Cx) -> bool {
     units::probe(cx, RESOLVED_UNIT).is_some_and(|u| u.active)
 }
 
@@ -296,24 +306,34 @@ pub fn observe_llmnr(cx: &Cx) -> Result<Observation> {
     }
 }
 
-/// Takes away the drop-in folder when Secblitz made it and nothing else was put in it since.
-fn remove_llmnr_folder(cx: &Cx) -> Result<()> {
+fn resolved_folder_exists(cx: &Cx) -> bool {
+    cx.run(TEST, &["-d", LLMNR_FOLDER])
+        .is_ok_and(|o| o.success())
+}
+
+/// Takes away the drop-in folder when Secblitz made it and nothing else is in it. The note of having made it stays while
+/// another file, such as another Secblitz setting, still keeps the folder in use, so the last one to leave removes it.
+pub(super) fn remove_resolved_folder(cx: &Cx) -> Result<()> {
     if cx.memo_read(LLMNR_FOLDER_MEMO)?.is_some() {
         let _ = cx.run(RMDIR, &[LLMNR_FOLDER]);
-        cx.memo_clear(LLMNR_FOLDER_MEMO)?;
+        if !resolved_folder_exists(cx) {
+            cx.memo_clear(LLMNR_FOLDER_MEMO)?;
+        }
+    }
+    Ok(())
+}
+
+/// Makes the drop-in folder when it is missing and notes that Secblitz did. Fedora has none until something makes one.
+pub(super) fn make_resolved_folder(cx: &Cx) -> Result<()> {
+    if !resolved_folder_exists(cx) {
+        cx.memo_write(LLMNR_FOLDER_MEMO, &[LLMNR_FOLDER.to_string()])?;
+        cx.run_ok(MKDIR, &["-m", "0755", LLMNR_FOLDER])?;
     }
     Ok(())
 }
 
 fn write_llmnr_file(cx: &Cx) -> Result<()> {
-    // Fedora has no drop-in folder until something makes one.
-    if !cx
-        .run(TEST, &["-d", LLMNR_FOLDER])
-        .is_ok_and(|o| o.success())
-    {
-        cx.memo_write(LLMNR_FOLDER_MEMO, &[LLMNR_FOLDER.to_string()])?;
-        cx.run_ok(MKDIR, &["-m", "0755", LLMNR_FOLDER])?;
-    }
+    make_resolved_folder(cx)?;
     cx.write_text(LLMNR_DROPIN, &format!("{NOTE}[Resolve]\nLLMNR=no\n"), 0o644)
 }
 
@@ -323,7 +343,7 @@ pub fn write_llmnr(cx: &Cx, want: &Items) -> Result<()> {
     };
     let wanted = llmnr_word(word).ok_or_else(|| plain(UNRECOGNISED))?;
     cx.remove(LLMNR_DROPIN)?;
-    remove_llmnr_folder(cx)?;
+    remove_resolved_folder(cx)?;
     // With no file setting it, the value comes from the running resolver, which keeps what our file said until it restarts.
     if wanted != "no" && filed_llmnr(cx)?.is_none() && running_llmnr(cx)? != Some(wanted) {
         cx.run_ok(SYSTEMCTL, &["try-restart", RESOLVED_UNIT])?;
@@ -334,12 +354,12 @@ pub fn write_llmnr(cx: &Cx, want: &Items) -> Result<()> {
         }
         if let Err(e) = write_llmnr_file(cx) {
             cx.remove(LLMNR_DROPIN)?;
-            remove_llmnr_folder(cx)?;
+            remove_resolved_folder(cx)?;
             return Err(e);
         }
         if effective_llmnr(cx)? != Some("no") {
             cx.remove(LLMNR_DROPIN)?;
-            remove_llmnr_folder(cx)?;
+            remove_resolved_folder(cx)?;
             return Err(plain(CHANGE_FAILED));
         }
     }

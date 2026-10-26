@@ -57,11 +57,11 @@ fn unhex(text: &str) -> Option<Vec<u8>> {
 }
 
 /// Keeps a file's exact bytes so an undo can write them back.
-fn remember_file(cx: &Cx, memo: &str, bytes: &[u8]) -> Result<()> {
+pub(super) fn remember_file(cx: &Cx, memo: &str, bytes: &[u8]) -> Result<()> {
     cx.memo_write(memo, &[hex(bytes)])
 }
 
-fn remembered_file(cx: &Cx, memo: &str) -> Result<Option<Vec<u8>>> {
+pub(super) fn remembered_file(cx: &Cx, memo: &str) -> Result<Option<Vec<u8>>> {
     let Some(lines) = cx.memo_read(memo)? else {
         return Ok(None);
     };
@@ -71,7 +71,7 @@ fn remembered_file(cx: &Cx, memo: &str) -> Result<Option<Vec<u8>>> {
     }
 }
 
-fn put_back_file(cx: &Cx, path: &str, bytes: &[u8]) -> Result<()> {
+pub(super) fn put_back_file(cx: &Cx, path: &str, bytes: &[u8]) -> Result<()> {
     cx.sys.write_atomic(Path::new(path), bytes, 0o644)
 }
 

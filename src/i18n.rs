@@ -14,6 +14,7 @@ mod linux_browsers;
 mod linux_cleanup;
 mod linux_feeds;
 mod linux_findings;
+mod linux_netguard;
 mod linux_network;
 mod linux_person;
 mod linux_services;
@@ -153,6 +154,7 @@ const MAINTENANCE_PARTS: &[&[[&str; 6]]] = &[
     linux_updates::ROWS,
     linux_cleanup::ROWS,
     linux_network::ROWS,
+    linux_netguard::ROWS,
     linux_services::ROWS,
     linux_person::ROWS,
     linux_browsers::ROWS,

@@ -7,6 +7,7 @@ pub mod findings;
 pub mod firewall;
 pub mod ini;
 pub mod kernel;
+pub mod netguard;
 pub mod network;
 pub mod privacy;
 pub mod remote;

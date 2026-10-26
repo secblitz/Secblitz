@@ -106,7 +106,7 @@ impl Sim {
     }
 
     /// What the resolver reads when it starts: the main file, then the drop-ins by name; "built" when none says.
-    fn resolved_from_files(&self) -> String {
+    fn resolved_from_files(&self, key: &str) -> String {
         let files = self.files.borrow();
         let mut paths: Vec<&PathBuf> = files
             .keys()
@@ -124,7 +124,7 @@ impl Sim {
                 .get(path)
                 .map(|b| String::from_utf8_lossy(b).into_owned());
             for line in text.iter().flat_map(|t| t.lines()) {
-                if let Some(value) = line.trim().strip_prefix("LLMNR=") {
+                if let Some(value) = line.trim().strip_prefix(&format!("{key}=")) {
                     word = value.trim().to_string();
                 }
             }
@@ -211,7 +211,11 @@ impl Sim {
             },
             "try-restart" => {
                 if name == "systemd-resolved.service" && units.get(&name).is_some_and(|u| u.1) {
-                    self.set("resolved.running", &self.resolved_from_files());
+                    self.set("resolved.running", &self.resolved_from_files("LLMNR"));
+                    self.set(
+                        "resolved.dot.running",
+                        &self.resolved_from_files("DNSOverTLS"),
+                    );
                 }
                 out(i32::from(!units.contains_key(&name)) * 5, "")
             }
@@ -588,6 +592,15 @@ impl Sim {
                     ("" | "built", true) => "yes",
                     ("" | "built", false) => &built,
                     (word, _) => word,
+                };
+                out(0, &format!("Global: {word}\nLink 2 (enp1s0): {word}\n"))
+            }
+            "/usr/bin/resolvectl" if args == ["dnsovertls"] => {
+                let running = self.get("resolved.dot.running");
+                let word = if matches!(running.as_str(), "" | "built") {
+                    "no"
+                } else {
+                    &running
                 };
                 out(0, &format!("Global: {word}\nLink 2 (enp1s0): {word}\n"))
             }

@@ -30,6 +30,9 @@ pub fn extra_section(id: &str) -> Option<&'static str> {
             | "linux.app_usage"
             | "linux.old_files"
             | "linux.browser_https_only"
+            | "linux.computer_name_sent"
+            | "linux.encrypted_dns"
+            | "linux.announce_name"
     ) {
         return Some("Privacy extras");
     }
