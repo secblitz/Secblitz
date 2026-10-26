@@ -80,6 +80,8 @@ impl Topic {
                 | "linux.lock_previews"
                 | "linux.ubuntu_insights",
             ) => Topic::Privacy,
+            ("linux", "linux.printer_sharing" | "linux.printer_discovery") => Topic::Network,
+            ("linux", "linux.ubuntu_news") => Topic::Privacy,
             _ => Topic::Windows,
         }
     }
@@ -315,6 +317,11 @@ mod tests {
             ("linux.recent_files", Privacy),
             ("linux.lock_previews", Privacy),
             ("linux.ubuntu_insights", Privacy),
+            ("linux.time_sync", Windows),
+            ("linux.printer_sharing", Network),
+            ("linux.printer_discovery", Network),
+            ("linux.ubuntu_news", Privacy),
+            ("linux.snap_updates", Windows),
         ];
         for (id, topic) in expected {
             assert_eq!(Topic::of(id), *topic, "{id}");

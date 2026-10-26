@@ -1,0 +1,5 @@
+Timezone=Europe/Tirane
+LocalRTC=no
+CanNTP=yes
+NTP=yes
+NTPSynchronized=no

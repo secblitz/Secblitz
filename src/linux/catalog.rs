@@ -261,6 +261,51 @@ const SPECS: &[LinuxSpec] = &[
             flag("release_upgrader", true),
         ],
     },
+    // ntp: 1 when the clock sets itself from the internet.
+    LinuxSpec {
+        id: "linux.time_sync",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[on("ntp")],
+    },
+    // share_printers, remote_admin, remote_any: 1 when the printing service shares printers, lets other computers manage it,
+    // or accepts connections from any address.
+    LinuxSpec {
+        id: "linux.printer_sharing",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[
+            flag("share_printers", true),
+            flag("remote_admin", true),
+            flag("remote_any", true),
+        ],
+    },
+    // cups_protocol: 1 when the finder of network printers is on and accepts announcements over the old printing protocol.
+    LinuxSpec {
+        id: "linux.printer_discovery",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[flag("cups_protocol", true)],
+    },
+    // apt_news: 1 when Ubuntu downloads news for update messages; motd_news: 1 when it downloads news for the sign-in text.
+    LinuxSpec {
+        id: "linux.ubuntu_news",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[flag("apt_news", true), flag("motd_news", true)],
+    },
+    // held: 1 when snap app updates are held back for good or for more than a week.
+    LinuxSpec {
+        id: "linux.snap_updates",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[flag("held", true)],
+    },
 ];
 
 /// The only words these keys can hold. Other text keys hold names or ranges, so they are only kept to plain ASCII.
@@ -366,7 +411,7 @@ mod tests {
         for windows in crate::engine::catalog::ids(Os::Windows) {
             assert!(spec(windows).is_none(), "{windows}");
         }
-        assert_eq!(specs().len(), 21);
+        assert_eq!(specs().len(), 26);
     }
 
     #[test]

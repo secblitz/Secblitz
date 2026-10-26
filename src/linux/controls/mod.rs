@@ -9,6 +9,7 @@ pub mod kernel;
 pub mod network;
 pub mod privacy;
 pub mod remote;
+pub mod services;
 pub mod units;
 pub mod updates;
 

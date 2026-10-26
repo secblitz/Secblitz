@@ -1,0 +1,19 @@
+
+[94m[info][0m A new version is available: 38ubuntu0~26.04
+Please run:
+    sudo apt install ubuntu-pro-client
+to get the latest bug fixes and new features.
+http_proxy                     None
+https_proxy                    None
+apt_http_proxy                 None
+apt_https_proxy                None
+ua_apt_http_proxy              None
+ua_apt_https_proxy             None
+global_apt_http_proxy          None
+global_apt_https_proxy         None
+update_messaging_timer         21600
+metering_timer                 14400
+apt_news                       True
+apt_news_url                   https://motd.ubuntu.com/aptnews.json
+vulnerability_data_url_prefix  https://security-metadata.canonical.com/oval/
+lxd_guest_attach               off

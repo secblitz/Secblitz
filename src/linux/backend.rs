@@ -19,7 +19,7 @@ pub struct LinuxBackend<S: Sys> {
     memo: PathBuf,
 }
 
-const TEXT: [(&str, &str, &str); 16] = [
+const TEXT: [(&str, &str, &str); 21] = [
     (
         "linux.firewall",
         "Firewall",
@@ -100,6 +100,31 @@ const TEXT: [(&str, &str, &str); 16] = [
         "Name lookups on the network",
         "Whether this computer answers name lookups from other computers on the local network.",
     ),
+    (
+        "linux.time_sync",
+        "Clock",
+        "Sets the clock from the internet so it stays correct.",
+    ),
+    (
+        "linux.printer_sharing",
+        "Printer sharing",
+        "Lets other computers on the network use your printers or manage printing here.",
+    ),
+    (
+        "linux.printer_discovery",
+        "Network printer finder",
+        "Adds printers that other computers announce on the network without asking you.",
+    ),
+    (
+        "linux.ubuntu_news",
+        "Ubuntu news",
+        "Downloads news and advertising from Ubuntu's makers to show in update messages and when you sign in.",
+    ),
+    (
+        "linux.snap_updates",
+        "App store updates",
+        "Whether updates of apps from Ubuntu's app store are held back.",
+    ),
 ];
 
 /// Every title and description a person can read, for the translation tests.
@@ -135,6 +160,7 @@ impl<S: Sys> LinuxBackend<S> {
         match id {
             "linux.fedora_open_ports" | "linux.countme" => self.distro.family == Family::Fedora,
             "linux.crash_reports" => self.distro.family == Family::Debian,
+            "linux.ubuntu_news" => self.distro.id == "ubuntu",
             _ => true,
         }
     }
@@ -217,6 +243,11 @@ impl<S: Sys> Backend for LinuxBackend<S> {
             "linux.ptrace" => controls::kernel::observe_ptrace(&cx),
             "linux.network_redirects" => controls::network::observe_redirects(&cx),
             "linux.llmnr" => controls::network::observe_llmnr(&cx),
+            "linux.time_sync" => controls::services::observe_time_sync(&cx),
+            "linux.printer_sharing" => controls::services::observe_printer_sharing(&cx),
+            "linux.printer_discovery" => controls::services::observe_printer_discovery(&cx),
+            "linux.ubuntu_news" => controls::services::observe_ubuntu_news(&cx),
+            "linux.snap_updates" => controls::services::observe_snap_updates(&cx),
             _ => bail!("Unknown control id: {id}"),
         };
         result.map_err(|e| detail(id, &e, READ_FAILED))
@@ -244,6 +275,11 @@ impl<S: Sys> Backend for LinuxBackend<S> {
             "linux.ptrace" => controls::kernel::write_ptrace(&cx, &want),
             "linux.network_redirects" => controls::network::write_redirects(&cx, &want),
             "linux.llmnr" => controls::network::write_llmnr(&cx, &want),
+            "linux.time_sync" => controls::services::write_time_sync(&cx, &want),
+            "linux.printer_sharing" => controls::services::write_printer_sharing(&cx, &want),
+            "linux.printer_discovery" => controls::services::write_printer_discovery(&cx, &want),
+            "linux.ubuntu_news" => controls::services::write_ubuntu_news(&cx, &want),
+            "linux.snap_updates" => controls::services::write_snap_updates(&cx, &want),
             _ => bail!("Unknown control id: {id}"),
         };
         result.map_err(|e| detail(id, &e, CHANGE_FAILED))
