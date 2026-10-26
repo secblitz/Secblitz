@@ -89,6 +89,8 @@ class StaticFiles(unittest.TestCase):
         for key, value in {"NoNewPrivileges": "yes", "PrivateTmp": "yes", "ProtectHome": "read-only",
                            "StateDirectory": "secblitz", "StateDirectoryMode": "0700"}.items():
             self.assertEqual(unit[key], value, key)
+        # Removing an old kernel writes /usr/lib/modules, which ProtectKernelModules makes read-only.
+        self.assertNotIn("ProtectKernelModules", unit)
 
     def test_monitor_units(self):
         unit = ini(PKG / "systemd" / "secblitz-monitor.service")["Service"]

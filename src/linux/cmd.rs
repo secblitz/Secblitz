@@ -312,6 +312,15 @@ mod real {
             run_program(program, args, Some(&self.bus), LONG_TIME_LIMIT, None)
         }
 
+        fn run_answering(
+            &self,
+            program: &'static str,
+            args: &[&str],
+            answer: &str,
+        ) -> Result<Output> {
+            run_program(program, args, Some(&self.bus), TIME_LIMIT, Some(answer))
+        }
+
         fn read(&self, path: &Path) -> Result<Option<Vec<u8>>> {
             RealSys.read(path)
         }
@@ -351,6 +360,15 @@ mod real {
                 .stdout
                 .contains(&format!("DBUS_SESSION_BUS_ADDRESS={address}")));
             assert_eq!(out.stdout.lines().count(), 3);
+        }
+
+        #[test]
+        fn a_session_program_can_be_given_an_answer() {
+            // SAFETY: geteuid has no preconditions and cannot fail.
+            let uid = unsafe { libc::geteuid() };
+            let sys = SessionSys::new(&super::super::session_bus_address(uid), uid).unwrap();
+            let out = sys.run_answering("/usr/bin/cat", &[], "n\n").unwrap();
+            assert_eq!(out.stdout, "n\n");
         }
 
         #[test]

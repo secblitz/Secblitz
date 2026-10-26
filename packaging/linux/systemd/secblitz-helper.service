@@ -11,7 +11,6 @@ PrivateTmp=yes
 ProtectHome=read-only
 StateDirectory=secblitz
 StateDirectoryMode=0700
-ProtectKernelModules=yes
 ProtectControlGroups=yes
 RestrictSUIDSGID=yes
 LockPersonality=yes
