@@ -1,5 +1,6 @@
 //! Opening the desktop's own Privacy settings for the person who asked. The program and its one argument are fixed
 //! per desktop, and nothing is started unless the program is there.
+#![cfg_attr(not(any(target_os = "linux", test)), allow(dead_code))]
 use crate::linux::distro::Desktop;
 use std::path::Path;
 

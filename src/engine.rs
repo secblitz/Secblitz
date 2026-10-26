@@ -11,6 +11,7 @@ mod journal;
 pub mod recover;
 mod recovery;
 mod revert;
+pub use revert::NOTHING_RECORDED;
 mod store;
 #[cfg(test)]
 mod tests;

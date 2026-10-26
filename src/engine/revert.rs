@@ -11,7 +11,7 @@ use std::collections::HashSet;
 const ALREADY_BACK: &str = "Original preference already present";
 const DIFFERS: &str = "Preference differs from both target and before image; no write performed";
 const CHANGED_AT_GATE: &str = "Preference changed immediately before restore; no write performed";
-const NOTHING_RECORDED: &str = "Nothing recorded to put back";
+pub const NOTHING_RECORDED: &str = "Nothing recorded to put back";
 const NEEDS_OTHER: &str = "Another protection needs this one";
 const UNDO_FIRST: &str = "Revert the active transaction before undoing chosen controls";
 

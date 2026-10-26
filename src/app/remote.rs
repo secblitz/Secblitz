@@ -23,12 +23,20 @@ pub enum Request {
     Available,
     RestartIds,
     Audit,
-    Apply { ids: Vec<String> },
+    Apply {
+        ids: Vec<String>,
+    },
     Undo,
-    UndoSelected { ids: Vec<String> },
+    UndoSelected {
+        ids: Vec<String>,
+    },
     History,
-    CanStart { undo: bool },
-    ChooseItems { picked: ItemChoice },
+    CanStart {
+        undo: bool,
+    },
+    ChooseItems {
+        picked: ItemChoice,
+    },
     StartFresh,
     /// Takes Secblitz's own package off the computer. It needs no open session.
     RemoveSelf,

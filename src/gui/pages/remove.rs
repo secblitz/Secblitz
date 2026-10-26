@@ -55,7 +55,49 @@ const KEEP_SECBLITZ: &str = "Keep Secblitz";
 const CLOSE: &str = "Close";
 const LEAVING_TITLE: &str = "Removing Secblitz…";
 const LEAVING_HELP: &str = "This window closes by itself.";
+const LINUX_KEEP_HELP: &str = "Your protection stays on.";
+const LINUX_STAY_NOTE: &str = "Updates and programs you installed yourself stay.";
+const LINUX_ITEM_SETTINGS: &str = "Computer settings";
+const LINUX_DELETE_FILE: &str = "You can now delete the Secblitz file.";
+const LINUX_CANNOT_START: &str = "We couldn't remove Secblitz. It is still installed. Try again, or remove it from the software app.";
+const LINUX_PUT_BACK: &str = "Secblitz undoes the changes it made first. This can take a minute.";
 const CANNOT_START: &str = "We couldn't start the removal. Secblitz was not removed. Close Secblitz, open it again and try once more. If that does not work, restart your computer.";
+
+fn on_linux() -> bool {
+    secblitz::os::Os::CURRENT == secblitz::os::Os::Linux
+}
+
+fn keep_help() -> &'static str {
+    if on_linux() {
+        LINUX_KEEP_HELP
+    } else {
+        KEEP_HELP
+    }
+}
+
+fn stay_note() -> &'static str {
+    if on_linux() {
+        LINUX_STAY_NOTE
+    } else {
+        STAY_NOTE
+    }
+}
+
+fn delete_note() -> &'static str {
+    if on_linux() {
+        LINUX_DELETE_FILE
+    } else {
+        DELETE_EXE
+    }
+}
+
+fn cannot_start() -> &'static str {
+    if on_linux() {
+        LINUX_CANNOT_START
+    } else {
+        CANNOT_START
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Choice {
@@ -81,6 +123,15 @@ impl Item {
         Item::Web,
     ];
 
+    /// The steps this system has. Linux has no apps to bring back, no suggested apps and no web protection.
+    pub fn shown() -> &'static [Item] {
+        if on_linux() {
+            &Self::ALL[..2]
+        } else {
+            &Self::ALL
+        }
+    }
+
     fn index(self) -> usize {
         Self::ALL.iter().position(|i| *i == self).unwrap_or(0)
     }
@@ -88,6 +139,7 @@ impl Item {
     fn label(self) -> &'static str {
         match self {
             Item::Personal => ITEM_PERSONAL,
+            Item::Settings if on_linux() => LINUX_ITEM_SETTINGS,
             Item::Settings => ITEM_SETTINGS,
             Item::Apps => ITEM_APPS,
             Item::Suggested => ITEM_SUGGESTED,
@@ -196,7 +248,11 @@ fn put_back_text(lang: Lang, counts: Option<Counts>) -> String {
         changes: 0,
         apps: 0,
     });
-    lang.t(put_back_key(counts))
+    let key = match counts {
+        None if on_linux() => LINUX_PUT_BACK,
+        counts => put_back_key(counts),
+    };
+    lang.t(key)
         .replace("{n}", &c.changes.to_string())
         .replace("{apps}", &c.apps.to_string())
 }
@@ -410,7 +466,7 @@ mod system;
 #[cfg(test)]
 use system::put_back_left;
 pub use system::uninstaller;
-use system::{launch_uninstaller, load_plan, run_put_back};
+use system::{launch_uninstaller, plan_task, run_put_back};
 
 pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
     let task = apply(state, msg, ctx);
@@ -447,9 +503,7 @@ fn apply(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
                 waiting: ask.len(),
                 safe: Vec::new(),
             };
-            let mut tasks = vec![Task::perform(blocking(load_plan), move |r| {
-                wrap(Msg::Planned(generation, r))
-            })];
+            let mut tasks = vec![plan_task(ctx.report.as_deref(), generation)];
             for setting in ask {
                 tasks.push(
                     ctx.broker_task(Request::UserSetting(setting, Op::Query), move |r| {
@@ -504,7 +558,7 @@ fn apply(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
         Msg::Spawned(true) => iced::exit(),
         Msg::Spawned(false) => {
             state.sheet = Sheet::Closed;
-            Task::done(Message::Toast(ctx.t(CANNOT_START), Tone::Warn))
+            Task::done(Message::Toast(ctx.t(cannot_start()), Tone::Warn))
         }
         Msg::Frame(now) => {
             state.now = now;
@@ -595,6 +649,7 @@ mod tests {
     use super::*;
     use crate::gui::widgets::hairline::Run;
 
+    use secblitz::model::CheckStatus;
     const LANGS: [Lang; 6] = [Lang::En, Lang::Es, Lang::Fr, Lang::De, Lang::Pt, Lang::It];
 
     fn plan(settings: usize, copy: usize, store: usize, suggested: bool) -> Plan {
@@ -942,6 +997,106 @@ mod tests {
         state.sheet = Sheet::Leaving;
         escape(&mut state);
         assert!(matches!(state.sheet, Sheet::Leaving));
+    }
+
+    #[test]
+    fn the_linux_words_are_plain_and_translated_and_say_nothing_about_windows() {
+        for source in [
+            LINUX_KEEP_HELP,
+            LINUX_STAY_NOTE,
+            LINUX_ITEM_SETTINGS,
+            LINUX_DELETE_FILE,
+            LINUX_CANNOT_START,
+            LINUX_PUT_BACK,
+            crate::uninstall::SETTING_NOT_POSSIBLE_LINUX,
+        ] {
+            assert!(!source.contains('\u{2014}'), "{source}");
+            for word in ["Windows", "Microsoft", "Store", ".exe", "PC"] {
+                assert!(!source.contains(word), "{source}");
+            }
+            for lang in &LANGS[1..] {
+                assert_ne!(lang.t(source), source, "{source}");
+            }
+        }
+    }
+
+    #[test]
+    fn linux_shows_two_steps_and_windows_all_five() {
+        assert_eq!(Item::ALL.len(), 5);
+        assert!(Item::shown().len() == 5 || on_linux());
+        if on_linux() {
+            assert_eq!(Item::shown(), [Item::Personal, Item::Settings]);
+        }
+    }
+
+    fn outcome(
+        id: &str,
+        status: CheckStatus,
+        detail: &str,
+        undoable: bool,
+    ) -> secblitz::engine::Outcome {
+        secblitz::engine::Outcome {
+            id: id.into(),
+            title: "Firewall".into(),
+            status,
+            detail: detail.into(),
+            undoable,
+            ..secblitz::engine::Outcome::default()
+        }
+    }
+
+    #[test]
+    fn the_count_comes_from_what_the_last_check_can_put_back() {
+        assert!(system::plan_from_report(None).is_err());
+        let report = secblitz::engine::Report {
+            results: vec![
+                outcome("a", CheckStatus::Compliant, "", true),
+                outcome("b", CheckStatus::Compliant, "", false),
+                outcome("c", CheckStatus::Attention, "", true),
+            ],
+            ..secblitz::engine::Report::default()
+        };
+        assert_eq!(system::plan_from_report(Some(&report)).unwrap().settings, 2);
+        let none = secblitz::engine::Report::default();
+        assert_eq!(system::plan_from_report(Some(&none)).unwrap().settings, 0);
+    }
+
+    #[test]
+    fn only_what_could_not_be_put_back_is_listed() {
+        let report = secblitz::engine::Report {
+            results: vec![
+                outcome("a", CheckStatus::Restored, "", true),
+                outcome("b", CheckStatus::Unchanged, "", true),
+                outcome(
+                    "c",
+                    CheckStatus::Skipped,
+                    secblitz::engine::NOTHING_RECORDED,
+                    false,
+                ),
+                outcome("d", CheckStatus::Conflict, "", true),
+                outcome("e", CheckStatus::Error, "", true),
+                outcome(
+                    "f",
+                    CheckStatus::Skipped,
+                    "Another protection needs this one",
+                    true,
+                ),
+            ],
+            ..secblitz::engine::Report::default()
+        };
+        let lines = system::put_back_lines(&report, Lang::En);
+        assert_eq!(lines.len(), 3);
+        assert!(
+            lines[0].contains("changed since Secblitz set it"),
+            "{}",
+            lines[0]
+        );
+        for line in &lines[1..] {
+            assert_eq!(
+                line,
+                "Firewall: this could not be put back, so it was left as it is. You can change it yourself in your computer's settings."
+            );
+        }
     }
 
     #[test]

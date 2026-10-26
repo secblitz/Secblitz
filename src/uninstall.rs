@@ -57,6 +57,7 @@ const SETTING_CHANGED: &str =
     "{title}: it has changed since Secblitz set it, so it was left as it is. No action is needed.";
 const SETTING_MACHINE_NOT_POSSIBLE: &str = "{title}: this could not be put back, so it was left as it is. Restart your computer and try again. If it still does not work, you can leave it as it is.";
 const SETTING_NOT_POSSIBLE: &str = "{title}: this could not be put back, so it was left as it is. You can change it yourself in Windows Settings.";
+pub(crate) const SETTING_NOT_POSSIBLE_LINUX: &str = "{title}: this could not be put back, so it was left as it is. You can change it yourself in your computer's settings.";
 const APP_FAILED: &str =
     "{name} could not be brought back. Try again later, or get it again from the Microsoft Store.";
 const APP_NEEDS_STORE: &str =
@@ -103,6 +104,22 @@ pub fn left_line(left: &Left, lang: Lang) -> String {
         Left::SuggestedOlderVersion => lang.t(SUGGESTED_OLDER),
         Left::SuggestedChangedSince => lang.t(SUGGESTED_CHANGED),
         Left::HistoryDamaged => lang.t(HISTORY_DAMAGED),
+    }
+}
+
+/// A setting that could not be put back on Linux, in the person's language.
+pub fn linux_left_line(title: &str, reason: LeftReason, lang: Lang) -> String {
+    match reason {
+        LeftReason::ChangedSince => left_line(
+            &Left::Setting {
+                title: title.to_owned(),
+                reason,
+            },
+            lang,
+        ),
+        LeftReason::NotPossible => lang
+            .t(SETTING_NOT_POSSIBLE_LINUX)
+            .replace("{title}", &lang.t(title)),
     }
 }
 
