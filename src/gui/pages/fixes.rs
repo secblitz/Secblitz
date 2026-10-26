@@ -2360,6 +2360,8 @@ fn protected_group<'a>(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn tiles_follow_the_system_and_never_hide_a_result() {
         use secblitz::os::Os;
@@ -2376,7 +2378,22 @@ mod tests {
         );
     }
 
-    use super::*;
+    #[test]
+    fn a_hidden_topic_with_a_result_keeps_its_tile() {
+        let mut rows = Rows::default();
+        rows.protected.push(Prot {
+            id: "defender.realtime".into(),
+            topic: Topic::Threats,
+            name: String::new(),
+            line: String::new(),
+            undoable: false,
+            info: None,
+            hay: search_text(&[], &[], "defender.realtime"),
+        });
+        let shown = rows.visible_topics(secblitz::os::Os::Linux);
+        assert!(shown.contains(&Topic::Threats));
+        assert!(!shown.contains(&Topic::Browsers));
+    }
 
     #[test]
     fn who_published_an_allowed_app_is_said_in_the_chosen_language() {

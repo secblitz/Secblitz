@@ -476,6 +476,8 @@ pub fn preload(state: &mut State, ctx: &mut Ctx) -> Task<Message> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn only_windows_lists_removed_apps() {
         use secblitz::os::Os;
@@ -483,8 +485,6 @@ mod tests {
         assert!(!shows_removed_apps(Os::Linux));
         assert!(!shows_removed_apps(Os::Macos));
     }
-
-    use super::*;
 
     #[test]
     fn undo_needs_an_applied_batch() {
