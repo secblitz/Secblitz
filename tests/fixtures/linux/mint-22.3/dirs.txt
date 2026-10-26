@@ -15,3 +15,4 @@
 /usr/lib/NetworkManager/conf.d
 /usr/share/lightdm/lightdm.conf.d
 /var/lib/linuxmint
+/etc/modprobe.d

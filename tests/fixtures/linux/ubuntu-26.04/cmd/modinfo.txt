@@ -1,0 +1,4 @@
+dccp none
+sctp /lib/modules/7.0.0-38-generic/kernel/net/sctp/sctp.ko.zst
+rds /lib/modules/7.0.0-38-generic/kernel/net/rds/rds.ko.zst
+tipc /lib/modules/7.0.0-38-generic/kernel/net/tipc/tipc.ko.zst
