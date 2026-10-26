@@ -1608,9 +1608,12 @@ pub fn view<'a>(
                 if part.is_empty() {
                     continue;
                 }
-                let mut section =
-                    column![container(widgets::h2(p, ctx.t(t.label()))).padding([0.0, theme::S4])]
-                        .spacing(theme::S3);
+                let mut section = column![container(widgets::h2(
+                    p,
+                    ctx.t(t.display_label(secblitz::os::Os::CURRENT))
+                ))
+                .padding([0.0, theme::S4])]
+                .spacing(theme::S3);
                 for group in topic_groups(state, ctx, rows, &part, t, true) {
                     section = section.push(group);
                 }
