@@ -31,21 +31,37 @@ cp -a @STAGE@/. %{buildroot}/
 @FILES@
 
 %post
+# The web protection filter runs as its own account, which has to exist before the unit can start.
+systemd-sysusers /usr/lib/sysusers.d/secblitz.conf >/dev/null 2>&1 || :
 if [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || :
     systemctl reload dbus.service >/dev/null 2>&1 || systemctl reload dbus-broker.service >/dev/null 2>&1 || :
     if [ "$1" -gt 1 ]; then
         systemctl try-restart secblitz-helper.service >/dev/null 2>&1 || :
+        systemctl try-restart secblitz-filter.service >/dev/null 2>&1 || :
     fi
 fi
 
 %preun
-if [ "$1" -eq 0 ] && [ -d /run/systemd/system ]; then
-    systemctl stop secblitz-monitor.timer secblitz-monitor.service secblitz-helper.service >/dev/null 2>&1 || :
-    systemctl disable secblitz-monitor.timer >/dev/null 2>&1 || :
+if [ "$1" -eq 0 ]; then
+    # Lookups go back to the network's own servers before the filter stops.
+    if [ -e /run/systemd/resolved.conf.d/95-secblitz-web-protection.conf ]; then
+        rm -f /run/systemd/resolved.conf.d/95-secblitz-web-protection.conf
+        if [ -d /run/systemd/system ]; then
+            systemctl try-restart systemd-resolved.service >/dev/null 2>&1 || :
+        fi
+    fi
+    if [ -d /run/systemd/system ]; then
+        systemctl stop secblitz-monitor.timer secblitz-monitor.service secblitz-helper.service >/dev/null 2>&1 || :
+        systemctl disable secblitz-monitor.timer >/dev/null 2>&1 || :
+        systemctl disable --now secblitz-filter.service >/dev/null 2>&1 || :
+    fi
 fi
 
 %postun
+if [ "$1" -eq 0 ]; then
+    rm -rf /var/lib/secblitz-filter
+fi
 if [ -d /run/systemd/system ]; then
     systemctl daemon-reload >/dev/null 2>&1 || :
     if [ "$1" -eq 0 ]; then
