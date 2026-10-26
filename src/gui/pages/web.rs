@@ -864,7 +864,7 @@ fn failure_text(raw: &str) -> &'static str {
     let r = raw.to_ascii_lowercase();
     let has = |needles: &[&str]| needles.iter().any(|n| r.contains(n));
     if has(&["administrator", "access is denied", "os error 5", "elevat"]) {
-        "Windows wouldn't let Secblitz change web protection. Sign in with an account that can make changes to this PC, then open Secblitz again."
+        "Windows wouldn't let Secblitz change web protection. Sign in with an account that can make changes to this computer, then open Secblitz again."
     } else if has(&["not a website name"]) {
         NOT_A_NAME
     } else if has(&["allowed sites is full"]) {
@@ -876,13 +876,13 @@ fn failure_text(raw: &str) -> &'static str {
         "only supported on windows",
         "requires windows",
     ]) {
-        "Web protection isn't available on this PC."
+        "Web protection isn't available on this computer."
     } else if has(&["marked for deletion", "already exists", "1072", "1073"]) {
-        "Windows is still tidying up the old web protection. Restart your PC, then try again."
+        "Windows is still tidying up the old web protection. Restart your computer, then try again."
     } else if has(&["untrusted", "unexpected", "writable", "owner"]) {
-        "Secblitz couldn't safely set up web protection on this PC. Install the latest Secblitz and try again."
+        "Secblitz couldn't safely set up web protection on this computer. Install the latest Secblitz and try again."
     } else {
-        "We couldn't change web protection. Please try again. If it keeps happening, restart your PC."
+        "We couldn't change web protection. Please try again. If it keeps happening, restart your computer."
     }
 }
 
@@ -896,7 +896,7 @@ fn problem_hint(snapshot: &Snapshot, line: Line) -> Option<&'static str> {
         .filter(|s| config::fresh(s, snapshot.now));
     match status.and_then(|s| s.last_error) {
         Some(ErrorCode::PortInUse) => Some(
-            "Another program on your PC is using what web protection needs. Close other ad blockers or VPN apps.",
+            "Another program on your computer is using what web protection needs. Close other ad blockers or VPN apps.",
         ),
         Some(ErrorCode::NoUpstream) => Some(
             "Web protection can't find your internet connection. Connect to the internet.",
@@ -908,7 +908,7 @@ fn problem_hint(snapshot: &Snapshot, line: Line) -> Option<&'static str> {
             "The block lists couldn't be used. Secblitz will try to download them again. If this stays, check for a Secblitz update.",
         ),
         None if line == Line::NotWorking => Some(
-            "Press Try again. If that doesn't help, restart your PC.",
+            "Press Try again. If that doesn't help, restart your computer.",
         ),
         None => None,
     }
@@ -1106,7 +1106,7 @@ fn switch_text(ctx: &Ctx, switch: Switch) -> (Icon, String, String) {
         Switch::Dangerous => (
             Icon::ShieldAlert,
             ctx.t("Block dangerous websites"),
-            ctx.t("Stops your PC from opening known scam and virus websites."),
+            ctx.t("Stops your computer from opening known scam and virus websites."),
         ),
         Switch::Scam => (
             Icon::AlertTriangle,
@@ -1117,18 +1117,18 @@ fn switch_text(ctx: &Ctx, switch: Switch) -> (Icon, String, String) {
             Icon::Bell,
             ctx.t("Pop-up and notification spam"),
             ctx.t(
-                "Blocks pop-up floods and fake 'your PC is infected' warnings.",
+                "Blocks pop-up floods and fake 'your computer is infected' warnings.",
             ),
         ),
         Switch::Adult => (
             Icon::EyeOff,
             ctx.t("Block adult websites"),
-            ctx.t("Stops your PC from opening websites meant for adults."),
+            ctx.t("Stops your computer from opening websites meant for adults."),
         ),
         Switch::Gambling => (
             Icon::Gamepad,
             ctx.t("Block gambling websites"),
-            ctx.t("Stops your PC from opening online betting and casino websites."),
+            ctx.t("Stops your computer from opening online betting and casino websites."),
         ),
         Switch::SafeSearch => (
             Icon::Search,
@@ -1364,7 +1364,7 @@ fn most_blocked_group<'a>(ctx: &'a Ctx, top: Vec<(String, u64)>) -> Option<El<'a
     Some(widgets::group(
         p,
         ctx.t("Most blocked"),
-        Some(ctx.t("Over the last 30 days, kept only on this PC.")),
+        Some(ctx.t("Over the last 30 days, kept only on this computer.")),
         None,
         rows,
     ))
@@ -1402,7 +1402,7 @@ fn gap_text(gap: Gap) -> (Icon, &'static str, &'static str) {
         Gap::OtherDnsRule => (
             Icon::AlertTriangle,
             "Another program redirects your lookups",
-            "A VPN, security tool or work setting on this PC sends all lookups somewhere else, so Web protection may not see them.",
+            "A VPN, security tool or work setting on this computer sends all lookups somewhere else, so Web protection may not see them.",
         ),
         Gap::Vpn => (
             Icon::Lock,
@@ -2234,9 +2234,8 @@ mod tests {
     fn known_failures_get_a_fix_and_unknown_ones_never_echo_raw_text() {
         let admin = failure_text("Changing web protection needs administrator rights");
         assert!(admin.contains("Sign in with an account"));
-        assert!(
-            failure_text("The service is marked for deletion (1072)").contains("Restart your PC")
-        );
+        assert!(failure_text("The service is marked for deletion (1072)")
+            .contains("Restart your computer"));
         let raw = "os error 87: weird HRESULT 0x80070057 in scm.rs";
         let general = failure_text(raw);
         assert!(general.starts_with("We couldn't change web protection."));
@@ -2263,7 +2262,7 @@ mod tests {
         };
         assert!(problem_hint(&down, Line::NotWorking)
             .unwrap()
-            .contains("restart your PC"));
+            .contains("restart your computer"));
         let ok = snapshot(on, Some(healthy()), true);
         assert!(problem_hint(&ok, Line::On).is_none());
     }

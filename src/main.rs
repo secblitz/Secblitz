@@ -22,7 +22,7 @@ fn command(lang: Lang) -> Command {
     let sub = |name, key| Command::new(name).about(text(lang.t(key)));
     let cmd = Command::new("secblitz")
         .version(env!("CARGO_PKG_VERSION"))
-        .about(text(lang.t("A safer PC. Without headaches.")))
+        .about(text(lang.t("A safer computer. Without headaches.")))
         .arg(
             Arg::new("lang")
                 .long("lang")

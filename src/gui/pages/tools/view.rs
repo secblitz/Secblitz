@@ -50,7 +50,7 @@ fn page<'a>(state: &'a State, ctx: &'a Ctx) -> El<'a> {
         widgets::page_header(
             p,
             ctx.t("Tools"),
-            Some(ctx.t("Handy ways to keep your PC safe and healthy.")),
+            Some(ctx.t("Handy ways to keep your computer safe and healthy.")),
         ),
         column![tabs, body].spacing(theme::S4).width(Length::Fill),
     ]
@@ -83,7 +83,7 @@ pub fn tab_name(ctx: &Ctx, tab: ToolsTab) -> String {
 fn tips_tab<'a>(state: &'a State, ctx: &'a Ctx) -> El<'a> {
     widgets::group(
         ctx.palette,
-        ctx.t("PC health tips"),
+        ctx.t("Computer health tips"),
         None,
         None,
         tips_block(state, ctx),
@@ -398,7 +398,7 @@ fn scan_row<'a>(state: &'a State, ctx: &'a Ctx) -> El<'a> {
             p,
             Some(Icon::Bug),
             ctx.t("Scan for viruses"),
-            Some(ctx.t("Look for harmful software on your PC.")),
+            Some(ctx.t("Look for harmful software on your computer.")),
             secondary(p, ctx.t("Scan"), Some(Msg::Ask(Sheet::Scan))),
             None,
         ),
@@ -407,7 +407,7 @@ fn scan_row<'a>(state: &'a State, ctx: &'a Ctx) -> El<'a> {
             p,
             Icon::Bug,
             ctx.t("Scan for viruses"),
-            ctx.t("Scanning your PC. This can take a few minutes."),
+            ctx.t("Scanning your computer. This can take a few minutes."),
         ),
         Run::Done(Ok(())) => finished(
             state,
@@ -510,7 +510,7 @@ fn defender_row<'a>(state: &'a State, ctx: &'a Ctx) -> El<'a> {
 fn keep_using<'a>(p: Palette, ctx: &Ctx) -> El<'a> {
     widgets::small(
         p,
-        ctx.t("You can keep using your PC. Please don't turn it off."),
+        ctx.t("You can keep using your computer. Please don't turn it off."),
     )
 }
 
@@ -683,7 +683,7 @@ fn updates_row<'a>(state: &'a State, ctx: &'a Ctx) -> El<'a> {
                 slot: Slot::Updates,
                 icon: Icon::Download,
                 tone: Tone::Good,
-                title: ctx.t("Your PC is up to date"),
+                title: ctx.t("Your computer is up to date"),
                 sub: Some(ctx.t("There are no important updates waiting.")),
                 menu: vec![check_again(ctx.t("Check again"))],
                 raw: None,
@@ -938,7 +938,7 @@ fn tips_running<'a>(ctx: &Ctx, profile: TipProfile) -> El<'a> {
     widgets::row_item_below(
         p,
         Some(Icon::ShieldCheck),
-        ctx.t("Looking at your PC…"),
+        ctx.t("Looking at your computer…"),
         Some(format!(
             "{}  ·  {}",
             ctx.t(profile.title()),
@@ -976,7 +976,7 @@ fn tips_picker<'a>(state: &'a State, ctx: &'a Ctx) -> El<'a> {
             p,
             vec![more_details(
                 ctx,
-                &ctx.t("What do you use this PC for?"),
+                &ctx.t("What do you use this computer for?"),
                 &tips_summary(ctx, report),
             )],
         ));
@@ -986,8 +986,8 @@ fn tips_picker<'a>(state: &'a State, ctx: &'a Ctx) -> El<'a> {
     widgets::row_item_below(
         p,
         Some(Icon::ShieldCheck),
-        ctx.t("What do you use this PC for?"),
-        Some(ctx.t("This only looks at your PC. Nothing is changed.")),
+        ctx.t("What do you use this computer for?"),
+        Some(ctx.t("This only looks at your computer. Nothing is changed.")),
         trailing(items),
         below,
         None,
@@ -1071,7 +1071,7 @@ fn tip_row<'a>(ctx: &Ctx, tip: &logic::Tip, scanning: bool, threats_busy: bool) 
         logic::TipAction::CheckNow => widgets::action(
             p,
             ButtonKind::Secondary,
-            ctx.t("Check my PC"),
+            ctx.t("Check my computer"),
             Some(Icon::Refresh),
             (!ctx.busy && ctx.checking.is_none()).then_some(Message::CheckNow),
         ),
@@ -1277,7 +1277,7 @@ fn shortcut_rows<'a>(ctx: &'a Ctx, which: &[Shortcut]) -> Vec<El<'a>> {
                 Shortcut::Encryption => (
                     Icon::Lock,
                     "Device encryption",
-                    "Keep your files private if your PC is lost",
+                    "Keep your files private if your computer is lost",
                 ),
                 Shortcut::SignIn => (
                     Icon::Key,
@@ -1340,9 +1340,9 @@ pub(super) fn sheet_copy(sheet: Sheet) -> SheetCopy {
             Icon::Bug,
             "Scan for viruses?",
             &[
-                "Windows Security will check your PC for harmful software.",
+                "Windows Security will check your computer for harmful software.",
                 "If it finds something, it removes it or puts it somewhere safe.",
-                "You can keep using your PC.",
+                "You can keep using your computer.",
             ],
             "Start scan",
         ),
@@ -1350,25 +1350,25 @@ pub(super) fn sheet_copy(sheet: Sheet) -> SheetCopy {
             Icon::Bug,
             "Remove the harmful files?",
             &[
-                "Windows Security will remove the harmful files it has found on this PC.",
+                "Windows Security will remove the harmful files it has found on this computer.",
                 "This can't be undone from Secblitz. Windows Security usually keeps what it removes in quarantine. If it was a mistake, you can restore an item there.",
-                "You can keep using your PC while it works.",
+                "You can keep using your computer while it works.",
             ],
             "Remove them",
         ),
         Sheet::Renewal { bitlocker } => (
             Icon::ShieldCheck,
-            "Renew your PC's startup security?",
+            "Renew your computer's startup security?",
             if bitlocker {
                 &[
                     "This can't be undone.",
-                    "It finishes the next time you restart your PC. Secblitz never restarts your PC for you.",
-                    "Your PC may ask for your BitLocker recovery key once after the restart. Make sure you can find it before you continue.",
+                    "It finishes the next time you restart your computer. Secblitz never restarts your computer for you.",
+                    "Your computer may ask for your BitLocker recovery key once after the restart. Make sure you can find it before you continue.",
                 ]
             } else {
                 &[
                     "This can't be undone.",
-                    "It finishes the next time you restart your PC. Secblitz never restarts your PC for you.",
+                    "It finishes the next time you restart your computer. Secblitz never restarts your computer for you.",
                 ]
             },
             "Renew now",
@@ -1384,7 +1384,7 @@ pub(super) fn sheet_copy(sheet: Sheet) -> SheetCopy {
             "Check for problems?",
             &[
                 "Secblitz will look at Windows for damage. Nothing is changed.",
-                "This can take a few minutes. You can keep using your PC.",
+                "This can take a few minutes. You can keep using your computer.",
             ],
             "Start check",
         ),
@@ -1393,7 +1393,7 @@ pub(super) fn sheet_copy(sheet: Sheet) -> SheetCopy {
             "Repair system files?",
             &[
                 "Secblitz will look for damaged Windows files and replace them with good copies.",
-                "This can take 15–45 minutes. You can keep using your PC.",
+                "This can take 15–45 minutes. You can keep using your computer.",
                 "Your own files and apps are not touched. This can't be undone automatically, but it only fixes files that belong to Windows.",
             ],
             "Repair now",
@@ -1402,17 +1402,17 @@ pub(super) fn sheet_copy(sheet: Sheet) -> SheetCopy {
             Icon::Download,
             "Install updates?",
             &[
-                "These updates come from Microsoft and protect your PC.",
-                "This can take a while. You can keep using your PC, but save your work first because Windows may need to restart.",
+                "These updates come from Microsoft and protect your computer.",
+                "This can take a while. You can keep using your computer, but save your work first because Windows may need to restart.",
                 "Updates can't be undone automatically. By continuing you accept Microsoft's license terms for them.",
             ],
             "Install now",
         ),
         Sheet::Restart => (
             Icon::Restart,
-            "Restart your PC now?",
+            "Restart your computer now?",
             &[
-                "Your PC restarts to finish installing updates.",
+                "Your computer restarts to finish installing updates.",
                 "Save your work first. Programs with unsaved work will ask you before they close.",
             ],
             "Restart now",

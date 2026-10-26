@@ -13,7 +13,7 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             change: "Windows asks first and you can allow it. A brand-new small program from a friend may get a question the first time.",
         },
         "defender.network_protection" => Explainer {
-            what: "Stops programs on your PC from connecting to websites and servers that are known to be harmful.",
+            what: "Stops programs on your computer from connecting to websites and servers that are known to be harmful.",
             risk: "A program or an ad could quietly connect to a known scam site and download something harmful.",
             change: "Nothing you'll notice most days. A game, VPN or work tool may be blocked by mistake and need to be allowed.",
         },
@@ -30,7 +30,7 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
         "defender.cfa_allowed_apps" => Explainer {
             what: "Lists apps that changed your personal folders while Windows was watching, so you can let them keep working.",
             risk: "A trusted app you use could be stopped from saving your work once full protection is on.",
-            change: "The listed apps can change your files once you agree. Only apps that really exist on your PC are added, and undo removes them.",
+            change: "The listed apps can change your files once you agree. Only apps that really exist on your computer are added, and undo removes them.",
         },
         "defender.cloud_block_level" => Explainer {
             what: "Makes Defender stricter about files it has never seen before by asking Microsoft's cloud to judge them.",
@@ -38,18 +38,18 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             change: "A download may pause for up to 20 seconds while it's checked. A few harmless new files may be blocked by mistake.",
         },
         "net.stack_hardening" => Explainer {
-            what: "Tells your PC to ignore network messages that try to reroute its traffic or release its name.",
-            risk: "Someone on the same cafe Wi-Fi could send messages that steer your PC's traffic through their device.",
+            what: "Tells your computer to ignore network messages that try to reroute its traffic or release its name.",
+            risk: "Someone on the same cafe Wi-Fi could send messages that steer your computer's traffic through their device.",
             change: "Nothing you'll notice. It takes effect after a restart.",
         },
         "net.netbios" => Explainer {
             what: "Turns off an old way for computers on a network to find each other by name.",
-            risk: "Someone on the same network could answer for another computer, and your PC might send its sign-in details to them.",
+            risk: "Someone on the same network could answer for another computer, and your computer might send its sign-in details to them.",
             change: "Nothing you'll notice. Very old network drives, printers or scanners may stop being found by name.",
         },
         "net.mdns" => Explainer {
-            what: "Stops your PC from asking and answering name questions with other devices on your local network.",
-            risk: "Someone on the same network could answer as a printer or TV, and your PC might start talking to them.",
+            what: "Stops your computer from asking and answering name questions with other devices on your local network.",
+            risk: "Someone on the same network could answer as a printer or TV, and your computer might start talking to them.",
             change: "Casting to a TV, AirPrint and some smart-home devices may stop showing up. It takes effect after a restart.",
         },
         "net.wpad" => Explainer {
@@ -58,8 +58,8 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             change: "Nothing you'll notice at home. A work or school network that sets this up automatically may stop working. It takes effect after a restart.",
         },
         "firewall.outbound_smb_internet" => Explainer {
-            what: "Adds a firewall rule so this PC never sends file-sharing traffic out to the internet.",
-            risk: "A harmful link could make your PC try to log in to an outside file server, handing over your sign-in details.",
+            what: "Adds a firewall rule so this computer never sends file-sharing traffic out to the internet.",
+            risk: "A harmful link could make your computer try to log in to an outside file server, handing over your sign-in details.",
             change: "Nothing you'll notice. Cloud file shares reached over the internet may stop connecting. Sharing at home still works.",
         },
         "tls.legacy_protocols" => Explainer {

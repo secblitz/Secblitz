@@ -184,9 +184,9 @@ fn days_ago(days: u64) -> String {
 /// seen", and a source that cannot be read is never counted as a backup.
 pub(super) fn backup_coverage(src: &BackupSources, now: Option<u64>) -> (Status, String) {
     let shadows = match src.shadow_copies {
-        Some(0) => "No restore points on this PC.",
+        Some(0) => "No restore points on this computer.",
         Some(_) => {
-            "This PC has restore points, but those live on the same drive and are not a backup."
+            "This computer has restore points, but those live on the same drive and are not a backup."
         }
         None => "Restore points could not be counted.",
     };

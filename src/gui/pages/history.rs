@@ -452,7 +452,7 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
             p,
             Icon::History,
             ctx.t("Nothing here yet"),
-            ctx.t("When you check your PC or fix something, it will show up here."),
+            ctx.t("When you check your computer or fix something, it will show up here."),
             None,
         ));
     } else {

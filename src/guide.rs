@@ -227,7 +227,7 @@ static MEMORY_INTEGRITY: Guide = g(
     &[
         "Find Memory integrity under Core isolation and turn it on.",
         "If Windows names a driver that blocks it, update that driver or its app, then try again.",
-        "Restart your PC when Windows asks.",
+        "Restart your computer when Windows asks.",
     ],
 );
 static KERNEL_STACK: Guide = g(
@@ -235,8 +235,8 @@ static KERNEL_STACK: Guide = g(
     &[
         "Turn on Memory integrity first. The next option appears below it.",
         "Turn on Kernel-mode Hardware-enforced Stack Protection.",
-        "If you don't see it, your PC doesn't support it and nothing is wrong.",
-        "Restart your PC when Windows asks.",
+        "If you don't see it, your computer doesn't support it and nothing is wrong.",
+        "Restart your computer when Windows asks.",
     ],
 );
 static ENCRYPTION: Guide = Guide {
@@ -254,16 +254,16 @@ static ENCRYPTION_HOME: Guide = g(
     &[
         "Save your recovery key somewhere safe first. Microsoft accounts keep it at account.microsoft.com/devices/recoverykey.",
         "Turn on Device encryption.",
-        "No Device encryption page? Then this PC can't encrypt its drive with Windows Home.",
+        "No Device encryption page? Then this computer can't encrypt its drive with Windows Home.",
     ],
 );
 static SECURE_BOOT: Guide = g(
     Page::Recovery,
     &[
-        "Encrypted PC? Find your recovery key first at aka.ms/myrecoverykey, as Windows may ask for it after this.",
+        "Encrypted computer? Find your recovery key first at aka.ms/myrecoverykey, as Windows may ask for it after this.",
         "Save your work, then select Restart now next to Advanced startup.",
         "Choose Troubleshoot, Advanced options, UEFI Firmware Settings, then Restart. No such option? Stop here.",
-        "Turn on Secure Boot, often under Boot or Security. Menus differ by PC maker. Save and exit.",
+        "Turn on Secure Boot, often under Boot or Security. Menus differ by computer maker. Save and exit.",
     ],
 );
 static AUTOLOGON: Guide = g(
@@ -277,7 +277,7 @@ static AUTOLOGON: Guide = g(
 static REMOTE_DESKTOP: Guide = g(
     Page::RemoteDesktop,
     &[
-        "Using this PC from another device right now? Stop here. Turning this off ends that connection.",
+        "Using this computer from another device right now? Stop here. Turning this off ends that connection.",
         "Turn off Remote Desktop.",
         "Select Confirm if Windows asks.",
     ],
@@ -288,7 +288,7 @@ static SMB1: Guide = g(
         "If an old printer or shared drive needs it, leave it on.",
         "Scroll down and select More Windows features.",
         "Untick SMB 1.0/CIFS File Sharing Support, then select OK.",
-        "Restart your PC when Windows asks.",
+        "Restart your computer when Windows asks.",
     ],
 );
 static LIFECYCLE: Guide = g(
@@ -296,7 +296,7 @@ static LIFECYCLE: Guide = g(
     &[
         "Select Check for updates.",
         "If a newer version of Windows is offered, choose Download and install.",
-        "If none is offered, look on this page for Extended Security Updates (Enroll now), or plan for a PC that runs Windows 11.",
+        "If none is offered, look on this page for Extended Security Updates (Enroll now), or plan for a computer that runs Windows 11.",
     ],
 );
 static SECURE_BOOT_CERTS: Guide = g(
@@ -304,15 +304,15 @@ static SECURE_BOOT_CERTS: Guide = g(
     &[
         "Select Check for updates and install everything offered.",
         "Restart when Windows asks. You may need to do this more than once.",
-        "Then look for a startup (BIOS) update on your PC maker's website.",
-        "Your PC maker may need to release one before the renewal can finish.",
+        "Then look for a startup (BIOS) update on your computer maker's website.",
+        "Your computer maker may need to release one before the renewal can finish.",
     ],
 );
 static RUN_HISTORY: Guide = g(
     Page::WindowsSecurity,
     &[
         "Run a full scan first. Choose Scan options, then Full scan, then Scan now.",
-        "Then use another phone or PC to change your passwords. Start with your email, then your bank.",
+        "Then use another phone or computer to change your passwords. Start with your email, then your bank.",
         "Turn on two-step sign-in wherever it is offered.",
         "Watch your bank and card statements for anything you don't know.",
     ],
@@ -335,7 +335,7 @@ static REBOOT: Guide = g(
 static WORK: Guide = g(
     Page::WorkAccounts,
     &[
-        "Look at the accounts listed. A work or school account means someone else may manage this PC.",
+        "Look at the accounts listed. A work or school account means someone else may manage this computer.",
         "If you don't recognise one, ask the person or company named there. Don't disconnect an account you use to sign in to Windows.",
     ],
 );
@@ -344,7 +344,7 @@ static HELLO: Guide = g(
     &[
         "Select PIN (Windows Hello).",
         "Choose Set up and follow the steps.",
-        "Face or fingerprint appear here too if your PC has the hardware.",
+        "Face or fingerprint appear here too if your computer has the hardware.",
     ],
 );
 static FIND_MY_DEVICE: Guide = g(
@@ -400,7 +400,7 @@ static WIDGETS: Guide = g(
     Page::Taskbar,
     &[
         "Turn off Widgets under Taskbar items.",
-        "This hides Widgets for your account. Anyone else who uses this PC can do the same.",
+        "This hides Widgets for your account. Anyone else who uses this computer can do the same.",
     ],
 );
 /// Hidden background tasks (WMI): nothing is removed by hand, since some work
@@ -410,8 +410,8 @@ static HIDDEN_TASKS: Guide = g(
     &[
         "Don't remove anything yourself. Some work or hardware tools set these up on purpose.",
         "Save your work. Choose Scan options, then Microsoft Defender Offline scan, then Scan now.",
-        "Your PC restarts and scans for about 15 minutes. Windows removes what it finds.",
-        "Still listed after that? Ask someone you trust who knows PCs to look at it with you.",
+        "Your computer restarts and scans for about 15 minutes. Windows removes what it finds.",
+        "Still listed after that? Ask someone you trust who knows computers to look at it with you.",
     ],
 );
 
@@ -593,7 +593,7 @@ mod tests {
             vbs::UNREADABLE,
             vbs::SET_BY_HAND,
             vbs::OLD_WINDOWS,
-            "Not offered: a driver on this PC may not work with itself",
+            "Not offered: a driver on this computer may not work with itself",
             "Not offered: this edition of Windows does not include it",
         ] {
             assert!(guide_not_offered(mi, no).is_none(), "{no}");

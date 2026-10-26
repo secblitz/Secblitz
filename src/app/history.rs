@@ -134,7 +134,7 @@ pub fn timeline(entries: &[Entry]) -> Vec<Day> {
 
 pub fn label(kind: Kind, n: usize) -> &'static str {
     match (kind, n) {
-        (Kind::Check, _) => "Checked your PC",
+        (Kind::Check, _) => "Checked your computer",
         (Kind::Fix, 0) => "Fixed problems",
         (Kind::Fix, 1) => "Fixed 1 problem",
         (Kind::Fix, _) => "Fixed {n} problems",
@@ -330,7 +330,7 @@ mod tests {
 
     #[test]
     fn labels_are_plain() {
-        assert_eq!(label(Kind::Check, 0), "Checked your PC");
+        assert_eq!(label(Kind::Check, 0), "Checked your computer");
         assert_eq!(label(Kind::Fix, 1), "Fixed 1 problem");
         assert_eq!(label(Kind::Fix, 3), "Fixed {n} problems");
         assert_eq!(label(Kind::Undo, 0), "Undid your last fixes");

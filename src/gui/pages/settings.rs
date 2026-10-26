@@ -210,7 +210,7 @@ pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
         Msg::Frame => Task::none(),
         Msg::PrefsSaved(true) => Task::none(),
         Msg::PrefsSaved(false) => toast(
-            "We couldn't save that choice. Please try again. If it keeps happening, restart your PC.",
+            "We couldn't save that choice. Please try again. If it keeps happening, restart your computer.",
             Tone::Warn,
             ctx,
         ),
@@ -349,7 +349,7 @@ pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
                     )
                 }
                 Err(_) => toast(
-                    "We couldn't change that. Nothing was changed on your PC. Please try again, or restart your PC first.",
+                    "We couldn't change that. Nothing was changed on your computer. Please try again, or restart your computer first.",
                     Tone::Warn,
                     ctx,
                 ),
@@ -377,7 +377,7 @@ pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
                     )
                 }
                 Err(_) => toast(
-                    "We couldn't change that. Nothing was changed on your PC. Please try again, or restart your PC first.",
+                    "We couldn't change that. Nothing was changed on your computer. Please try again, or restart your computer first.",
                     Tone::Warn,
                     ctx,
                 ),
@@ -433,8 +433,8 @@ fn busy<'a>(p: Palette, state: &State, label: String) -> Element<'a, Message> {
 fn confirm_text(confirm: Confirm) -> (&'static str, &'static str, &'static str) {
     match confirm {
         Confirm::Background(true) => (
-            "Check my PC automatically?",
-            "Secblitz checks your PC every 15 minutes in the background. It never changes anything on its own.",
+            "Check my computer automatically?",
+            "Secblitz checks your computer every 15 minutes in the background. It never changes anything on its own.",
             "Turn on",
         ),
         Confirm::Background(false) => (
@@ -444,7 +444,7 @@ fn confirm_text(confirm: Confirm) -> (&'static str, &'static str, &'static str) 
         ),
         Confirm::Tray(true) => (
             "Show Secblitz in the system tray?",
-            "A small shield will appear near the clock when you sign in. It shows whether your PC looks safe.",
+            "A small shield will appear near the clock when you sign in. It shows whether your computer looks safe.",
             "Turn on",
         ),
         Confirm::Tray(false) => (
@@ -561,7 +561,7 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
     let mut rows = vec![widgets::row_item(
         p,
         Some(Icon::Scan),
-        t("Check my PC automatically"),
+        t("Check my computer automatically"),
         Some(t(
             "Looks for problems in the background and tells you if something changes.",
         )),
@@ -578,7 +578,7 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
         Some(Icon::Bell),
         t("System tray icon"),
         Some(if state.installed {
-            t("A small shield tells you at a glance if your PC looks safe.")
+            t("A small shield tells you at a glance if your computer looks safe.")
         } else {
             t("Available once Secblitz is installed.")
         }),
@@ -672,7 +672,7 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
     );
 
     let mut details = column![
-        widgets::small(p, t("A safer PC. Without headaches.")),
+        widgets::small(p, t("A safer computer. Without headaches.")),
         widgets::small(p, t("Fonts: Lexend (SIL Open Font License).")),
         widgets::small(p, t("Icons: Fluent UI System Icons (MIT license).")),
         widgets::small(

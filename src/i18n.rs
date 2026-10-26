@@ -375,7 +375,7 @@ mod tests {
                 assert_ne!(lang.control(id), id);
                 assert_ne!(lang.control(id), Lang::En.control(id));
             }
-            let detail = lang.detail("AutoAdminLogon enabled=True; Winlogon DefaultPassword value present=False. Presence only: no password data is read. Passwords kept in the Windows secret store are not checked. Review who can use this PC; automatic logon is kept to avoid disrupting kiosk or sign-in workflows.");
+            let detail = lang.detail("AutoAdminLogon enabled=True; Winlogon DefaultPassword value present=False. Presence only: no password data is read. Passwords kept in the Windows secret store are not checked. Review who can use this computer; automatic logon is kept to avoid disrupting kiosk or sign-in workflows.");
             assert!(detail.contains("True"));
             assert!(detail.contains("False"));
             assert!(!detail.contains("no password data is read"));

@@ -14,14 +14,14 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             change: "File names in folders will show their ending, like .docx. Nothing else changes.",
         },
         "net.nearby_sharing" => Explainer {
-            what: "Nearby sharing lets this PC send and receive files with other devices close to you.",
+            what: "Nearby sharing lets this computer send and receive files with other devices close to you.",
             risk: "While anyone nearby is allowed, people on a train or in a cafe can try to send you files.",
-            change: "Only your own devices can share with this PC. Sending to a friend's PC may need you to switch it back.",
+            change: "Only your own devices can share with this computer. Sending to a friend's computer may need you to switch it back.",
         },
         "privacy.tailored_experiences" => Explainer {
-            what: "Windows can use the information it collects about how you use your PC to suggest tips and ads.",
-            risk: "Your PC habits are used to personalize suggestions, which many people would rather keep private.",
-            change: "You'll see more general tips and ads instead of ones based on how you use your PC. Nothing breaks.",
+            what: "Windows can use the information it collects about how you use your computer to suggest tips and ads.",
+            risk: "Your computer habits are used to personalize suggestions, which many people would rather keep private.",
+            change: "You'll see more general tips and ads instead of ones based on how you use your computer. Nothing breaks.",
         },
         "office.internet_macros" => Explainer {
             what: "Office files downloaded from the internet can contain small programs, called macros, that run when you open them.",
@@ -30,7 +30,7 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
         },
         "debloat.lockscreen_tips" => Explainer {
             what: "The lock screen can show tips, fun facts and offers on top of its picture.",
-            risk: "You keep seeing tips and offers each time you lock or wake your PC.",
+            risk: "You keep seeing tips and offers each time you lock or wake your computer.",
             change: "The lock screen shows only its picture. Your picture and the way you sign in do not change.",
         },
         "debloat.start_settings_tips" => Explainer {
@@ -46,7 +46,7 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
         "debloat.search_web" => Explainer {
             what: "When you search in Start, Windows can also show results and ads from the web.",
             risk: "What you type in Start search can be sent to the web, and web results show next to your own files.",
-            change: "Start search shows only your PC, with no web results or daily pictures. Searching in your browser is not affected.",
+            change: "Start search shows only your computer, with no web results or daily pictures. Searching in your browser is not affected.",
         },
         "debloat.gamebar_popups" => Explainer {
             what: "Windows opens Game Bar from the Xbox button on a controller and can ask you to get an app when Game Bar is missing.",

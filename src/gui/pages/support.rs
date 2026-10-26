@@ -13,7 +13,7 @@ type El<'a> = Element<'a, Message>;
 pub const QUESTIONS: [(&str, &str); 8] = [
     (
         "What does Secblitz do?",
-        "Secblitz checks the security and privacy settings of your PC and your web browsers. It shows what could be safer and fixes it when you say yes. It can also remove apps you don't want and block dangerous websites.",
+        "Secblitz checks the security and privacy settings of your computer and your web browsers. It shows what could be safer and fixes it when you say yes. It can also remove apps you don't want and block dangerous websites.",
     ),
     (
         "Will Secblitz change anything without asking?",
@@ -37,11 +37,11 @@ pub const QUESTIONS: [(&str, &str); 8] = [
     ),
     (
         "How do I stop background checks or the icon near the clock?",
-        "Open Settings and stay on General. Turn off Check my PC automatically to stop background checks. Turn off System tray icon to hide the small shield near the clock.",
+        "Open Settings and stay on General. Turn off Check my computer automatically to stop background checks. Turn off System tray icon to hide the small shield near the clock.",
     ),
     (
         "How do I remove Secblitz?",
-        "Open Settings, General, and choose Remove Secblitz. You decide whether your PC stays as it is now or Secblitz puts everything back the way it was first.",
+        "Open Settings, General, and choose Remove Secblitz. You decide whether your computer stays as it is now or Secblitz puts everything back the way it was first.",
     ),
 ];
 
@@ -377,7 +377,7 @@ pub fn modal<'a>(state: &State, ctx: &'a Ctx, clock: &anim::Clock) -> Option<El<
             widgets::h2(p, ctx.t("We couldn't save the support file")),
             widgets::muted(
                 p,
-                ctx.t("Nothing was changed on your PC. Check that your Downloads folder exists and has room, then try again."),
+                ctx.t("Nothing was changed on your computer. Check that your Downloads folder exists and has room, then try again."),
             ),
             buttons("Close", "Try again", Msg::Save),
         ]
@@ -412,7 +412,7 @@ mod tests {
             "Show in folder",
             "Done",
             "We couldn't save the support file",
-            "Nothing was changed on your PC. Check that your Downloads folder exists and has room, then try again.",
+            "Nothing was changed on your computer. Check that your Downloads folder exists and has room, then try again.",
             "We couldn't open the folder. Look for the file in your Downloads folder.",
         ]);
         all

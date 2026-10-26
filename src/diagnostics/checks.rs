@@ -171,13 +171,13 @@ pub(super) fn secure_boot_certs(v: &SecureBootCerts) -> Vec<Assessment> {
     let (status, detail) = match Renewal::of(v) {
         Renewal::NotApplicable => (Informational, "Secure Boot is off or unavailable, so the certificate renewal does not apply."),
         Renewal::Done => (Healthy, "The 2023 Secure Boot certificate update is reported as complete."),
-        Renewal::VirtualPc => (Informational, "This is a virtual PC. The certificate renewal belongs to the program that runs it, so Secblitz leaves it alone."),
+        Renewal::VirtualPc => (Informational, "This is a virtual computer. The certificate renewal belongs to the program that runs it, so Secblitz leaves it alone."),
         Renewal::Started => (Attention, "The Secure Boot certificate renewal has started. It finishes after the next restart."),
         Renewal::Offer { .. } => (Attention, "The 2011 Secure Boot certificates have not been replaced by the 2023 ones. Secblitz can start the renewal after you agree; it cannot be undone."),
-        Renewal::Blocked(Blocker::MakerUpdate) => (Attention, "Windows logged a failed or blocked Secure Boot certificate update. The PC maker may need to release a firmware update first."),
+        Renewal::Blocked(Blocker::MakerUpdate) => (Attention, "Windows logged a failed or blocked Secure Boot certificate update. The computer maker may need to release a firmware update first."),
         Renewal::Blocked(Blocker::TaskOff) => (Attention, "The Windows job that renews the Secure Boot certificates is missing or switched off. Install all Windows updates, then check again."),
         Renewal::Blocked(Blocker::OtherSystem) => (Attention, "Another operating system is in the startup list, so Secblitz does not renew the Secure Boot certificates for you."),
-        Renewal::Blocked(Blocker::NotChecked) => (Attention, "No sign that the 2011 Secure Boot certificates were replaced by the 2023 ones, and the renewal could not be checked safely. Install all Windows updates and check the PC maker's firmware guidance."),
+        Renewal::Blocked(Blocker::NotChecked) => (Attention, "No sign that the 2011 Secure Boot certificates were replaced by the 2023 ones, and the renewal could not be checked safely. Install all Windows updates and check the computer maker's firmware guidance."),
         Renewal::Unknown => (Unknown, "Secure Boot certificate renewal state could not be read."),
     };
     vec![a(id, status, detail)]
@@ -245,7 +245,7 @@ pub(super) fn smartscreen(v: &SmartScreen) -> Vec<Assessment> {
         (Some(false), Some(false)) => Healthy,
         _ => Unknown,
     };
-    out.push(a("smartscreen.apps", apps, "App and file reputation warnings are off by local setting or by a policy value. When a policy value is present, whoever manages this PC may have set it on purpose."));
+    out.push(a("smartscreen.apps", apps, "App and file reputation warnings are off by local setting or by a policy value. When a policy value is present, whoever manages this computer may have set it on purpose."));
     let browser = match (v.edge_off_policy.known(), v.chrome_off_policy.known()) {
         (Some(true), _) | (_, Some(true)) => Attention,
         (Some(false), Some(false)) => Healthy,
@@ -269,7 +269,7 @@ pub(super) fn update_policy(v: &UpdatePolicy) -> Vec<Assessment> {
         (Some(false), _) => Healthy,
         _ => Unknown,
     };
-    out.push(a("update.reboot_overdue", reboot, "A restart is waiting to finish installing updates and the PC has been up for a week or more. Fast Startup does not count as a restart, and nothing is restarted automatically."));
+    out.push(a("update.reboot_overdue", reboot, "A restart is waiting to finish installing updates and the computer has been up for a week or more. Fast Startup does not count as a restart, and nothing is restarted automatically."));
     out
 }
 
@@ -386,7 +386,7 @@ pub(super) fn kernel_stack(vbs: &Vbs) -> Option<Assessment> {
     let running_hvci = vbs.running_services.known().is_some_and(|s| s.contains(&2));
     Some(match vbs.kernel_shadow_stacks.known().map(String::as_str) {
         Some("On") => a(id, Healthy, "Kernel-mode hardware-enforced stack protection is switched on."),
-        Some("Off") if running_hvci => a(id, Attention, "Kernel-mode hardware-enforced stack protection is off although Memory integrity is running. Whether your PC supports it is not tested; the Windows Security toggle shows that. Nothing is changed by this check."),
+        Some("Off") if running_hvci => a(id, Attention, "Kernel-mode hardware-enforced stack protection is off although Memory integrity is running. Whether your computer supports it is not tested; the Windows Security toggle shows that. Nothing is changed by this check."),
         Some("Off") => a(id, Informational, "Kernel-mode hardware-enforced stack protection is off. It needs Memory integrity running first; nothing is changed by this check."),
         Some("Absent") => return None,
         _ => a(id, Unknown, "Kernel-mode stack protection state could not be read."),
@@ -411,7 +411,7 @@ pub(super) fn dns_encryption(v: &DnsEncryption) -> Vec<Assessment> {
 pub(super) fn wifi_security(v: &WifiSecurity) -> Vec<Assessment> {
     let (status, detail) = match v.current_network.known().map(String::as_str) {
         Some("Strong") => (Healthy, "The connected Wi-Fi network uses modern WPA2 or WPA3 security."),
-        Some("None") => (Informational, "No Wi-Fi network is connected, or this PC has no Wi-Fi."),
+        Some("None") => (Informational, "No Wi-Fi network is connected, or this computer has no Wi-Fi."),
         Some("Open") => (Attention, "The connected Wi-Fi network has no password protection. On your own router, turn on WPA2 or WPA3; on a public network avoid private sign-ins."),
         Some("Wep") => (Attention, "The connected Wi-Fi network uses WEP, which can be broken in minutes. The fix is on the router: switch to WPA2 or WPA3."),
         Some("Old") => (Attention, "The connected Wi-Fi network uses old WPA or TKIP security. The fix is on the router: switch to WPA2 or WPA3 with AES."),
@@ -483,7 +483,7 @@ pub(super) fn documentation(id: &str) -> Option<&'static str> {
 pub(super) fn guidance(id: &str) -> Option<&'static str> {
     Some(match id {
         "os.feature_release_support" => "Install the newest Windows release through Windows Update after a backup; never silently. Skip when on a metered connection or with little free disk space.",
-        "boot.secure_boot_certs" => "Install all pending Windows updates, then check the PC maker's firmware update page. Keep the BitLocker recovery key safe first. Secblitz can start the renewal on a PC that allows it, only after you agree, and it cannot be undone.",
+        "boot.secure_boot_certs" => "Install all pending Windows updates, then check the computer maker's firmware update page. Keep the BitLocker recovery key safe first. Secblitz can start the renewal on a computer that allows it, only after you agree, and it cannot be undone.",
         "defender.tamper_protection" => "Open Windows Security, Virus and threat protection settings, and turn Tamper Protection on. If a work or school account controls it, ask them.",
         "defender.threats" => "Open Windows Security, Protection history, and follow the steps for each active item. Do not delete files by hand.",
         "defender.scan_age" => "Run a quick scan from Windows Security. This tool never starts a full scan on its own.",
@@ -499,8 +499,8 @@ pub(super) fn guidance(id: &str) -> Option<&'static str> {
         "accounts.daily_admin" => "Create a standard account for daily use and keep this administrator account for installing software. Nothing is changed for you.",
         "accounts.hello_configured" => "Open Settings, Accounts, Sign-in options and add a PIN or Windows Hello. This tool never sets one for you.",
         "accounts.find_my_device" => "Open Settings, Privacy and security, Find my device and turn it on, so a lost laptop can be located and locked.",
-        "vbs.kernel_stack_protection" => "Open Protection in Secblitz: it turns this on only when your PC supports it and it is safe. To look yourself, open Windows Security, then Device security, then Core isolation details.",
-        "vbs.memory_integrity" => "Open Protection in Secblitz: it turns this on only when your PC supports it and every driver looks compatible. To look yourself, open Windows Security, then Device security, then Core isolation details.",
+        "vbs.kernel_stack_protection" => "Open Protection in Secblitz: it turns this on only when your computer supports it and it is safe. To look yourself, open Windows Security, then Device security, then Core isolation details.",
+        "vbs.memory_integrity" => "Open Protection in Secblitz: it turns this on only when your computer supports it and every driver looks compatible. To look yourself, open Windows Security, then Device security, then Core isolation details.",
         "net.dns_encryption" => "Open Settings, Network and internet, your connection, DNS server assignment, and choose encrypted lookups. Your DNS servers are never changed by this tool.",
         "net.wifi_security" => "Change the Wi-Fi security on your router to WPA2 or WPA3 (AES). On a public network, avoid banking and passwords.",
         "persistence.run_and_tasks" => "Secblitz can switch off flagged start-up items and scheduled tasks without deleting them, and undo it exactly. Otherwise open Task Manager, Startup apps, and switch off ones you do not know.",

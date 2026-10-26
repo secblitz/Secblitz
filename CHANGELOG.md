@@ -9,6 +9,9 @@ dated version section when a release is prepared (see `docs/RELEASING.md`).
 
 ## [Unreleased]
 
+### Changed
+- Secblitz now says computer instead of PC.
+
 ### Fixed
 - Secure connections for updates and block lists use newer versions that fix recently found weaknesses.
 

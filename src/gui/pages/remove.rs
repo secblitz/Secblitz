@@ -17,18 +17,18 @@ use std::time::Instant;
 type El<'a> = Element<'a, Message>;
 
 pub const SECTION_TITLE: &str = "Remove Secblitz";
-pub const SECTION_ROW: &str = "Remove Secblitz from this PC";
+pub const SECTION_ROW: &str = "Remove Secblitz from this computer";
 pub const SECTION_HELP: &str = "You choose whether your settings stay as they are or go back.";
 const QUESTION: &str = "What should happen to the changes Secblitz made?";
 const NOTHING_TO_PUT_BACK: &str = "Nothing Secblitz changed needs to be put back.";
-const KEEP_TITLE: &str = "Keep my PC as it is now";
+const KEEP_TITLE: &str = "Keep my computer as it is now";
 const KEEP_HELP: &str = "Your protection stays on, and apps you removed stay removed.";
 const PUT_BACK_TITLE: &str = "Put everything back the way it was";
 const STAY_NOTE: &str = "Windows updates, virus scans and apps you installed with Secblitz stay.";
 const WEB_STOPS: &str = "Web protection stops too, because it is part of Secblitz.";
 const KEEP_DELETES_COPIES: &str = "The saved copies of removed apps are deleted to free space, so those apps can then only come back from the Microsoft Store.";
 const OWN_ACCOUNT_ONLY: &str =
-    "Personal settings are put back for your account only. Other accounts on this PC keep theirs.";
+    "Personal settings are put back for your account only. Other accounts on this computer keep theirs.";
 const STORE_NEEDS_INTERNET: &str = "Apps without a saved copy download again from the Microsoft Store, which needs an internet connection. They can take a few minutes to show up in Start.";
 const CANCEL: &str = "Cancel";
 const LOADING: &str = "Looking at what Secblitz changed…";
@@ -55,7 +55,7 @@ const KEEP_SECBLITZ: &str = "Keep Secblitz";
 const CLOSE: &str = "Close";
 const LEAVING_TITLE: &str = "Removing Secblitz…";
 const LEAVING_HELP: &str = "This window closes by itself.";
-const CANNOT_START: &str = "We couldn't start the removal. Secblitz was not removed. Close Secblitz, open it again and try once more. If that does not work, restart your PC.";
+const CANNOT_START: &str = "We couldn't start the removal. Secblitz was not removed. Close Secblitz, open it again and try once more. If that does not work, restart your computer.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Choice {

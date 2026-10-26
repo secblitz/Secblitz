@@ -33,7 +33,7 @@ pub fn friendly_problem(raw: &str) -> &'static str {
         "windows 10/11",
         "64-bit windows",
     ]) {
-        "Secblitz works on Windows 10 and Windows 11 (64-bit) only. Open it on a PC that runs one of them."
+        "Secblitz works on Windows 10 and Windows 11 (64-bit) only. Open it on a computer that runs one of them."
     } else if has(&["undo history is damaged"]) {
         DAMAGED_HISTORY
     } else if has(&["declined", "cancel"]) {
@@ -45,13 +45,13 @@ pub fn friendly_problem(raw: &str) -> &'static str {
         "administrator",
         "elevat",
     ]) {
-        "Windows wouldn't let Secblitz open its files. Sign in with an account that can make changes to this PC, then open Secblitz again."
+        "Windows wouldn't let Secblitz open its files. Sign in with an account that can make changes to this computer, then open Secblitz again."
     } else if has(&["journal lock", "another secblitz", "already running"]) {
         "Secblitz is already busy with another task. Wait a minute, then open it again."
     } else if has(&["no space", "os error 112", "disk full"]) {
-        "Your PC is almost out of space. Free up some space, then open Secblitz again."
+        "Your computer is almost out of space. Free up some space, then open Secblitz again."
     } else if has(&["journal", "corrupt", "missing header", "utf8"]) {
-        "Secblitz couldn't read its saved information. Restart your PC and open Secblitz again. If it keeps happening, install the latest Secblitz."
+        "Secblitz couldn't read its saved information. Restart your computer and open Secblitz again. If it keeps happening, install the latest Secblitz."
     } else if has(&[
         "timed out",
         "did not answer",
@@ -60,9 +60,9 @@ pub fn friendly_problem(raw: &str) -> &'static str {
         "script",
         "backend",
     ]) {
-        "Windows didn't answer in time. Restart your PC, then open Secblitz again."
+        "Windows didn't answer in time. Restart your computer, then open Secblitz again."
     } else {
-        "Something unexpected got in the way. Restart your PC and open Secblitz again. If it keeps happening, check for a Secblitz update."
+        "Something unexpected got in the way. Restart your computer and open Secblitz again. If it keeps happening, check for a Secblitz update."
     }
 }
 
@@ -71,7 +71,7 @@ pub fn friendly_check_problem(raw: &str) -> &'static str {
     if found.starts_with("Secblitz works on Windows 10") || found == DAMAGED_HISTORY {
         found
     } else {
-        "Something unexpected got in the way. Press Check again. If it keeps happening, restart your PC."
+        "Something unexpected got in the way. Press Check again. If it keeps happening, restart your computer."
     }
 }
 

@@ -109,7 +109,7 @@ pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
         Msg::Changed(setting, reply) => {
             let note = match reply {
                 Ok(Reply::Done) => None,
-                Ok(Reply::Unavailable) => Some(ctx.t("This setting can't be changed on this PC. Your work or school may control it.")),
+                Ok(Reply::Unavailable) => Some(ctx.t("This setting can't be changed on this computer. Your work or school may control it.")),
                 Ok(Reply::ChangedSince) => Some(ctx.t("This setting was changed again after Secblitz set it. Whatever you changed was left as it is.")),
                 Err(e) if e == "unavailable" => Some(helper_text(ctx)),
                 _ => Some(ctx.t("We couldn't change that setting. It was left as it was. Please try again.")),
@@ -138,7 +138,7 @@ pub struct Part<'a> {
 
 pub fn account<'a>(state: &'a State, ctx: &'a Ctx) -> Part<'a> {
     Part {
-        subtitle: ctx.t("Settings that belong to the person signed in to this PC."),
+        subtitle: ctx.t("Settings that belong to the person signed in to this computer."),
         rows: account_rows(state, ctx),
     }
 }
@@ -158,7 +158,7 @@ fn label(ctx: &Ctx, setting: Setting) -> (Icon, String) {
         Setting::NearbySharing => (Icon::Globe, ctx.t("Nearby sharing with your devices only")),
         Setting::TailoredExperiences => (
             Icon::EyeOff,
-            ctx.t("Keep your PC habits out of tips and ads"),
+            ctx.t("Keep your computer habits out of tips and ads"),
         ),
         Setting::OfficeMacros => (
             Icon::Lock,
