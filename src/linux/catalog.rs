@@ -365,6 +365,22 @@ const SPECS: &[LinuxSpec] = &[
         reboot: false,
         keys: &[set("others", "", &[0], false, Some(0), 7)],
     },
+    // firefox, chromium: 1 when that browser (Chromium means Chrome, Chromium or Brave) still shares usage data; null when none is installed.
+    LinuxSpec {
+        id: "linux.browser_data_collection",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[flag("firefox", true), flag("chromium", true)],
+    },
+    // firefox: 1 when Firefox does not insist on secure connections; null when it is not installed.
+    LinuxSpec {
+        id: "linux.browser_https_only",
+        scope: Scope::System,
+        ask: true,
+        reboot: false,
+        keys: &[flag("firefox", true)],
+    },
 ];
 
 /// The only words these keys can hold. Other text keys hold names or ranges, so they are only kept to plain ASCII.
@@ -470,7 +486,7 @@ mod tests {
         for windows in crate::engine::catalog::ids(Os::Windows) {
             assert!(spec(windows).is_none(), "{windows}");
         }
-        assert_eq!(specs().len(), 32);
+        assert_eq!(specs().len(), 34);
     }
 
     #[test]
@@ -496,6 +512,7 @@ mod tests {
             "linux.recent_files",
             "linux.app_usage",
             "linux.old_files",
+            "linux.browser_https_only",
         ];
         for s in specs() {
             let want = if person.contains(&s.id) {

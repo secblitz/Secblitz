@@ -64,7 +64,13 @@ impl Sim {
             .join("root");
         read_tree(&root, &root, &mut sim.files.borrow_mut());
         services::load_recordings(&sim, &root.with_file_name("cmd"));
-        for tool in ["/usr/bin/ls", "/usr/bin/systemctl"] {
+        for tool in [
+            "/usr/bin/ls",
+            "/usr/bin/systemctl",
+            "/usr/bin/test",
+            "/usr/bin/mkdir",
+            "/usr/bin/rmdir",
+        ] {
             sim.tools.borrow_mut().insert(tool.into());
         }
         sim
@@ -374,12 +380,76 @@ impl Sim {
         )
     }
 
+    fn dir_exists(&self, path: &str) -> bool {
+        let prefix = format!("{}/", path.trim_end_matches('/'));
+        matches!(path, "/" | "/etc" | "/etc/opt")
+            || self.kv.borrow().contains_key(&format!("dir:{path}"))
+            || self
+                .files
+                .borrow()
+                .keys()
+                .any(|p| p.to_str().is_some_and(|p| p.starts_with(&prefix)))
+    }
+
+    fn mkdir(&self, path: &str) -> Result<Output> {
+        let parent = path.rsplit_once('/').map_or("/", |(p, _)| p);
+        if self.dir_exists(path) || !self.dir_exists(if parent.is_empty() { "/" } else { parent }) {
+            return out(1, "");
+        }
+        self.set(&format!("dir:{path}"), "1");
+        Ok(Output {
+            status: 0,
+            stdout: String::new(),
+            stderr: String::new(),
+        })
+    }
+
+    fn rmdir(&self, path: &str) -> Result<Output> {
+        let prefix = format!("{path}/");
+        let busy = self
+            .files
+            .borrow()
+            .keys()
+            .any(|p| p.to_str().is_some_and(|p| p.starts_with(&prefix)))
+            || self
+                .kv
+                .borrow()
+                .keys()
+                .any(|k| k.starts_with(&format!("dir:{prefix}")));
+        if busy
+            || self
+                .kv
+                .borrow_mut()
+                .remove(&format!("dir:{path}"))
+                .is_none()
+        {
+            return out(1, "");
+        }
+        out(0, "")
+    }
+
     fn dispatch(&self, program: &str, args: &[&str]) -> Result<Output> {
         if let Some(done) = services::dispatch(self, program, args) {
             return done;
         }
         match program {
             "/usr/bin/ls" => self.ls(args[1]),
+            "/usr/bin/test" => match args {
+                ["-d", path] => out(i32::from(!self.dir_exists(path)), ""),
+                ["-e", path] => out(
+                    i32::from(!(self.dir_exists(path) || self.has(path))),
+                    "",
+                ),
+                other => bail!("test {other:?}"),
+            },
+            "/usr/bin/mkdir" => match args {
+                ["-m", _, path] => self.mkdir(path),
+                other => bail!("mkdir {other:?}"),
+            },
+            "/usr/bin/rmdir" => match args {
+                [path] => self.rmdir(path),
+                other => bail!("rmdir {other:?}"),
+            },
             "/usr/bin/systemctl" => self.systemctl(args),
             "/usr/sbin/ufw" => self.ufw(args),
             "/usr/bin/firewall-cmd" | "/usr/bin/firewall-offline-cmd" => {

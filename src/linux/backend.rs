@@ -19,7 +19,7 @@ pub struct LinuxBackend<S: Sys> {
     memo: PathBuf,
 }
 
-const TEXT: [(&str, &str, &str); 21] = [
+const TEXT: [(&str, &str, &str); 23] = [
     (
         "linux.firewall",
         "Firewall",
@@ -124,6 +124,16 @@ const TEXT: [(&str, &str, &str); 21] = [
         "linux.snap_updates",
         "App store updates",
         "Whether updates of apps from Ubuntu's app store are held back.",
+    ),
+    (
+        "linux.browser_data_collection",
+        "Browser usage data",
+        "Whether your web browsers send details about how you use them to the companies that make them.",
+    ),
+    (
+        "linux.browser_https_only",
+        "Secure connections only",
+        "Whether Firefox warns you before it opens a page that is not protected.",
     ),
 ];
 
@@ -248,6 +258,8 @@ impl<S: Sys> Backend for LinuxBackend<S> {
             "linux.printer_discovery" => controls::services::observe_printer_discovery(&cx),
             "linux.ubuntu_news" => controls::services::observe_ubuntu_news(&cx),
             "linux.snap_updates" => controls::services::observe_snap_updates(&cx),
+            "linux.browser_data_collection" => controls::browsers::observe_data_collection(&cx),
+            "linux.browser_https_only" => controls::browsers::observe_https_only(&cx),
             _ => bail!("Unknown control id: {id}"),
         };
         result.map_err(|e| detail(id, &e, READ_FAILED))
@@ -280,6 +292,10 @@ impl<S: Sys> Backend for LinuxBackend<S> {
             "linux.printer_discovery" => controls::services::write_printer_discovery(&cx, &want),
             "linux.ubuntu_news" => controls::services::write_ubuntu_news(&cx, &want),
             "linux.snap_updates" => controls::services::write_snap_updates(&cx, &want),
+            "linux.browser_data_collection" => {
+                controls::browsers::write_data_collection(&cx, &want)
+            }
+            "linux.browser_https_only" => controls::browsers::write_https_only(&cx, &want),
             _ => bail!("Unknown control id: {id}"),
         };
         result.map_err(|e| detail(id, &e, CHANGE_FAILED))

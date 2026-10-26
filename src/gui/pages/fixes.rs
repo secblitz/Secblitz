@@ -2389,6 +2389,7 @@ mod tests {
                 Topic::SignIn,
                 Topic::Network,
                 Topic::Windows,
+                Topic::Browsers,
                 Topic::Privacy
             ]
         );
@@ -2408,7 +2409,7 @@ mod tests {
         });
         let shown = rows.visible_topics(secblitz::os::Os::Linux);
         assert!(shown.contains(&Topic::Threats));
-        assert!(!shown.contains(&Topic::Browsers));
+        assert!(!shown.contains(&Topic::Clutter));
     }
 
     #[test]

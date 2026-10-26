@@ -28,6 +28,7 @@ pub fn extra_section(id: &str) -> Option<&'static str> {
             | "linux.recent_files"
             | "linux.app_usage"
             | "linux.old_files"
+            | "linux.browser_https_only"
     ) {
         return Some("Privacy extras");
     }

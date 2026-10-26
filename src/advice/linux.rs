@@ -42,6 +42,8 @@ pub(super) fn label(id: &str) -> Option<&'static str> {
         "linux.app_usage" => "Most-used apps list",
         "linux.old_files" => "Automatic Trash cleanup",
         "linux.home_private" => "Privacy of your home folder",
+        "linux.browser_data_collection" => "Browser usage data",
+        "linux.browser_https_only" => "Secure connections only",
         _ => return None,
     })
 }
@@ -116,6 +118,12 @@ pub(super) fn impact(id: &str) -> Option<&'static str> {
             "Deleted files and leftovers staying on your computer for anyone to find"
         }
         "linux.home_private" => "Other people with an account on this computer reading your files",
+        "linux.browser_data_collection" => {
+            "Details about the sites you visit and how you browse being sent to the companies behind your browsers"
+        }
+        "linux.browser_https_only" => {
+            "Someone on the same network reading or changing a page that is not protected"
+        }
         _ => return None,
     })
 }
@@ -165,6 +173,9 @@ pub(super) fn repair(id: &str) -> Option<&'static str> {
         "linux.home_private" => {
             "Other accounts on this computer will no longer be able to open your home folder."
         }
+        "linux.browser_data_collection" => {
+            "Your browsers will stop sending usage data to the companies that make them."
+        }
         _ => return None,
     })
 }
@@ -178,6 +189,7 @@ pub(super) fn consequence(id: &str) -> Option<&'static str> {
         "linux.recent_files" => "The list of recent files is forgotten after 30 days. Your files stay where they are. You can undo this.",
         "linux.app_usage" => "Your computer stops keeping track of which apps you use most. Search may list apps in a different order. You can undo this.",
         "linux.old_files" => "Files in the Trash for over 30 days, and old temporary files, are deleted for good. Undo cannot bring them back.",
+        "linux.browser_https_only" => "Firefox warns you before opening a page that is not protected. You can still open it. You can undo this.",
         _ => return None,
     })
 }
@@ -246,6 +258,8 @@ pub(super) fn not_offered(reason: &str) -> Option<&'static str> {
         c::services::NO_PRINTER_FINDER,
         c::services::NO_SNAP_STORE,
         c::UNRECOGNISED,
+        c::browsers::NO_BROWSER,
+        c::browsers::NO_FIREFOX,
         crate::linux::person::UNAVAILABLE,
     ]
     .into_iter()
@@ -328,6 +342,7 @@ mod tests {
             "linux.recent_files",
             "linux.app_usage",
             "linux.old_files",
+            "linux.browser_https_only",
         ] {
             assert_eq!(crate::advice::extra_section(id), Some("Privacy extras"));
             let a = for_control(id, &CheckStatus::Attention, "Eligible");
@@ -374,6 +389,8 @@ mod tests {
             c::REMOTE_SIGN_IN_UNREADABLE,
             c::NO_NETWORK_MANAGER,
             c::UNRECOGNISED,
+            c::browsers::NO_BROWSER,
+            c::browsers::NO_FIREFOX,
             crate::linux::person::UNAVAILABLE,
         ] {
             let a = for_control("linux.firewall", &CheckStatus::Skipped, reason);

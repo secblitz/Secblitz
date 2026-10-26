@@ -87,6 +87,16 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             "Someone on the same network can answer first and trick your computer into sending them a sign-in password.",
             "Your computer stops answering these questions. Names are still found through your normal internet settings, and you can undo this.",
         ),
+        "linux.browser_data_collection" => e(
+            "Your browsers can send Google, Mozilla and others details about how you use them and what interests you.",
+            "Those details can include the sites you visit, and they are used to tailor ads and services to you.",
+            "Browsers stop sending usage data and then say your organization manages them, which only means a setting was made here. You can undo this.",
+        ),
+        "linux.browser_https_only" => e(
+            "Firefox can insist on secure connections and warn you before it opens a page that is not protected.",
+            "On a page that is not protected, anyone on the same network can read what you type or change what you see.",
+            "Firefox warns you first, and you can still open the page. It will say your organization manages it, which only means a setting was made here.",
+        ),
         "linux.screen_lock" => e(
             "Your screen should lock when you walk away. This checks that locking is on and that it does not wait forever.",
             "Anyone who walks past can read your screen and use your accounts while you are gone.",

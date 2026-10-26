@@ -77,6 +77,9 @@ impl Topic {
                 | "linux.media_autorun"
                 | "linux.home_private",
             ) => Topic::SignIn,
+            ("linux", "linux.browser_data_collection" | "linux.browser_https_only") => {
+                Topic::Browsers
+            }
             (
                 "linux",
                 "linux.crash_reports"
@@ -194,8 +197,8 @@ mod tests {
     #[test]
     fn linux_shows_only_topics_with_linux_checks() {
         let shown = Topic::shown_on(secblitz::os::Os::Linux);
-        assert_eq!(shown, vec![SignIn, Network, Windows, Privacy]);
-        for gone in [Threats, Browsers, Ai, Clutter] {
+        assert_eq!(shown, vec![SignIn, Network, Windows, Browsers, Privacy]);
+        for gone in [Threats, Ai, Clutter] {
             assert!(!shown.contains(&gone));
         }
     }
@@ -339,6 +342,8 @@ mod tests {
             ("linux.app_usage", Privacy),
             ("linux.old_files", Privacy),
             ("linux.home_private", SignIn),
+            ("linux.browser_data_collection", Browsers),
+            ("linux.browser_https_only", Browsers),
         ];
         for (id, topic) in expected {
             assert_eq!(Topic::of(id), *topic, "{id}");

@@ -10,6 +10,7 @@ mod guided;
 mod interface;
 mod italian;
 mod linux;
+mod linux_browsers;
 mod linux_cleanup;
 mod linux_network;
 mod linux_services;
@@ -151,6 +152,7 @@ const MAINTENANCE_PARTS: &[&[[&str; 6]]] = &[
     linux_network::ROWS,
     linux_services::ROWS,
     linux_person::ROWS,
+    linux_browsers::ROWS,
 ];
 
 const TEXT_PARTS: &[&[[&str; 5]]] = &[
