@@ -19,7 +19,7 @@ pub struct LinuxBackend<S: Sys> {
     memo: PathBuf,
 }
 
-const TEXT: [(&str, &str, &str); 32] = [
+const TEXT: [(&str, &str, &str); 41] = [
     (
         "linux.firewall",
         "Firewall",
@@ -99,6 +99,51 @@ const TEXT: [(&str, &str, &str); 32] = [
         "linux.llmnr",
         "Name lookups on the network",
         "Whether this computer answers name lookups from other computers on the local network.",
+    ),
+    (
+        "linux.fake_sources",
+        "Faked sender addresses",
+        "Whether this computer throws away network messages that pretend to come from a place they could not have come from.",
+    ),
+    (
+        "linux.flood_protection",
+        "Protection from connection floods",
+        "Whether this computer keeps answering real visitors when someone floods it with fake requests to connect.",
+    ),
+    (
+        "linux.source_routing",
+        "Messages that choose their own route",
+        "Whether this computer follows network messages that say which way they must travel.",
+    ),
+    (
+        "linux.broadcast_pings",
+        "Calls to the whole network",
+        "Whether this computer answers a single call that is sent to every computer on the network at once.",
+    ),
+    (
+        "linux.ipv6_privacy",
+        "Private network address",
+        "Whether this computer uses a temporary address on newer networks, so websites cannot follow it by its address.",
+    ),
+    (
+        "linux.computer_name_sent",
+        "Computer name shared with networks",
+        "Whether this computer tells every network it joins what its name is.",
+    ),
+    (
+        "linux.encrypted_dns",
+        "Private website lookups",
+        "Whether this computer scrambles the questions it asks to find websites, so others on the network cannot read them.",
+    ),
+    (
+        "linux.announce_name",
+        "Announcing this computer",
+        "Whether this computer tells others on the local network its name and what it offers.",
+    ),
+    (
+        "linux.old_network_services",
+        "Old network services",
+        "Whether old remote services that send data without protection are running on this computer.",
     ),
     (
         "linux.time_sync",
@@ -304,6 +349,15 @@ impl<S: Sys> Backend for LinuxBackend<S> {
             "linux.ptrace" => controls::kernel::observe_ptrace(&cx),
             "linux.network_redirects" => controls::network::observe_redirects(&cx),
             "linux.llmnr" => controls::network::observe_llmnr(&cx),
+            "linux.fake_sources" => controls::netguard::observe_fake_sources(&cx),
+            "linux.flood_protection" => controls::netguard::observe_flood_protection(&cx),
+            "linux.source_routing" => controls::netguard::observe_source_routing(&cx),
+            "linux.broadcast_pings" => controls::netguard::observe_broadcast_pings(&cx),
+            "linux.ipv6_privacy" => controls::netguard::observe_ipv6_privacy(&cx),
+            "linux.computer_name_sent" => controls::netguard::observe_computer_name(&cx),
+            "linux.encrypted_dns" => controls::netguard::observe_encrypted_dns(&cx),
+            "linux.announce_name" => controls::netguard::observe_announce_name(&cx),
+            "linux.old_network_services" => controls::netguard::observe_old_services(&cx),
             "linux.time_sync" => controls::services::observe_time_sync(&cx),
             "linux.printer_sharing" => controls::services::observe_printer_sharing(&cx),
             "linux.printer_discovery" => controls::services::observe_printer_discovery(&cx),
@@ -347,6 +401,15 @@ impl<S: Sys> Backend for LinuxBackend<S> {
             "linux.ptrace" => controls::kernel::write_ptrace(&cx, &want),
             "linux.network_redirects" => controls::network::write_redirects(&cx, &want),
             "linux.llmnr" => controls::network::write_llmnr(&cx, &want),
+            "linux.fake_sources" => controls::netguard::write_fake_sources(&cx, &want),
+            "linux.flood_protection" => controls::netguard::write_flood_protection(&cx, &want),
+            "linux.source_routing" => controls::netguard::write_source_routing(&cx, &want),
+            "linux.broadcast_pings" => controls::netguard::write_broadcast_pings(&cx, &want),
+            "linux.ipv6_privacy" => controls::netguard::write_ipv6_privacy(&cx, &want),
+            "linux.computer_name_sent" => controls::netguard::write_computer_name(&cx, &want),
+            "linux.encrypted_dns" => controls::netguard::write_encrypted_dns(&cx, &want),
+            "linux.announce_name" => controls::netguard::write_announce_name(&cx, &want),
+            "linux.old_network_services" => controls::netguard::write_old_services(&cx, &want),
             "linux.time_sync" => controls::services::write_time_sync(&cx, &want),
             "linux.printer_sharing" => controls::services::write_printer_sharing(&cx, &want),
             "linux.printer_discovery" => controls::services::write_printer_discovery(&cx, &want),

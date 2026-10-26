@@ -32,6 +32,15 @@ pub(super) fn label(id: &str) -> Option<&'static str> {
         "linux.ptrace" => "Looking inside other programs",
         "linux.network_redirects" => "Network route changes",
         "linux.llmnr" => "Name lookups on the network",
+        "linux.fake_sources" => "Faked sender addresses",
+        "linux.flood_protection" => "Protection from connection floods",
+        "linux.source_routing" => "Messages that choose their own route",
+        "linux.broadcast_pings" => "Calls to the whole network",
+        "linux.ipv6_privacy" => "Private network address",
+        "linux.computer_name_sent" => "Computer name shared with networks",
+        "linux.encrypted_dns" => "Private website lookups",
+        "linux.announce_name" => "Announcing this computer",
+        "linux.old_network_services" => "Old network services",
         "linux.screen_lock" => "Screen lock",
         "linux.remote_desktop" => "Screen sharing",
         "linux.recent_files" => "Recent files list",
@@ -100,6 +109,33 @@ pub(super) fn impact(id: &str) -> Option<&'static str> {
         }
         "linux.llmnr" => {
             "Someone on the same network tricking your computer into handing over a sign-in password"
+        }
+        "linux.fake_sources" => {
+            "Someone sending harmful messages that pretend to come from a computer you trust"
+        }
+        "linux.flood_protection" => {
+            "Someone knocking your computer offline by flooding it with fake connection requests"
+        }
+        "linux.source_routing" => {
+            "Someone steering network messages around the protections of your network"
+        }
+        "linux.broadcast_pings" => {
+            "Your computer being used to flood someone else with replies"
+        }
+        "linux.ipv6_privacy" => {
+            "Websites and networks recognising your computer by its address from day to day"
+        }
+        "linux.computer_name_sent" => {
+            "Every network you join learning the name of your computer, which often holds your own name"
+        }
+        "linux.encrypted_dns" => {
+            "Anyone on the network seeing every website you look up"
+        }
+        "linux.announce_name" => {
+            "Strangers on the same network seeing the name of your computer and what it offers"
+        }
+        "linux.old_network_services" => {
+            "Anyone on the network reading or taking over what these old services handle"
         }
         "linux.screen_lock" => "Anyone walking up to your computer while you are away",
         "linux.remote_desktop" => {
@@ -188,6 +224,24 @@ pub(super) fn repair(id: &str) -> Option<&'static str> {
         "linux.llmnr" => {
             "This computer will stop answering name lookups from other computers on the network."
         }
+        "linux.fake_sources" => {
+            "This computer will throw away network messages that claim to come from a place they could not have come from."
+        }
+        "linux.flood_protection" => {
+            "This computer will keep answering real visitors when it is flooded with fake requests to connect."
+        }
+        "linux.source_routing" => {
+            "This computer will ignore network messages that try to choose their own route."
+        }
+        "linux.broadcast_pings" => {
+            "This computer will stop answering calls that are sent to every computer on the network at once."
+        }
+        "linux.ipv6_privacy" => {
+            "This computer will use temporary addresses that change from time to time, starting with your next connection to a network."
+        }
+        "linux.old_network_services" => {
+            "Old network services that send data without protection will be stopped and switched off."
+        }
         "linux.crash_reports" => "Ubuntu will stop collecting crash reports.",
         "linux.countme" => "Fedora will stop counting this computer.",
         "linux.screen_lock" => "The screen will lock after a few minutes without use.",
@@ -244,6 +298,9 @@ pub(super) fn consequence(id: &str) -> Option<&'static str> {
     Some(match id {
         "linux.ssh_server" => "Nobody can sign in to this computer from another one. Do not choose this if you manage it from afar. You can undo this.",
         "linux.fedora_open_ports" => "A tool that must be reached from other computers may stop working until you allow it. You can undo this.",
+        "linux.computer_name_sent" => "Networks stop seeing your computer's name from your next connection. Some routers then show it as unknown. You can undo this.",
+        "linux.encrypted_dns" => "Website lookups are scrambled when your network allows it. Some networks may answer more slowly. You can undo this.",
+        "linux.announce_name" => "Printers and speakers may no longer see what this computer shares. This computer still finds them. You can undo this.",
         "linux.connectivity_check" => "Your computer stops contacting an outside address. Wi-Fi sign-in pages may no longer pop up by themselves.",
         "linux.wifi_mac" => "Each Wi-Fi network sees a made-up address. A network that knew your old one may ask you to sign in again.",
         "linux.recent_files" => "The list of recent files is forgotten after 30 days. Your files stay where they are. You can undo this.",
@@ -446,6 +503,9 @@ mod tests {
             "linux.app_usage",
             "linux.old_files",
             "linux.browser_https_only",
+            "linux.computer_name_sent",
+            "linux.encrypted_dns",
+            "linux.announce_name",
         ] {
             assert_eq!(crate::advice::extra_section(id), Some("Privacy extras"));
             let a = for_control(id, &CheckStatus::Attention, "Eligible");

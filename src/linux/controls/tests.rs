@@ -1144,8 +1144,8 @@ fn the_controls_listed_follow_the_distribution() {
     let ubuntu = backend(&ubuntu()).controls();
     let fedora = backend(&fedora()).controls();
     let ids = |c: &[Control]| c.iter().map(|c| c.id.clone()).collect::<Vec<_>>();
-    assert_eq!(ubuntu.len(), 29);
-    assert_eq!(fedora.len(), 29);
+    assert_eq!(ubuntu.len(), 38);
+    assert_eq!(fedora.len(), 38);
     assert!(ids(&ubuntu).contains(&"linux.crash_reports".to_string()));
     assert!(!ids(&ubuntu).contains(&"linux.countme".to_string()));
     assert!(ids(&fedora).contains(&"linux.fedora_open_ports".to_string()));
@@ -1702,5 +1702,6 @@ fn every_finding_title_the_linux_backend_can_emit_has_linux_advice_and_no_window
 }
 
 mod hardening;
+mod netguard;
 mod network;
 mod services;

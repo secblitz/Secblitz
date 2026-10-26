@@ -142,6 +142,51 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             "An account with a password can be guessed from the network or the sign-in screen, and it has no limits at all.",
             "The account is locked and your other administrators keep working. You can undo this.",
         ),
+        "linux.fake_sources" => e(
+            "Network messages carry the address of their sender, and a sender can lie about it. This checks that impossible senders are turned away.",
+            "Attackers can pretend to be another computer to get past simple protections or to hide where an attack comes from.",
+            "Messages that could not have arrived from where they claim are thrown away. Everything you do online works as before, and you can undo this.",
+        ),
+        "linux.flood_protection" => e(
+            "When someone floods a computer with fake requests to connect, it can run out of room for the real ones. A built-in defence stops that.",
+            "Without the defence, one attacker on the network can make this computer stop answering anyone.",
+            "The built-in defence is switched on. Nothing you do changes, and you can undo this.",
+        ),
+        "linux.source_routing" => e(
+            "A network message can carry its own list of stops that tells computers which way it must go. This checks that such lists are ignored.",
+            "An attacker can use such lists to slip messages past protections or to receive answers meant for someone else.",
+            "Messages that choose their own route are ignored. Everything you do online works as before, and you can undo this.",
+        ),
+        "linux.broadcast_pings" => e(
+            "One computer can send a single call to every computer on a network and wait for the answers. This checks whether yours answers.",
+            "Attackers can use this to make many computers answer one victim at the same moment, which can knock it offline.",
+            "This computer stops answering such calls. Everything you do online works as before, and you can undo this.",
+        ),
+        "linux.ipv6_privacy" => e(
+            "Your computer can use an address that never changes, which lets websites recognise it. A temporary address changes now and then instead.",
+            "A fixed address lets websites and networks follow this computer from day to day and from place to place.",
+            "Temporary addresses are used instead. They start with your next connection to a network, so reconnect to use them now. You can undo this.",
+        ),
+        "linux.computer_name_sent" => e(
+            "When you join a network, your computer tells it its name so that the network can list it. Many people have their own name in it.",
+            "Anyone who runs a network, such as a cafe or a hotel, can see that name and use it to recognise you again.",
+            "Networks stop seeing the name from your next connection. Some routers then list this computer as unknown, and you can undo this.",
+        ),
+        "linux.encrypted_dns" => e(
+            "To open a website, your computer first asks a server where it is. By default anyone along the way can read that question.",
+            "Whoever runs the network, or sits on it, can see every website you look up, even when the sites themselves are protected.",
+            "Questions are scrambled whenever the server allows it and sent as before when it does not. Nothing is cut off, and you can undo this.",
+        ),
+        "linux.announce_name" => e(
+            "Your computer tells everyone on the local network its name and what it offers, so that other devices can find it without setup.",
+            "Anyone on the same network, such as public Wi-Fi, can see the name of your computer and what it offers.",
+            "Your computer stops announcing itself but still finds other devices. Others may find what you share less easily, and you can undo this.",
+        ),
+        "linux.old_network_services" => e(
+            "Some old programs let other computers connect to this one and send everything, even passwords, without protection. This looks for them.",
+            "Anyone on the network can read what these programs send, and attackers keep searching for computers that run them.",
+            "Those programs are stopped and no longer start by themselves. A shared folder from another computer may stop working, and you can undo this.",
+        ),
         "linux.screen_lock" => e(
             "Your screen should lock when you walk away. This checks that locking is on and that it does not wait forever.",
             "Anyone who walks past can read your screen and use your accounts while you are gone.",

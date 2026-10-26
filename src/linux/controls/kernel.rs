@@ -15,9 +15,9 @@ pub const SYSCTL: &str = "/usr/sbin/sysctl";
 
 /// A control made of running kernel settings, each kept after a restart in the control's own file.
 pub(super) struct Def {
-    pub id: &'static str,
-    pub dropin: &'static str,
-    pub keys: &'static [(&'static str, &'static str)],
+    pub(super) id: &'static str,
+    pub(super) dropin: &'static str,
+    pub(super) keys: &'static [(&'static str, &'static str)],
 }
 
 const PROTECTIONS: Def = Def {

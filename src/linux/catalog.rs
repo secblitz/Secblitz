@@ -180,6 +180,83 @@ const SPECS: &[LinuxSpec] = &[
         reboot: false,
         keys: &[text("llmnr", &["no"], true, Some("no"))],
     },
+    // rp_filter: the weakest check of sender addresses on any connection, 0 off, 1 strict, 2 loose; null when unreadable.
+    LinuxSpec {
+        id: "linux.fake_sources",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[set("rp_filter", "", &[1, 2], true, Some(2), 2)],
+    },
+    // syncookies: the defence against connection floods, 0 off, 1 on, 2 always on; null when unreadable.
+    LinuxSpec {
+        id: "linux.flood_protection",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[set("syncookies", "", &[1, 2], true, Some(1), 2)],
+    },
+    // accept_source_route: 1 when any connection follows messages that choose their own route, over either address family; null when unreadable.
+    LinuxSpec {
+        id: "linux.source_routing",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[flag("accept_source_route", true)],
+    },
+    // ignore_broadcasts: 1 when this computer ignores calls sent to the whole network; null when unreadable.
+    LinuxSpec {
+        id: "linux.broadcast_pings",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[set("ignore_broadcasts", "", &[1], true, Some(1), 1)],
+    },
+    // use_tempaddr: the weakest rule for temporary addresses on any connection, 0 off, 1 allowed, 2 preferred; null without IPv6.
+    LinuxSpec {
+        id: "linux.ipv6_privacy",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[set("use_tempaddr", "", &[2], true, Some(2), 2)],
+    },
+    // sends: 1 when the network program tells every network the computer's name; null where it is not installed.
+    LinuxSpec {
+        id: "linux.computer_name_sent",
+        scope: Scope::System,
+        ask: true,
+        reboot: false,
+        keys: &[flag("sends", true)],
+    },
+    // dns_over_tls: whether website lookups are scrambled: "yes", "opportunistic" or "no"; null when systemd-resolved is not the resolver.
+    LinuxSpec {
+        id: "linux.encrypted_dns",
+        scope: Scope::System,
+        ask: true,
+        reboot: false,
+        keys: &[text(
+            "dns_over_tls",
+            &["yes", "opportunistic"],
+            true,
+            Some("opportunistic"),
+        )],
+    },
+    // announcing: 1 when avahi tells the local network this computer's name and services; null when it is not running.
+    LinuxSpec {
+        id: "linux.announce_name",
+        scope: Scope::System,
+        ask: true,
+        reboot: false,
+        keys: &[flag("announcing", true)],
+    },
+    // enabled: 1 when an old remote service (telnet, rsh, tftp, ftp servers, rpcbind, nfs, snmp) is on.
+    LinuxSpec {
+        id: "linux.old_network_services",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[flag("enabled", true)],
+    },
     // apport: 1 when Ubuntu's crash reporting is enabled.
     LinuxSpec {
         id: "linux.crash_reports",
@@ -468,6 +545,7 @@ fn closed_words(id: &str, key: &str) -> Option<&'static [&'static str]> {
         ("linux.firewall", "incoming") => &["deny", "reject", "allow"],
         ("linux.autologin", "gdm_automatic") | ("linux.guest", "allow_guest") => &["true", "false"],
         ("linux.llmnr", "llmnr") => &["yes", "resolve", "no"],
+        ("linux.encrypted_dns", "dns_over_tls") => &["yes", "opportunistic", "no"],
         ("linux.ssh_password", "root_login") => {
             &["yes", "no", "prohibit-password", "forced-commands-only"]
         }
@@ -564,7 +642,7 @@ mod tests {
         for windows in crate::engine::catalog::ids(Os::Windows) {
             assert!(spec(windows).is_none(), "{windows}");
         }
-        assert_eq!(specs().len(), 43);
+        assert_eq!(specs().len(), 52);
     }
 
     #[test]
@@ -592,6 +670,9 @@ mod tests {
             "linux.old_files",
             "linux.browser_https_only",
             "linux.root_account",
+            "linux.computer_name_sent",
+            "linux.encrypted_dns",
+            "linux.announce_name",
         ];
         for s in specs() {
             let want = if person.contains(&s.id) {
