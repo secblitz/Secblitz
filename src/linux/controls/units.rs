@@ -139,6 +139,19 @@ pub fn settle(cx: &Cx, unit: &Unit, was_enabled: bool, was_active: bool) -> Resu
     }
 }
 
+/// Returns a unit to the enabled and running state it had before.
+pub fn put_back(cx: &Cx, name: &'static str, enabled: bool, active: bool) -> Result<()> {
+    cx.run_ok(
+        SYSTEMCTL,
+        &[if enabled { "enable" } else { "disable" }, name],
+    )?;
+    if active {
+        start(cx, name)
+    } else {
+        stop(cx, name)
+    }
+}
+
 pub fn reload(cx: &Cx, name: &'static str) -> Result<()> {
     cx.run_ok(SYSTEMCTL, &["reload", name]).map(drop)
 }

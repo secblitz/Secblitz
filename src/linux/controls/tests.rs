@@ -69,8 +69,8 @@ fn fedora() -> Sim {
     }
     sim.unit("firewalld.service", "enabled", true)
         .unit("sshd.service", "disabled", false)
-        .unit("dnf5-automatic.timer", "disabled", false)
         .unit("NetworkManager.service", "enabled", true)
+        .file("/usr/bin/gnome-software", "")
         .set("fw.zone", "FedoraWorkstation")
         .set("fw.target.FedoraWorkstation", "default")
         .set(
@@ -78,16 +78,39 @@ fn fedora() -> Sim {
             "1025-65535/tcp 1025-65535/udp",
         )
         .file("/etc/machine-id", "0123456789abcdef\n");
-    for (name, value) in [
-        ("kernel/kptr_restrict", "1"),
-        ("kernel/dmesg_restrict", "0"),
-        ("fs/protected_hardlinks", "1"),
-        ("fs/protected_symlinks", "1"),
-        ("fs/protected_fifos", "1"),
-        ("fs/protected_regular", "1"),
+    sim
+}
+
+/// Fedora with the automatic updater added, which a stock Workstation does not have.
+fn fedora_automatic() -> Sim {
+    let sim = fedora();
+    sim.unit("dnf5-automatic.timer", "disabled", false).file(
+        "/usr/share/dnf5/dnf5-plugins/automatic.conf",
+        "[commands]\napply_updates = no\n",
+    );
+    sim
+}
+
+fn linuxmint() -> Sim {
+    let sim = Sim::fixture("mint-22.3");
+    for tool in [
+        "/usr/sbin/ufw",
+        "/usr/bin/dpkg-query",
+        "/usr/bin/apt-config",
+        "/usr/sbin/sysctl",
+        "/usr/bin/mintupdate-automation",
     ] {
-        sim.file(&format!("/proc/sys/{name}"), &format!("{value}\n"));
+        sim.tool(tool);
     }
+    sim.unit("ufw.service", "enabled", true)
+        .unit("mintupdate-automation-upgrade.timer", "disabled", false)
+        .unit("apt-daily-upgrade.timer", "enabled", true)
+        .unit("NetworkManager.service", "enabled", true)
+        .file("/usr/bin/mintupdate-automation", "")
+        .file("/etc/X11/default-display-manager", "/usr/sbin/lightdm\n")
+        .set("dpkg.unattended", "0")
+        .set("ufw.active", "0")
+        .file("/etc/machine-id", "0123456789abcdef\n");
     sim
 }
 
@@ -639,14 +662,166 @@ fn fedora_stock_install_reads_as_it_really_is() {
         value(&mut b, "linux.countme"),
         json!({"items": {"countme": 1}})
     );
+    let o = b.observe("linux.auto_updates").unwrap();
+    assert!(!o.eligible);
+    assert_eq!(o.reason, SOFTWARE_APP_UPDATES);
+    assert!(skipped(&mut b, "linux.auto_updates"));
     assert_eq!(
-        value(&mut b, "linux.auto_updates"),
-        json!({"items": {"unattended": 0}})
+        value(&mut b, "linux.kernel_protections"),
+        json!({"items": {"kptr_restrict": 0, "dmesg_restrict": 1, "protected_hardlinks": 1,
+            "protected_symlinks": 1, "protected_fifos": 1, "protected_regular": 1}})
     );
     assert_eq!(
         value(&mut b, "linux.autologin"),
         json!({"items": {"gdm_automatic": null, "lightdm_user": null}})
     );
+}
+
+#[test]
+fn fedora_without_the_software_app_says_updates_are_not_set_up() {
+    let sim = fedora();
+    sim.files
+        .borrow_mut()
+        .remove(std::path::Path::new("/usr/bin/gnome-software"));
+    let o = backend(&sim).observe("linux.auto_updates").unwrap();
+    assert!(!o.eligible);
+    assert_eq!(o.reason, NO_AUTO_UPDATES);
+    let e = backend(&sim)
+        .write("linux.auto_updates", &json!({"items": {"unattended": 1}}))
+        .unwrap_err();
+    assert_eq!(e.to_string(), NO_AUTO_UPDATES);
+}
+
+#[test]
+fn a_stock_linux_mint_install_reads_as_it_really_is() {
+    let sim = linuxmint();
+    let mut b = backend(&sim);
+    assert_eq!(
+        value(&mut b, "linux.firewall"),
+        json!({"items": {"enabled": "no", "incoming": "deny"}})
+    );
+    assert_eq!(status(&mut b, "linux.firewall"), CheckStatus::Attention);
+    assert_eq!(
+        value(&mut b, "linux.auto_updates"),
+        json!({"items": {"unattended": 0}})
+    );
+    assert_eq!(status(&mut b, "linux.auto_updates"), CheckStatus::Attention);
+    assert!(b.observe("linux.auto_updates").unwrap().eligible);
+    assert_eq!(
+        value(&mut b, "linux.kernel_protections"),
+        json!({"items": {"kptr_restrict": 1, "dmesg_restrict": 0, "protected_hardlinks": 1,
+            "protected_symlinks": 1, "protected_fifos": 1, "protected_regular": 2}})
+    );
+    assert_eq!(
+        status(&mut b, "linux.kernel_protections"),
+        CheckStatus::Attention
+    );
+    for id in [
+        "linux.ssh_server",
+        "linux.file_sharing",
+        "linux.autologin",
+        "linux.guest",
+    ] {
+        assert_eq!(status(&mut b, id), CheckStatus::Compliant, "{id}");
+    }
+    let ids: Vec<String> = b.controls().into_iter().map(|c| c.id).collect();
+    assert!(ids.contains(&"linux.crash_reports".to_string()));
+    assert!(!ids.contains(&"linux.countme".to_string()));
+    assert_eq!(
+        value(&mut b, "linux.crash_reports"),
+        json!({"items": {"apport": null}})
+    );
+    assert_ne!(
+        status(&mut b, "linux.crash_reports"),
+        CheckStatus::Attention
+    );
+}
+
+#[test]
+fn linux_mint_updates_are_switched_on_with_its_own_tool_and_undone_exactly() {
+    let sim = linuxmint();
+    let mut b = backend(&sim);
+    let before = value(&mut b, "linux.auto_updates");
+    let fixed = spec("linux.auto_updates")
+        .unwrap()
+        .derive_target(&before)
+        .unwrap();
+    b.write("linux.auto_updates", &fixed).unwrap();
+    assert!(sim.ran("/usr/bin/mintupdate-automation upgrade enable"));
+    assert!(sim.has("/var/lib/linuxmint/mintupdate-automatic-upgrades-enabled"));
+    assert_eq!(
+        sim.state("mintupdate-automation-upgrade.timer"),
+        ("enabled".into(), true)
+    );
+    assert_eq!(
+        value(&mut b, "linux.auto_updates"),
+        json!({"items": {"unattended": 1}})
+    );
+    assert_eq!(status(&mut b, "linux.auto_updates"), CheckStatus::Compliant);
+    b.write("linux.auto_updates", &before).unwrap();
+    assert!(sim.ran("/usr/bin/mintupdate-automation upgrade disable"));
+    assert!(!sim.has("/var/lib/linuxmint/mintupdate-automatic-upgrades-enabled"));
+    assert_eq!(
+        sim.state("mintupdate-automation-upgrade.timer"),
+        ("disabled".into(), false)
+    );
+    assert_eq!(value(&mut b, "linux.auto_updates"), before);
+}
+
+#[test]
+fn linux_mint_updates_that_were_already_on_are_never_turned_off() {
+    let sim = linuxmint();
+    sim.file(
+        "/var/lib/linuxmint/mintupdate-automatic-upgrades-enabled",
+        "",
+    )
+    .unit("mintupdate-automation-upgrade.timer", "enabled", true);
+    let mut b = backend(&sim);
+    assert_eq!(
+        value(&mut b, "linux.auto_updates"),
+        json!({"items": {"unattended": 1}})
+    );
+    assert_eq!(status(&mut b, "linux.auto_updates"), CheckStatus::Compliant);
+    let e = b
+        .write("linux.auto_updates", &json!({"items": {"unattended": 0}}))
+        .unwrap_err();
+    assert_eq!(e.to_string(), NO_RECORD);
+    assert!(!sim.ran("/usr/bin/mintupdate-automation upgrade disable"));
+}
+
+#[test]
+fn linux_mint_half_set_up_updates_return_to_the_same_half() {
+    let sim = linuxmint();
+    sim.file(
+        "/var/lib/linuxmint/mintupdate-automatic-upgrades-enabled",
+        "",
+    );
+    let mut b = backend(&sim);
+    let before = value(&mut b, "linux.auto_updates");
+    assert_eq!(before, json!({"items": {"unattended": 0}}));
+    b.write("linux.auto_updates", &json!({"items": {"unattended": 1}}))
+        .unwrap();
+    assert_eq!(
+        value(&mut b, "linux.auto_updates"),
+        json!({"items": {"unattended": 1}})
+    );
+    b.write("linux.auto_updates", &before).unwrap();
+    assert!(sim.has("/var/lib/linuxmint/mintupdate-automatic-upgrades-enabled"));
+    assert_eq!(
+        sim.state("mintupdate-automation-upgrade.timer"),
+        ("disabled".into(), false)
+    );
+}
+
+#[test]
+fn linux_mint_without_its_tool_falls_back_to_unattended_upgrades_being_absent() {
+    let sim = linuxmint();
+    sim.files
+        .borrow_mut()
+        .remove(std::path::Path::new("/usr/bin/mintupdate-automation"));
+    let o = backend(&sim).observe("linux.auto_updates").unwrap();
+    assert!(!o.eligible);
+    assert_eq!(o.reason, NO_AUTO_UPDATES);
 }
 
 #[test]
@@ -790,7 +965,7 @@ fn counting_is_not_asked_about_where_there_are_no_software_sources() {
 
 #[test]
 fn dnf_automatic_is_switched_on_with_the_timer_and_restored() {
-    let sim = fedora();
+    let sim = fedora_automatic();
     let mut b = backend(&sim);
     let before = value(&mut b, "linux.auto_updates");
     assert_eq!(before, json!({"items": {"unattended": 0}}));
@@ -813,7 +988,7 @@ fn dnf_automatic_is_switched_on_with_the_timer_and_restored() {
 
 #[test]
 fn dnf_automatic_keeps_what_the_administrator_had_in_its_file() {
-    let sim = fedora();
+    let sim = fedora_automatic();
     sim.file(
         "/etc/dnf/automatic.conf",
         "[commands]\napply_updates = no\nrandom_sleep = 5\n",

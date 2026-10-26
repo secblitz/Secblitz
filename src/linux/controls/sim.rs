@@ -292,6 +292,25 @@ impl Sim {
         bail!("firewalld {args:?}")
     }
 
+    /// Linux Mint's switch: a marker file and the timer, as `mintupdate-automation upgrade` leaves them.
+    fn mint_automation(&self, args: &[&str]) -> Result<Output> {
+        const TOUCH: &str = "/var/lib/linuxmint/mintupdate-automatic-upgrades-enabled";
+        const TIMER: &str = "mintupdate-automation-upgrade.timer";
+        match args {
+            ["upgrade", "enable"] => {
+                self.file(TOUCH, "");
+                self.unit(TIMER, "enabled", true);
+                out(0, "")
+            }
+            ["upgrade", "disable"] => {
+                self.files.borrow_mut().remove(Path::new(TOUCH));
+                self.unit(TIMER, "disabled", false);
+                out(0, "")
+            }
+            _ => out(1, "Bad arguments\n"),
+        }
+    }
+
     fn apt_config(&self) -> String {
         let mut values: BTreeMap<String, String> = BTreeMap::new();
         for name in self
@@ -369,6 +388,7 @@ impl Sim {
                     }
                 }
             },
+            "/usr/bin/mintupdate-automation" => self.mint_automation(args),
             "/usr/bin/apt-config" => out(0, &self.apt_config()),
             "/usr/sbin/sshd" => match args {
                 ["-V"] => out(1, ""),
