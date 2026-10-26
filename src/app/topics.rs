@@ -75,6 +75,14 @@ impl Topic {
             Topic::Clutter => "Less clutter",
         }
     }
+
+    /// The name shown to the person. The topic saved as `windows` is "System" on the other systems.
+    pub fn display_label(self, os: secblitz::os::Os) -> &'static str {
+        match (self, os) {
+            (Topic::Windows, secblitz::os::Os::Linux | secblitz::os::Os::Macos) => "System",
+            _ => self.label(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -333,6 +341,23 @@ mod tests {
         );
         assert_eq!(serde_json::from_str::<Topic>("\"ai\"").unwrap(), Topic::Ai);
         assert!(serde_json::from_str::<Topic>("\"nope\"").is_err());
+    }
+
+    #[test]
+    fn the_windows_topic_is_called_system_on_the_other_systems() {
+        use secblitz::os::Os;
+        assert_eq!(Topic::Windows.display_label(Os::Windows), "Windows");
+        assert_eq!(Topic::Windows.display_label(Os::Linux), "System");
+        assert_eq!(Topic::Windows.display_label(Os::Macos), "System");
+        for t in Topic::ALL.into_iter().filter(|t| *t != Topic::Windows) {
+            for os in [Os::Windows, Os::Linux, Os::Macos] {
+                assert_eq!(t.display_label(os), t.label());
+            }
+        }
+        assert_eq!(
+            serde_json::to_string(&Topic::Windows).unwrap(),
+            "\"windows\""
+        );
     }
 
     #[test]

@@ -3,8 +3,50 @@
 use crate::model::{
     Authority, CheckStatus, Control, EffectiveFirewall, InboundAction, Observation,
 };
+use crate::os::Os;
 use anyhow::{bail, ensure, Context, Result};
 use serde_json::{json, Value};
+const WINDOWS_FIXED_IDS: [&str; 18] = [
+    "defender.realtime",
+    "defender.behavior",
+    "defender.ioav",
+    "defender.archive",
+    "firewall.domain.enabled",
+    "firewall.private.enabled",
+    "firewall.public.enabled",
+    "firewall.domain.inbound",
+    "firewall.private.inbound",
+    "firewall.public.inbound",
+    "uac.enabled",
+    "uac.consent",
+    "installer.always_install_elevated",
+    "wdigest.use_logon_credential",
+    "lsa.restrict_anonymous_sam",
+    "lsa.limit_blank_password_use",
+    "permissions.service.bits",
+    "permissions.service.wuauserv",
+];
+
+/// Every control id compiled in for `os`. Linux and macOS have none yet.
+pub fn ids(os: Os) -> Vec<&'static str> {
+    match os {
+        Os::Windows => crate::hardening::all()
+            .iter()
+            .map(|s| s.id)
+            .chain(WINDOWS_FIXED_IDS)
+            .collect(),
+        Os::Linux | Os::Macos => Vec::new(),
+    }
+}
+
+/// The compiled target for `id` on `os`. A control of another system is as unknown as one that does not exist.
+pub(super) fn target_in(os: Os, id: &str) -> Result<Value> {
+    match os {
+        Os::Windows => target(id),
+        Os::Linux | Os::Macos => bail!("Unknown control id: {id}"),
+    }
+}
+
 // Kept here rather than trusting Backend or serialized Control data. This is
 // intentionally the same typed domain as platform.rs and the fixed service
 // controls in permissions.rs; journal data cannot name arbitrary objects.

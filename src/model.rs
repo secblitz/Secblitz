@@ -121,15 +121,27 @@ impl ItemLabel {
 
 /// Validates typed evidence at both native decoding and the engine boundary. Missing evidence never proves effective protection.
 pub fn validate_observation(id: &str, obs: &Observation) -> anyhow::Result<()> {
+    validate_observation_for(crate::os::Os::Windows, id, obs)
+}
+
+/// Typed firewall evidence belongs to the Windows catalog only; any other system's controls must carry none.
+pub fn validate_observation_for(
+    os: crate::os::Os,
+    id: &str,
+    obs: &Observation,
+) -> anyhow::Result<()> {
     use anyhow::ensure;
-    let enabled = matches!(
-        id,
-        "firewall.domain.enabled" | "firewall.private.enabled" | "firewall.public.enabled"
-    );
-    let inbound = matches!(
-        id,
-        "firewall.domain.inbound" | "firewall.private.inbound" | "firewall.public.inbound"
-    );
+    let windows = os == crate::os::Os::Windows;
+    let enabled = windows
+        && matches!(
+            id,
+            "firewall.domain.enabled" | "firewall.private.enabled" | "firewall.public.enabled"
+        );
+    let inbound = windows
+        && matches!(
+            id,
+            "firewall.domain.inbound" | "firewall.private.inbound" | "firewall.public.inbound"
+        );
     ensure!(
         (enabled || inbound) || (obs.effective.is_none() && obs.authority.is_none()),
         "Firewall evidence is invalid for this control"

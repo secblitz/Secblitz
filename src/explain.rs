@@ -103,6 +103,13 @@ mod tests {
         ids.extend(script_finding_titles());
         ids.extend(RUST_FINDINGS.iter().map(|s| (*s).to_owned()));
         ids.extend(rule_ids());
+        for os in [crate::os::Os::Linux, crate::os::Os::Macos] {
+            ids.extend(
+                crate::engine::catalog::ids(os)
+                    .into_iter()
+                    .map(str::to_owned),
+            );
+        }
         ids
     }
 

@@ -4,7 +4,7 @@
 //! Schema 1 has no checksum, so it cannot tell post-commit truncation or media corruption from a crash prefix.
 mod apply;
 mod audit;
-mod catalog;
+pub mod catalog;
 pub mod cfa;
 mod fsio;
 mod journal;
@@ -16,11 +16,12 @@ mod store;
 mod tests;
 
 use crate::model::{
-    validate_observation, Authority, Backend, CheckStatus, Control, EffectiveFirewall, Finding,
+    validate_observation_for, Authority, Backend, CheckStatus, Control, EffectiveFirewall, Finding,
     Observation, Readiness,
 };
+use crate::os::Os;
 use anyhow::{ensure, Context, Result};
-use catalog::{target, validate_value};
+use catalog::validate_value;
 use fsio::metadata_safe;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -187,6 +188,7 @@ impl std::error::Error for JournalRecoveryRequired {}
 pub struct Engine {
     dir: PathBuf,
     backend: Box<dyn Backend>,
+    os: Os,
     controls: Vec<Control>,
     machine: String,
     storage_failed: bool,
@@ -206,9 +208,23 @@ fn native_mutation_interlocks(held: &File) -> Result<()> {
     )
 }
 
+/// Unit tests run on every host and exercise the Windows catalog; the engine for another system is opened with `open_for`.
+const fn running_os() -> Os {
+    if cfg!(test) {
+        Os::Windows
+    } else {
+        Os::CURRENT
+    }
+}
+
 impl Engine {
     pub fn open(dir: PathBuf, backend: Box<dyn Backend>) -> Result<Self> {
-        let mut engine = Self::unopened(dir, backend)?;
+        Self::open_for(running_os(), dir, backend)
+    }
+
+    /// The catalog is fixed by the system the engine is opened for, never by anything read from disk or from the backend.
+    pub fn open_for(os: Os, dir: PathBuf, backend: Box<dyn Backend>) -> Result<Self> {
+        let mut engine = Self::unopened_for(os, dir, backend)?;
         let _lock = engine.lock()?;
         engine.identify()?;
         engine.load()?;
@@ -217,6 +233,10 @@ impl Engine {
 
     /// Validates the directory and backend without taking the lock or reading any journal.
     fn unopened(dir: PathBuf, backend: Box<dyn Backend>) -> Result<Self> {
+        Self::unopened_for(running_os(), dir, backend)
+    }
+
+    fn unopened_for(os: Os, dir: PathBuf, backend: Box<dyn Backend>) -> Result<Self> {
         #[cfg(all(windows, not(test)))]
         ensure!(
             dir == crate::platform::state_dir()?,
@@ -237,13 +257,14 @@ impl Engine {
         for c in &controls {
             ensure!(ids.insert(c.id.clone()), "Duplicate backend control");
             ensure!(
-                c.target == target(&c.id)?,
+                c.target == catalog::target_in(os, &c.id)?,
                 "Backend target differs from compiled target"
             );
         }
         Ok(Self {
             dir,
             backend,
+            os,
             controls,
             machine: String::new(),
             storage_failed: false,
@@ -304,7 +325,7 @@ impl Engine {
     }
 
     pub(super) fn observe(&mut self, id: &str) -> Result<Observation> {
-        let mut obs = Self::validated(id, self.backend.observe(id)?)?;
+        let mut obs = Self::validated(self.os, id, self.backend.observe(id)?)?;
         if let (Some(names), Some(spec)) = (self.choice.get(id), crate::hardening::spec(id)) {
             obs.value = spec.narrow(&obs.value, names);
             obs.labels
@@ -314,9 +335,10 @@ impl Engine {
         Ok(obs)
     }
 
-    fn validated(id: &str, obs: Observation) -> Result<Observation> {
+    fn validated(os: Os, id: &str, obs: Observation) -> Result<Observation> {
+        catalog::target_in(os, id)?;
         validate_value(id, &obs.value)?;
-        validate_observation(id, &obs)?;
+        validate_observation_for(os, id, &obs)?;
         Ok(obs)
     }
 
@@ -333,11 +355,12 @@ impl Engine {
                 })
                 .collect();
         }
+        let os = self.os;
         observed
             .into_iter()
             .zip(ids)
             .map(|(obs, id)| {
-                let mut obs = Self::validated(id, obs?)?;
+                let mut obs = Self::validated(os, id, obs?)?;
                 self.cfa_gate(id, &mut obs);
                 Ok(obs)
             })

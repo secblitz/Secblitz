@@ -320,6 +320,7 @@ impl Engine {
     fn replay(&self, tx: &mut Transaction, record: Record) -> Result<()> {
         match record {
             Record::Prepare { id, before } => {
+                super::catalog::target_in(self.os, &id)?;
                 self.control(&id)?;
                 validate_value(&id, &before)?;
                 ensure!(

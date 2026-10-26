@@ -13,6 +13,7 @@ pub mod filter;
 pub mod hardening;
 pub mod model;
 pub mod operations;
+pub mod os;
 pub mod patching;
 pub mod permissions;
 pub mod platform;
