@@ -173,7 +173,7 @@ pub(super) fn not_offered(reason: &str) -> Option<&'static str> {
         "Not offered: the browser add-on rules on this computer could not be read" => {
             "We couldn't read this computer's browser add-on rules, so we leave them alone."
         }
-        _ => return None,
+        _ => return super::linux::not_offered(reason),
     })
 }
 
@@ -225,7 +225,7 @@ pub(super) fn repair_help(id: &str) -> &'static str {
         "recovery.winre_enabled" => {
             "It turns the recovery tools back on, so Windows can repair itself if it stops starting."
         }
-        _ => "It turns this protection on.",
+        _ => super::linux::repair(id).unwrap_or("It turns this protection on."),
     }
 }
 

@@ -100,7 +100,7 @@ pub fn control_label(id: &str) -> &'static str {
         "browser.dns_bypass" => "Browsers use Web protection",
         "browser.extensions_off" => "Turn off a browser add-on",
         "findings" => "Additional protection checks",
-        _ => "Protection check",
+        _ => super::linux::label(id).unwrap_or("Protection check"),
     }
 }
 
