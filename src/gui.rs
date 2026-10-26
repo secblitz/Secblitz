@@ -1558,8 +1558,6 @@ impl App {
     }
 }
 
-/// Pages asked for by a second start, read on their own thread so the window
-/// only wakes when there is one.
 /// The person's own history is tried first: it needs no password. The system's history is only reset when the
 /// person's was not the damaged one.
 #[cfg(target_os = "linux")]
@@ -1575,6 +1573,8 @@ fn start_fresh_on_linux() -> anyhow::Result<()> {
     }
 }
 
+/// Pages asked for by a second start, read on their own thread so the window
+/// only wakes when there is one.
 fn open_requests() -> Subscription<Message> {
     Subscription::run(|| {
         let (tx, rx) = iced::futures::channel::mpsc::unbounded();
