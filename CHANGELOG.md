@@ -9,6 +9,9 @@ dated version section when a release is prepared (see `docs/RELEASING.md`).
 
 ## [Unreleased]
 
+### Added
+- On Linux, Free up space shows and clears install files, old crash reports, picture previews, unused app parts and the Trash, and Clean up apps removes remote control apps.
+
 ### Changed
 - Secblitz now says computer instead of PC.
 
