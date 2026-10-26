@@ -1930,15 +1930,16 @@ fn pages_without_a_check_ask_for_one_and_the_welcome_covers_the_window() {
 
 #[cfg(target_os = "linux")]
 #[test]
-fn on_linux_a_way_to_web_protection_or_tools_lands_on_home() {
+fn on_linux_a_way_to_tools_lands_on_home() {
     let _motion = widgets::anim::forced::set(false);
     let mut app = app();
     drop(app.update(Message::Navigate(Page::Settings)));
-    for page in [Page::Web, Page::Tools] {
-        drop(app.update(Message::Navigate(page)));
-        assert_eq!(app.page, Page::Home, "{page:?}");
-        drop(app.view());
-    }
+    drop(app.update(Message::Navigate(Page::Tools)));
+    assert_eq!(app.page, Page::Home);
+    drop(app.view());
+    drop(app.update(Message::Navigate(Page::Web)));
+    assert_eq!(app.page, Page::Web);
+    drop(app.view());
     drop(app.update(Message::Navigate(Page::Fixes)));
     assert_eq!(app.page, Page::Fixes);
 }

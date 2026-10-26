@@ -63,7 +63,7 @@ impl Page {
     ];
     /// Pages with nothing to offer on a system are left out of the sidebar and every way to reach them.
     pub fn shown_on(self, os: secblitz::os::Os) -> bool {
-        !(os == secblitz::os::Os::Linux && matches!(self, Page::Web | Page::Tools))
+        !(os == secblitz::os::Os::Linux && self == Page::Tools)
     }
     /// The page itself where this system has it, Home otherwise.
     pub fn on(self, os: secblitz::os::Os) -> Page {

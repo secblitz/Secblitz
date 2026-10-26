@@ -635,9 +635,9 @@ fn assessed<'a>(state: &State, ctx: &'a Ctx, report: &'a Report) -> Element<'a, 
     page.into()
 }
 
-/// Web protection exists on Windows only.
+/// Web protection exists on Windows and Linux.
 fn shows_web_suggestion(state: &State, os: secblitz::os::Os) -> bool {
-    state.web_suggest && os == secblitz::os::Os::Windows
+    state.web_suggest && matches!(os, secblitz::os::Os::Windows | secblitz::os::Os::Linux)
 }
 
 fn processor_card<'a>(ctx: &'a Ctx) -> Element<'a, Message> {
@@ -850,13 +850,13 @@ mod tests {
     }
 
     #[test]
-    fn the_web_protection_card_is_never_offered_off_windows() {
+    fn the_web_protection_card_is_never_offered_on_a_mac() {
         use secblitz::os::Os;
         let mut state = State::default();
         assert!(!shows_web_suggestion(&state, Os::Windows));
         update_flag(&mut state);
         assert!(shows_web_suggestion(&state, Os::Windows));
-        assert!(!shows_web_suggestion(&state, Os::Linux));
+        assert!(shows_web_suggestion(&state, Os::Linux));
         assert!(!shows_web_suggestion(&state, Os::Macos));
     }
 
