@@ -183,8 +183,14 @@ fn updates_waiting(cx: &Cx) -> Option<bool> {
 
 fn restart_needed(cx: &Cx) -> Option<bool> {
     if cx.distro.family == Family::Fedora {
-        // Exit 1 also means "nothing cached yet", so the answer comes from its sentence (the locale is C).
-        let out = dnf(cx, &["needs-restarting", "-r"])?;
+        // It compares running programs with installed packages, so no package list is loaded or downloaded. Exit 1 can
+        // mean either answer, so the answer comes from its sentence (the locale is C).
+        let out = cx
+            .run(
+                "/usr/bin/dnf5",
+                &["--disable-repo=*", "needs-restarting", "-r"],
+            )
+            .ok()?;
         return if out.stdout.contains("Reboot should not be necessary") {
             Some(false)
         } else if out.stdout.contains("Reboot is required") {

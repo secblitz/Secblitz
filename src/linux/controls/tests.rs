@@ -1320,7 +1320,8 @@ fn fedora_findings_use_its_own_tools() {
 }
 
 #[test]
-fn fedora_asks_the_saved_lists_first_and_downloads_them_once_when_there_are_none() {
+fn fedora_asks_the_saved_lists_first_and_downloads_them_once_when_there_are_none_and_never_for_a_restart(
+) {
     let sim = fedora();
     sim.tool("/usr/bin/dnf5");
     let mut b = backend(&sim);
@@ -1332,7 +1333,10 @@ fn fedora_asks_the_saved_lists_first_and_downloads_them_once_when_there_are_none
             .map(|f| f.status.clone())
     };
     sim.set("dnf.offline", "1");
-    assert_eq!(status(&mut b, crate::advice::RESTART_NEEDED), None);
+    assert_eq!(
+        status(&mut b, crate::advice::RESTART_NEEDED),
+        Some(CheckStatus::Ok)
+    );
     assert_eq!(
         status(&mut b, crate::advice::UPDATES_WAITING),
         Some(CheckStatus::Unknown)
@@ -1365,7 +1369,8 @@ fn fedora_asks_the_saved_lists_first_and_downloads_them_once_when_there_are_none
         .borrow()
         .iter()
         .filter(|c| c.starts_with("/usr/bin/dnf5"))
-        .all(|c| c.starts_with("/usr/bin/dnf5 -C ")));
+        .all(|c| c.starts_with("/usr/bin/dnf5 -C ")
+            || c == "/usr/bin/dnf5 --disable-repo=* needs-restarting -r"));
 }
 
 fn finding(sim: &Sim, title: &str) -> Option<crate::model::Finding> {

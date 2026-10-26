@@ -491,10 +491,11 @@ impl Sim {
             }
             "/usr/bin/dnf5" => {
                 let (cache_only, args) = match args {
-                    ["-C", rest @ ..] => (true, rest),
+                    ["-C", rest @ ..] | ["--disable-repo=*", rest @ ..] => (true, rest),
                     _ => (false, args),
                 };
-                if cache_only && self.get("dnf.cache").is_empty() {
+                let no_repos = matches!(args, ["needs-restarting", ..]);
+                if cache_only && !no_repos && self.get("dnf.cache").is_empty() {
                     return Ok(Output {
                         status: 1,
                         stdout: "Updating and loading repositories:\n".into(),
