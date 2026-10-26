@@ -826,6 +826,15 @@ fn only_the_package_for_this_processor_counts_on_debian_based_systems() {
 }
 
 #[test]
+fn a_package_that_was_only_asked_for_or_has_leftover_settings_is_not_installed() {
+    assert!(h::dpkg_installed("ii "));
+    assert!(!h::dpkg_installed("in "));
+    assert!(!h::dpkg_installed("rc "));
+    assert!(!h::dpkg_installed("un "));
+    assert!(!h::dpkg_installed(""));
+}
+
+#[test]
 fn on_fedora_either_package_counts() {
     let sim = fedora_h();
     sim.package("microcode_ctl", false, "");

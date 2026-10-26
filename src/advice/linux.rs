@@ -234,7 +234,7 @@ pub(super) fn repair(id: &str) -> Option<&'static str> {
             "Apps will need permission to make a private box for themselves. No restart is needed."
         }
         "linux.processor_updates" => {
-            "The processor update will be installed from your software sources. Other software is not changed."
+            "The processor update will be installed from your software sources. It starts working the next time your computer starts, and we never restart it for you. Other software is not changed."
         }
         _ => return None,
     })

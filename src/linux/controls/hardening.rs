@@ -494,6 +494,11 @@ fn processor_package(cx: &Cx) -> Result<Option<(&'static str, &'static [&'static
     })
 }
 
+/// The three-letter status of a package: it is installed when the second letter says so, not when it was only asked for.
+pub(super) fn dpkg_installed(status: &str) -> bool {
+    status.trim_start().chars().nth(1) == Some('i')
+}
+
 /// Whether the package is installed; `None` when the package tool cannot be run.
 fn installed(cx: &Cx, package: &str) -> Option<bool> {
     Some(match cx.distro.family {
@@ -501,7 +506,7 @@ fn installed(cx: &Cx, package: &str) -> Option<bool> {
             let out = cx
                 .run(DPKG_QUERY, &["-W", "-f=${db:Status-Abbrev}", package])
                 .ok()?;
-            out.success() && out.stdout.trim_start().starts_with('i')
+            out.success() && dpkg_installed(&out.stdout)
         }
         Family::Fedora => cx.run(RPM, &["-q", package]).ok()?.success(),
         Family::Other => return None,
