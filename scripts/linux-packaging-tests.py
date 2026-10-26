@@ -222,6 +222,18 @@ class Glibc(unittest.TestCase):
         self.assertLess(build.newest_glibc("GLIBC_2.36"), (2, 37))
 
 
+class BuildBinaryHost(unittest.TestCase):
+    def test_a_binary_is_built_only_for_the_machine_it_runs_on(self):
+        from unittest import mock
+        for machine, other in (("x86_64", "aarch64"), ("aarch64", "x86_64"), ("arm64", "x86_64")):
+            with mock.patch.object(build.platform, "machine", return_value=machine), self.assertRaises(SystemExit):
+                build.build_binary("/nonexistent/secblitz", other)
+
+    def test_host_names_map_to_the_two_architectures(self):
+        self.assertEqual(build.HOST_ARCH["arm64"], "aarch64")
+        self.assertEqual(build.HOST_ARCH["AMD64"], "x86_64")
+
+
 class RepoTool(unittest.TestCase):
     def test_refuses_to_run_in_ci(self):
         for var in ("CI", "GITHUB_ACTIONS"):
