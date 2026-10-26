@@ -122,6 +122,31 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             "A hacked program can then reach far more of your files and settings than it needs.",
             "We leave it as it is. Changing it can stop programs from working, so ask whoever set up this computer.",
         ),
+        crate::advice::ACCOUNTS_WITHOUT_PASSWORD => e(
+            "At least one account on this computer has no password, so anyone can sign in to it.",
+            "Anyone who can reach the sign-in screen or the network could use that account and see what it can see.",
+            "We leave it as it is. Give the account a password in your system settings, or ask whoever set up this computer.",
+        ),
+        crate::advice::ADMIN_WITHOUT_PASSWORD => e(
+            "A rule on this computer lets some accounts use full admin rights without typing a password.",
+            "A harmful program running in that account could change anything on the computer without asking you.",
+            "We leave it as it is. The rule may be needed, so ask whoever set up this computer before removing it.",
+        ),
+        crate::advice::UNCHECKED_SOURCES => e(
+            "A place your computer gets software from is set up to skip the safety check on what it downloads.",
+            "Anyone who tampers with that download could slip harmful software onto your computer.",
+            "We leave it as it is. Remove that source in your software settings, or ask whoever added it.",
+        ),
+        crate::advice::SECURITY_SUPPORT => e(
+            "Each version of Linux gets security fixes for a limited time. The end date of yours is close or has passed.",
+            "After that date, new security holes in your version are never fixed.",
+            "We cannot change this for you. Move to a newer version of Linux, and back up your files first.",
+        ),
+        crate::advice::HARDWARE_UPDATES => e(
+            "The makers of some parts inside your computer have released updates for them.",
+            "Those updates fix weak spots in parts such as the startup software, which other updates do not reach.",
+            "We leave updating to you. Open your software app and install them. Some need a restart afterwards.",
+        ),
         _ => return None,
     })
 }
@@ -130,12 +155,17 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
 mod tests {
     use super::*;
 
-    const FINDINGS: [&str; 5] = [
+    const FINDINGS: [&str; 10] = [
         crate::advice::DISK_ENCRYPTION,
         crate::advice::LINUX_SECURE_BOOT,
         crate::advice::UPDATES_WAITING,
         crate::advice::RESTART_NEEDED,
         crate::advice::PROGRAM_LIMITS,
+        crate::advice::ACCOUNTS_WITHOUT_PASSWORD,
+        crate::advice::ADMIN_WITHOUT_PASSWORD,
+        crate::advice::UNCHECKED_SOURCES,
+        crate::advice::SECURITY_SUPPORT,
+        crate::advice::HARDWARE_UPDATES,
     ];
 
     #[test]

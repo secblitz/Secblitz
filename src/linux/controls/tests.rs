@@ -1285,7 +1285,7 @@ fn fedora_findings_use_its_own_tools() {
 }
 
 #[test]
-fn fedora_never_downloads_package_lists_and_an_empty_cache_is_not_a_restart() {
+fn fedora_asks_the_saved_lists_first_and_downloads_them_once_when_there_are_none() {
     let sim = fedora();
     sim.tool("/usr/bin/dnf5");
     let mut b = backend(&sim);
@@ -1296,12 +1296,15 @@ fn fedora_never_downloads_package_lists_and_an_empty_cache_is_not_a_restart() {
             .find(|f| f.title == title)
             .map(|f| f.status.clone())
     };
+    sim.set("dnf.offline", "1");
     assert_eq!(status(&mut b, crate::advice::RESTART_NEEDED), None);
     assert_eq!(
         status(&mut b, crate::advice::UPDATES_WAITING),
         Some(CheckStatus::Unknown)
     );
-    sim.set("dnf.cache", "1");
+    assert_eq!(sim.get("dnf.cache"), "");
+
+    sim.set("dnf.offline", "");
     assert_eq!(
         status(&mut b, crate::advice::RESTART_NEEDED),
         Some(CheckStatus::Ok)
@@ -1310,6 +1313,9 @@ fn fedora_never_downloads_package_lists_and_an_empty_cache_is_not_a_restart() {
         status(&mut b, crate::advice::UPDATES_WAITING),
         Some(CheckStatus::Ok)
     );
+    assert_eq!(sim.get("dnf.cache"), "1");
+
+    sim.calls.borrow_mut().clear();
     sim.set("dnf.restart", "1").set("dnf.waiting", "1");
     assert_eq!(
         status(&mut b, crate::advice::RESTART_NEEDED),
@@ -1325,6 +1331,290 @@ fn fedora_never_downloads_package_lists_and_an_empty_cache_is_not_a_restart() {
         .iter()
         .filter(|c| c.starts_with("/usr/bin/dnf5"))
         .all(|c| c.starts_with("/usr/bin/dnf5 -C ")));
+}
+
+fn finding(sim: &Sim, title: &str) -> Option<crate::model::Finding> {
+    sim.tool("/usr/bin/date");
+    backend(sim)
+        .findings()
+        .unwrap()
+        .into_iter()
+        .find(|f| f.title == title)
+}
+
+fn status_of(sim: &Sim, title: &str) -> Option<CheckStatus> {
+    finding(sim, title).map(|f| f.status)
+}
+
+fn real_mint() -> Sim {
+    Sim::fixture("mint-22.3")
+}
+
+fn drop_file(sim: &Sim, path: &str) {
+    sim.files.borrow_mut().remove(std::path::Path::new(path));
+}
+
+#[test]
+fn accounts_without_a_password_are_reported_on_every_computer() {
+    use crate::advice::ACCOUNTS_WITHOUT_PASSWORD as T;
+    for sim in [ubuntu(), fedora(), real_mint()] {
+        assert_eq!(status_of(&sim, T), Some(CheckStatus::Ok));
+    }
+    let sim = ubuntu();
+    sim.file(
+        "/etc/shadow",
+        "root:!:20000:0:99999:7:::\nguest::20000:0:99999:7:::\ntester:$y$j9T$placeholder:20000:0:99999:7:::\n",
+    );
+    let f = finding(&sim, T).unwrap();
+    assert_eq!(f.status, CheckStatus::Attention);
+    assert_eq!(f.detail, findings::PASSWORD_MISSING);
+    assert!(!f.detail.contains("guest"));
+    sim.file("/etc/shadow", "root:*:20000:0:99999:7:::\nsvc:!!:1::::::\n");
+    assert_eq!(status_of(&sim, T), Some(CheckStatus::Ok));
+    drop_file(&sim, "/etc/shadow");
+    assert_eq!(status_of(&sim, T), None);
+}
+
+#[test]
+fn admin_rights_without_a_password_are_found_but_single_command_rules_are_fine() {
+    use crate::advice::ADMIN_WITHOUT_PASSWORD as T;
+    for sim in [ubuntu(), fedora(), real_mint()] {
+        assert_eq!(status_of(&sim, T), Some(CheckStatus::Ok));
+    }
+    let bad = [
+        "%wheel ALL=(ALL) NOPASSWD: ALL",
+        "tester ALL=(ALL:ALL) NOPASSWD:ALL",
+        "tester ALL = NOPASSWD: SETENV: ALL",
+        "tester ALL=(ALL) PASSWD: /usr/bin/id, NOPASSWD: ALL",
+    ];
+    for rule in bad {
+        let sim = ubuntu();
+        sim.file("/etc/sudoers.d/90-cloud-init-users", &format!("{rule}\n"));
+        let f = finding(&sim, T).unwrap();
+        assert_eq!(f.status, CheckStatus::Attention, "{rule}");
+        assert_eq!(f.detail, findings::ADMIN_NEVER_ASKS);
+    }
+    let fine = [
+        "# tester ALL=(ALL) NOPASSWD: ALL",
+        "tester ALL=(ALL) ALL",
+        "tester ALL=(ALL) NOPASSWD: /usr/bin/apt update, /usr/bin/id",
+        "tester ALL=(ALL) NOPASSWD: /usr/bin/id, PASSWD: ALL",
+        "Defaults:tester !authenticate, env_keep=ALL",
+    ];
+    for rule in fine {
+        let sim = ubuntu();
+        sim.file("/etc/sudoers.d/90-extra", &format!("{rule}\n"));
+        assert_eq!(status_of(&sim, T), Some(CheckStatus::Ok), "{rule}");
+    }
+
+    let sim = ubuntu();
+    sim.file("/etc/sudoers", "tester ALL=(ALL) NOPASSWD: ALL\n");
+    assert_eq!(status_of(&sim, T), Some(CheckStatus::Attention));
+
+    // sudo skips these names, so what is in them never applies.
+    let sim = ubuntu();
+    for name in ["old.disabled", "backup~", "dpkg.dist"] {
+        sim.file(
+            &format!("/etc/sudoers.d/{name}"),
+            "tester ALL=(ALL) NOPASSWD: ALL\n",
+        );
+    }
+    assert_eq!(status_of(&sim, T), Some(CheckStatus::Ok));
+
+    // A folder the main file does not include is not read.
+    let sim = ubuntu();
+    sim.file("/etc/sudoers", "root ALL=(ALL:ALL) ALL\n");
+    sim.file(
+        "/etc/sudoers.d/90-extra",
+        "tester ALL=(ALL) NOPASSWD: ALL\n",
+    );
+    assert_eq!(status_of(&sim, T), Some(CheckStatus::Ok));
+    sim.file(
+        "/etc/sudoers",
+        "root ALL=(ALL:ALL) ALL\n#includedir /etc/sudoers.d\n",
+    );
+    assert_eq!(status_of(&sim, T), Some(CheckStatus::Attention));
+    sim.file(
+        "/etc/sudoers",
+        "root ALL=(ALL:ALL) ALL\n@includedir /etc/other\n",
+    );
+    assert_eq!(status_of(&sim, T), Some(CheckStatus::Ok));
+
+    drop_file(&sim, "/etc/sudoers");
+    assert_eq!(status_of(&sim, T), None);
+}
+
+#[test]
+fn software_sources_without_safety_checks_are_found_for_apt_and_dnf() {
+    use crate::advice::UNCHECKED_SOURCES as T;
+    for sim in [ubuntu(), fedora(), real_mint()] {
+        assert_eq!(status_of(&sim, T), Some(CheckStatus::Ok));
+    }
+    let apt = [
+        (
+            "/etc/apt/sources.list",
+            "deb [trusted=yes] http://example.org/apt stable main\n",
+        ),
+        (
+            "/etc/apt/sources.list.d/x.list",
+            "deb [arch=amd64 allow-insecure=yes] http://example.org/apt stable main\n",
+        ),
+        (
+            "/etc/apt/sources.list.d/x.sources",
+            "Types: deb\nURIs: http://example.org/apt\nSuites: stable\nTrusted: yes\n",
+        ),
+        (
+            "/etc/apt/sources.list.d/y.sources",
+            "Types: deb\nURIs: http://a.example.org\n\nTypes: deb\nURIs: http://b.example.org\nAllow-Insecure: yes\n",
+        ),
+    ];
+    for (path, text) in apt {
+        let sim = ubuntu();
+        sim.file(path, text);
+        let f = finding(&sim, T).unwrap();
+        assert_eq!(f.status, CheckStatus::Attention, "{path}");
+        assert_eq!(f.detail, findings::SOURCES_UNCHECKED);
+    }
+    let fine_apt = [
+        (
+            "/etc/apt/sources.list",
+            "# deb [trusted=yes] http://example.org/apt stable main\n",
+        ),
+        (
+            "/etc/apt/sources.list.d/x.sources",
+            "Types: deb\nURIs: http://example.org/apt\nTrusted: no\n",
+        ),
+        (
+            "/etc/apt/sources.list.d/x.sources",
+            "Types: deb\nURIs: http://example.org/apt\nTrusted: yes\nEnabled: no\n",
+        ),
+        ("/etc/apt/sources.list.d/x.sources.save", "Trusted: yes\n"),
+    ];
+    for (path, text) in fine_apt {
+        let sim = ubuntu();
+        sim.file(path, text);
+        assert_eq!(status_of(&sim, T), Some(CheckStatus::Ok), "{path}");
+    }
+
+    let sim = fedora();
+    let repo = "/etc/yum.repos.d/extra.repo";
+    sim.file(
+        repo,
+        "[extra]\nname=Extra\nbaseurl=http://example.org/rpm\nenabled=1\ngpgcheck=0\n",
+    );
+    assert_eq!(status_of(&sim, T), Some(CheckStatus::Attention));
+    for text in [
+        "[extra]\nname=Extra\nenabled=0\ngpgcheck=0\n",
+        "[extra]\nname=Extra\nrepo_gpgcheck=0\ngpgcheck=1\n",
+        "[extra]\nname=Extra\nlocalpkg_gpgcheck=0\n",
+        "[first]\ngpgcheck=1\n[second]\ngpgcheck=1\nenabled=0\n",
+    ] {
+        sim.file(repo, text);
+        assert_eq!(status_of(&sim, T), Some(CheckStatus::Ok), "{text}");
+    }
+    sim.file(repo, "[a]\ngpgcheck=1\n[b]\ngpgcheck=0\n");
+    assert_eq!(status_of(&sim, T), Some(CheckStatus::Attention));
+    sim.file(repo, "[a]\nenabled=0\n[b]\ngpgcheck=0\n");
+    assert_eq!(status_of(&sim, T), Some(CheckStatus::Attention));
+    drop_file(&sim, repo);
+    sim.file("/etc/dnf/dnf.conf", "[main]\ngpgcheck=0\n");
+    assert_eq!(status_of(&sim, T), Some(CheckStatus::Attention));
+
+    let nothing = Sim::default();
+    nothing.tool("/usr/bin/ls");
+    assert_eq!(status_of(&nothing, T), None);
+}
+
+#[test]
+fn security_support_counts_the_days_left_from_what_the_computer_records() {
+    use crate::advice::SECURITY_SUPPORT as T;
+    let ending = |sim: &Sim, today: &str| {
+        sim.set("date", today);
+        finding(sim, T).map(|f| (f.status, f.detail))
+    };
+    // Fedora 44: SUPPORT_END=2027-05-19.
+    let sim = fedora();
+    assert_eq!(
+        ending(&sim, "2026-10-26"),
+        Some((CheckStatus::Ok, findings::SUPPORT_LONG.into()))
+    );
+    assert_eq!(ending(&sim, "2027-02-17").unwrap().0, CheckStatus::Ok);
+    assert_eq!(
+        ending(&sim, "2027-02-18"),
+        Some((CheckStatus::Attention, findings::SUPPORT_SOON.into()))
+    );
+    assert_eq!(
+        ending(&sim, "2027-05-19").unwrap().1,
+        findings::SUPPORT_SOON
+    );
+    assert_eq!(
+        ending(&sim, "2027-05-20"),
+        Some((CheckStatus::Attention, findings::SUPPORT_ENDED.into()))
+    );
+    // Ubuntu 26.04 (resolute) and Mint 22.3 (noble underneath).
+    let sim = ubuntu();
+    assert_eq!(ending(&sim, "2026-10-26").unwrap().0, CheckStatus::Ok);
+    assert_eq!(
+        ending(&sim, "2031-05-29").unwrap().1,
+        findings::SUPPORT_SOON
+    );
+    assert_eq!(
+        ending(&sim, "2031-05-30").unwrap().1,
+        findings::SUPPORT_ENDED
+    );
+    let sim = real_mint();
+    assert_eq!(ending(&sim, "2026-10-26").unwrap().0, CheckStatus::Ok);
+    assert_eq!(
+        ending(&sim, "2029-04-01").unwrap().1,
+        findings::SUPPORT_SOON
+    );
+    assert_eq!(
+        ending(&sim, "2029-06-01").unwrap().1,
+        findings::SUPPORT_ENDED
+    );
+    // Debian reads debian.csv by its codename.
+    let sim = debian();
+    sim.file(
+        "/usr/share/distro-info/debian.csv",
+        "version,codename,series,created,release,eol,eol-lts,eol-elts\n13,Trixie,trixie,2023-06-10,2025-08-09,2028-08-09,2030-06-30,2035-06-30\n",
+    );
+    assert_eq!(ending(&sim, "2026-10-26").unwrap().0, CheckStatus::Ok);
+    assert_eq!(
+        ending(&sim, "2028-08-10").unwrap().1,
+        findings::SUPPORT_ENDED
+    );
+    // Not known is not reported.
+    sim.file(
+        "/usr/share/distro-info/debian.csv",
+        "version,codename,series,created,release,eol\n13,Trixie,trixie,2023-06-10,2025-08-09,\n",
+    );
+    assert_eq!(ending(&sim, "2026-10-26"), None);
+    drop_file(&sim, "/usr/share/distro-info/debian.csv");
+    assert_eq!(ending(&sim, "2026-10-26"), None);
+    let sim = ubuntu();
+    sim.set("date", "");
+    assert!(finding(&sim, T).is_none());
+    sim.file("/usr/share/distro-info/ubuntu.csv", "version,series\n");
+    assert_eq!(ending(&sim, "2026-10-26"), None);
+}
+
+#[test]
+fn hardware_updates_are_reported_only_when_the_update_tool_answers() {
+    use crate::advice::HARDWARE_UPDATES as T;
+    for sim in [ubuntu(), fedora(), real_mint()] {
+        assert_eq!(status_of(&sim, T), None, "no update tool installed");
+        sim.tool("/usr/bin/fwupdmgr");
+        let f = finding(&sim, T).unwrap();
+        assert_eq!(f.status, CheckStatus::Ok);
+        assert_eq!(f.detail, findings::NO_HARDWARE_UPDATES);
+        sim.set("fwupd.waiting", "1");
+        let f = finding(&sim, T).unwrap();
+        assert_eq!(f.status, CheckStatus::Info);
+        assert_eq!(f.detail, findings::HARDWARE_WAITING);
+    }
+    let sim = ubuntu();
+    sim.tool("/usr/bin/fwupdmgr").fail("/usr/bin/fwupdmgr");
+    assert_eq!(status_of(&sim, T), None, "an answer that is not the list");
 }
 
 #[test]

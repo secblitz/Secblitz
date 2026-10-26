@@ -1,0 +1,2 @@
+ALL ALL = NOPASSWD:/usr/bin/mintdrivers-remove-live-media
+ALL ALL = NOPASSWD:/usr/bin/mintdrivers-load-broadcom-modules

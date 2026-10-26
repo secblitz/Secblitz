@@ -2674,6 +2674,11 @@ mod tests {
             advice::UPDATES_WAITING,
             advice::RESTART_NEEDED,
             advice::PROGRAM_LIMITS,
+            advice::ACCOUNTS_WITHOUT_PASSWORD,
+            advice::ADMIN_WITHOUT_PASSWORD,
+            advice::UNCHECKED_SOURCES,
+            advice::SECURITY_SUPPORT,
+            advice::HARDWARE_UPDATES,
         ] {
             let a = advice::for_finding(title, &CheckStatus::Attention, "");
             for bucket in [Bucket::Look, Bucket::GoodToKnow] {

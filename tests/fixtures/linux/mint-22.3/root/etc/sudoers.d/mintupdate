@@ -1,0 +1,2 @@
+ALL ALL = NOPASSWD:/usr/bin/mint-refresh-cache
+ALL ALL = NOPASSWD:/usr/lib/linuxmint/mintUpdate/dpkg_lock_check.sh
