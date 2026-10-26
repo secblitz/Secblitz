@@ -1061,6 +1061,81 @@ mod tests {
         assert_eq!(system::plan_from_report(Some(&none)).unwrap().settings, 0);
     }
 
+    struct Interrupted {
+        open: bool,
+        calls: Vec<&'static str>,
+    }
+
+    impl crate::app::worker::Session for Interrupted {
+        fn available(&self) -> Vec<String> {
+            vec!["a".into()]
+        }
+        fn restart_ids(&self) -> Vec<String> {
+            Vec::new()
+        }
+        fn audit(
+            &mut self,
+            _: &mut dyn FnMut(secblitz::engine::Progress<'_>),
+        ) -> anyhow::Result<secblitz::engine::Report> {
+            unreachable!()
+        }
+        fn apply(
+            &mut self,
+            _: &[String],
+            _: &mut dyn FnMut(secblitz::engine::Progress<'_>),
+        ) -> anyhow::Result<secblitz::engine::Report> {
+            unreachable!()
+        }
+        fn undo(
+            &mut self,
+            _: &mut dyn FnMut(secblitz::engine::Progress<'_>),
+        ) -> anyhow::Result<secblitz::engine::Report> {
+            self.calls.push("undo");
+            self.open = false;
+            Ok(secblitz::engine::Report::default())
+        }
+        fn undo_selected(
+            &mut self,
+            _: &[String],
+            _: &mut dyn FnMut(secblitz::engine::Progress<'_>),
+        ) -> anyhow::Result<secblitz::engine::Report> {
+            self.calls.push("undo_selected");
+            let (status, detail) = if self.open {
+                (CheckStatus::Skipped, secblitz::engine::UNDO_FIRST)
+            } else {
+                (CheckStatus::Restored, "")
+            };
+            Ok(secblitz::engine::Report {
+                results: vec![outcome("a", status, detail, true)],
+                ..secblitz::engine::Report::default()
+            })
+        }
+        fn history(&mut self) -> anyhow::Result<Vec<String>> {
+            unreachable!()
+        }
+        fn can_start(&mut self, _: bool) -> anyhow::Result<()> {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn an_interrupted_fix_is_put_back_whole_before_the_chosen_settings() {
+        let mut open = Interrupted {
+            open: true,
+            calls: Vec::new(),
+        };
+        let report = system::put_back_all(&mut open).unwrap();
+        assert_eq!(open.calls, ["undo_selected", "undo", "undo_selected"]);
+        assert!(system::put_back_lines(&report, Lang::En).is_empty());
+
+        let mut closed = Interrupted {
+            open: false,
+            calls: Vec::new(),
+        };
+        system::put_back_all(&mut closed).unwrap();
+        assert_eq!(closed.calls, ["undo_selected"]);
+    }
+
     #[test]
     fn only_what_could_not_be_put_back_is_listed() {
         let report = secblitz::engine::Report {

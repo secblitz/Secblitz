@@ -13,7 +13,7 @@ const DIFFERS: &str = "Preference differs from both target and before image; no 
 const CHANGED_AT_GATE: &str = "Preference changed immediately before restore; no write performed";
 pub const NOTHING_RECORDED: &str = "Nothing recorded to put back";
 const NEEDS_OTHER: &str = "Another protection needs this one";
-const UNDO_FIRST: &str = "Revert the active transaction before undoing chosen controls";
+pub const UNDO_FIRST: &str = "Revert the active transaction before undoing chosen controls";
 
 /// When `RestorePending` becomes durable relative to the final read.
 /// Undoing a whole batch records its intent first, so any failure at the gate stays recoverable by `revert`.

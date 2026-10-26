@@ -315,19 +315,34 @@ pub(super) fn put_back_lines(report: &secblitz::engine::Report, lang: Lang) -> V
         .collect()
 }
 
+/// An interrupted fix is put back as a whole first, since the chosen settings cannot be undone one by one while it is open.
+#[cfg(any(target_os = "linux", test))]
+pub(super) fn put_back_all(
+    session: &mut dyn crate::app::worker::Session,
+) -> anyhow::Result<secblitz::engine::Report> {
+    let ids = session.available();
+    if ids.is_empty() {
+        return Ok(secblitz::engine::Report::default());
+    }
+    let report = session.undo_selected(&ids, &mut |_| {})?;
+    if report
+        .results
+        .iter()
+        .any(|o| o.detail == secblitz::engine::UNDO_FIRST)
+    {
+        session.undo(&mut |_| {})?;
+        return session.undo_selected(&ids, &mut |_| {});
+    }
+    Ok(report)
+}
+
 /// Puts back everything one half of the settings recorded. A half that cannot be reached leaves its own sentence.
 #[cfg(target_os = "linux")]
 fn put_back_half(
     open: impl FnOnce() -> anyhow::Result<Box<dyn crate::app::worker::Session>>,
     lang: Lang,
 ) -> Vec<String> {
-    let result = open().and_then(|mut session| {
-        let ids = session.available();
-        if ids.is_empty() {
-            return Ok(secblitz::engine::Report::default());
-        }
-        session.undo_selected(&ids, &mut |_| {})
-    });
+    let result = open().and_then(|mut session| put_back_all(session.as_mut()));
     match result {
         Ok(report) => put_back_lines(&report, lang),
         Err(error)
