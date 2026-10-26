@@ -1518,6 +1518,11 @@ pub fn app_access_applies() -> bool {
     secblitz::os::Os::CURRENT == secblitz::os::Os::Windows
 }
 
+/// On Windows, personal settings are undone from the Tools page; elsewhere they are undone here with the rest.
+fn personal_undo_on_tools(os: secblitz::os::Os) -> bool {
+    os == secblitz::os::Os::Windows
+}
+
 pub fn view<'a>(
     state: &'a State,
     ctx: &'a Ctx,
@@ -2257,15 +2262,16 @@ fn protected_group<'a>(
     let mut list = column![].spacing(theme::S1);
     let offers_undo = shown.protected.iter().any(|r| r.undoable);
     if offers_undo {
-        list = list
-            .push(widgets::muted(
-                p,
-                ctx.t("You can put any setting Secblitz changed back the way it was."),
-            ))
-            .push(widgets::small(
+        list = list.push(widgets::muted(
+            p,
+            ctx.t("You can put any setting Secblitz changed back the way it was."),
+        ));
+        if personal_undo_on_tools(secblitz::os::Os::CURRENT) {
+            list = list.push(widgets::small(
                 p,
                 ctx.t("Personal settings you changed are on the Tools page."),
             ));
+        }
     }
     for r in visible {
         list = list.push(if r.undoable {
@@ -2363,6 +2369,14 @@ fn protected_group<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_windows_points_to_the_tools_page_for_personal_settings() {
+        use secblitz::os::Os;
+        assert!(personal_undo_on_tools(Os::Windows));
+        assert!(!personal_undo_on_tools(Os::Linux));
+        assert!(!personal_undo_on_tools(Os::Macos));
+    }
 
     #[test]
     fn tiles_follow_the_system_and_never_hide_a_result() {
