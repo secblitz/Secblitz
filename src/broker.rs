@@ -396,6 +396,7 @@ pub fn encode_space_reply(reply: Reply, tally: Tally) -> [u8; SPACE_REPLY] {
     out
 }
 
+#[cfg(any(windows, test))]
 pub fn decode_space_reply(bytes: [u8; SPACE_REPLY]) -> Option<(Reply, Tally)> {
     let reply = Reply::decode(bytes[0])?;
     let tally = Tally {
