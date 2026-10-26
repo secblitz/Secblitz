@@ -10,6 +10,7 @@ dated version section when a release is prepared (see `docs/RELEASING.md`).
 ## [Unreleased]
 
 ### Added
+- Secblitz now runs on Ubuntu, Linux Mint and Fedora, with checks and fixes made for each.
 - On Linux, Secblitz can look once a day for a newer version of itself and install it when you say yes.
 - On Linux, Free up space shows and clears install files, old crash reports, picture previews, unused app parts and the Trash, and Clean up apps removes remote control apps.
 
