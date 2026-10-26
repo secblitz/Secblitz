@@ -4,6 +4,7 @@ use super::polkit::{self, Action};
 use crate::app::remote::{self, Event, Reply, Request};
 use crate::app::worker::Session;
 use secblitz::engine::recover::NotDamaged;
+use secblitz::linux::backend::LinuxBackend;
 use std::collections::VecDeque;
 use std::future::Future;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -30,7 +31,6 @@ const BUSY: &str = "Secblitz is busy with another task. Try again in a moment.";
 const STOPPED: &str = "Secblitz stopped unexpectedly. Try again in a moment.";
 const TOO_LARGE: &str =
     "Secblitz could not send all the results at once. Try again with fewer settings.";
-const NO_CONTROLS: &str = "This setting is not available on this computer.";
 
 pub type Opener = Arc<dyn Fn() -> anyhow::Result<Box<dyn Session>> + Send + Sync>;
 pub type Recover = Arc<dyn Fn() -> anyhow::Result<()> + Send + Sync>;
@@ -352,44 +352,20 @@ pub fn run(open: Opener, recover: Recover) -> anyhow::Result<()> {
     )
 }
 
-/// What the helper uses until the Linux checks exist: no controls, only the computer's identity.
-pub struct BareBackend;
-
-impl secblitz::model::Backend for BareBackend {
-    fn machine_id(&mut self) -> anyhow::Result<String> {
-        let id = std::fs::read_to_string("/etc/machine-id")?;
-        let id = id.trim();
-        anyhow::ensure!(!id.is_empty(), crate::launcher::NOT_INSTALLED);
-        Ok(id.to_owned())
-    }
-    fn controls(&self) -> Vec<secblitz::model::Control> {
-        Vec::new()
-    }
-    fn observe(&mut self, _id: &str) -> anyhow::Result<secblitz::model::Observation> {
-        anyhow::bail!(NO_CONTROLS)
-    }
-    fn write(&mut self, _id: &str, _value: &serde_json::Value) -> anyhow::Result<()> {
-        anyhow::bail!(NO_CONTROLS)
-    }
-    fn findings(&mut self) -> anyhow::Result<Vec<secblitz::model::Finding>> {
-        Ok(Vec::new())
-    }
-}
-
 /// The helper as the system installs it: the engine on the protected state folder.
 pub fn run_installed() -> anyhow::Result<()> {
     run(
         Arc::new(|| {
             let engine = secblitz::engine::Engine::open(
                 secblitz::platform::state_dir()?,
-                Box::new(BareBackend),
+                Box::new(LinuxBackend::installed()?),
             )?;
             Ok(Box::new(engine) as Box<dyn Session>)
         }),
         Arc::new(|| {
             secblitz::engine::recover::start_fresh(
                 &secblitz::platform::state_dir()?,
-                Box::new(BareBackend),
+                Box::new(LinuxBackend::installed()?),
             )
             .map(drop)
         }),
@@ -467,8 +443,26 @@ mod tests {
 
     #[test]
     fn every_sentence_the_helper_shows_is_translated() {
-        for text in [BUSY, STOPPED, TOO_LARGE, NO_CONTROLS, polkit::NOT_ALLOWED] {
+        for text in [BUSY, STOPPED, TOO_LARGE, polkit::NOT_ALLOWED] {
             assert_ne!(crate::i18n::Lang::De.t(text), text, "{text}");
+        }
+    }
+
+    #[test]
+    fn every_sentence_the_linux_checks_show_is_translated_in_every_language() {
+        use secblitz::linux::controls::{findings, SENTENCES};
+        let names = ["AppArmor", "SELinux", "Secure Boot", "Firewall"];
+        let all = SENTENCES
+            .iter()
+            .chain(&findings::SENTENCES)
+            .chain(&findings::TITLES)
+            .copied()
+            .chain(secblitz::linux::backend::texts());
+        for text in all.filter(|t| !names.contains(t)) {
+            for lang in ["es", "fr", "de", "pt", "it"] {
+                let lang = crate::i18n::Lang::parse(lang).unwrap();
+                assert_ne!(lang.t(text), text, "{text} in {lang:?}");
+            }
         }
     }
 

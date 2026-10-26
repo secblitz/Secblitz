@@ -174,6 +174,7 @@ fn is_ours(name: &str) -> bool {
             "Updates" | "operations" | "Patching" | "App" | DAMAGED
         )
         && name != crate::platform::WEB_PROTECTION
+        && name != crate::platform::LINUX_NOTES
 }
 
 fn hash(path: &Path) -> Result<Option<(u64, String)>> {
