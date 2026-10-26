@@ -8,6 +8,7 @@ use std::collections::VecDeque;
 use std::future::Future;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::pin::Pin;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 use zbus::fdo;
@@ -26,8 +27,7 @@ const NEXT_WAIT: Duration = Duration::from_millis(250);
 const ABANDONED_AFTER: Duration = Duration::from_secs(30);
 
 const BUSY: &str = "Secblitz is busy with another task. Try again in a moment.";
-const STOPPED: &str =
-    "Secblitz stopped unexpectedly. Try again, and restart the computer if it keeps happening.";
+const STOPPED: &str = "Secblitz stopped unexpectedly. Try again in a moment.";
 const TOO_LARGE: &str =
     "Secblitz could not send all the results at once. Try again with fewer settings.";
 const NO_CONTROLS: &str = "This setting is not available on this computer.";
@@ -77,6 +77,24 @@ struct Shared {
     state: Mutex<State>,
     news: Condvar,
     touched: Mutex<Instant>,
+    asking: AtomicUsize,
+}
+
+/// Keeps the helper awake while a request waits on the permission prompt, which can take far longer than the idle time.
+struct Asking<'a>(&'a Shared);
+
+impl<'a> Asking<'a> {
+    fn new(shared: &'a Shared) -> Self {
+        shared.asking.fetch_add(1, Ordering::SeqCst);
+        Self(shared)
+    }
+}
+
+impl Drop for Asking<'_> {
+    fn drop(&mut self) {
+        self.0.touch();
+        self.0.asking.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
 impl Shared {
@@ -85,6 +103,7 @@ impl Shared {
             state: Mutex::new(State::default()),
             news: Condvar::new(),
             touched: Mutex::new(Instant::now()),
+            asking: AtomicUsize::new(0),
         }
     }
 
@@ -98,7 +117,7 @@ impl Shared {
 
     fn idle_for(&self) -> Option<Duration> {
         let busy = self.lock().job.as_ref().is_some_and(|job| !job.done);
-        if busy {
+        if busy || self.asking.load(Ordering::SeqCst) > 0 {
             return None;
         }
         Some(
@@ -199,7 +218,7 @@ fn run_job(shared: &Shared, id: u64, request: Request, open: &Opener, recover: &
         finished |= last;
         shared.push(id, encode(&event), last);
     };
-    let ran = catch_unwind(AssertUnwindSafe(|| match request {
+    let _ = catch_unwind(AssertUnwindSafe(|| match request {
         Request::StartFresh => {
             let result = match recover() {
                 Err(e) if e.downcast_ref::<NotDamaged>().is_some() => Ok(()),
@@ -215,7 +234,7 @@ fn run_job(shared: &Shared, id: u64, request: Request, open: &Opener, recover: &
             Err(error) => emit(Event::Done(Reply::Failed(format!("{error:#}")))),
         },
     }));
-    if ran.is_err() || !finished {
+    if !finished {
         shared.push(id, failure(STOPPED), true);
     }
 }
@@ -244,7 +263,7 @@ impl Helper {
         #[zbus(header)] header: Header<'_>,
         #[zbus(connection)] connection: &Connection,
     ) -> fdo::Result<u64> {
-        self.shared.touch();
+        let _asking = Asking::new(&self.shared);
         let sender = Self::sender(&header)?;
         let request =
             remote::decode_request(&request).map_err(|e| fdo::Error::Failed(format!("{e:#}")))?;
@@ -423,6 +442,37 @@ mod tests {
     }
 
     #[test]
+    fn a_waiting_permission_prompt_keeps_the_helper_awake() {
+        let shared = Shared::new();
+        let asking = Asking::new(&shared);
+        assert!(shared.idle_for().is_none());
+        drop(asking);
+        assert!(shared.idle_for().is_some());
+    }
+
+    #[test]
+    fn a_job_that_panics_still_ends_with_one_final_event() {
+        let shared = Shared::new();
+        let id = shared.start(":1.1").unwrap();
+        let open: Opener = Arc::new(|| Ok(Box::new(Panics) as Box<dyn Session>));
+        let recover: Recover = Arc::new(|| Ok(()));
+        run_job(&shared, id, Request::Available, &open, &recover);
+        let (events, done) = shared.take(id, ":1.1").unwrap();
+        assert!(done);
+        assert_eq!(events.len(), 1);
+        assert!(String::from_utf8(events[0].clone())
+            .unwrap()
+            .contains(STOPPED));
+    }
+
+    #[test]
+    fn every_sentence_the_helper_shows_is_translated() {
+        for text in [BUSY, STOPPED, TOO_LARGE, NO_CONTROLS, polkit::NOT_ALLOWED] {
+            assert_ne!(crate::i18n::Lang::De.t(text), text, "{text}");
+        }
+    }
+
+    #[test]
     fn next_waits_a_moment_then_returns_nothing() {
         let shared = Shared::new();
         let id = shared.start(":1.1").unwrap();
@@ -531,6 +581,43 @@ mod tests {
         }
         fn can_start(&mut self, _: bool) -> anyhow::Result<()> {
             Ok(())
+        }
+    }
+
+    struct Panics;
+
+    impl Session for Panics {
+        fn available(&self) -> Vec<String> {
+            panic!("boom")
+        }
+        fn restart_ids(&self) -> Vec<String> {
+            Vec::new()
+        }
+        fn audit(&mut self, _: &mut dyn FnMut(Progress<'_>)) -> anyhow::Result<Report> {
+            unreachable!()
+        }
+        fn apply(
+            &mut self,
+            _: &[String],
+            _: &mut dyn FnMut(Progress<'_>),
+        ) -> anyhow::Result<Report> {
+            unreachable!()
+        }
+        fn undo(&mut self, _: &mut dyn FnMut(Progress<'_>)) -> anyhow::Result<Report> {
+            unreachable!()
+        }
+        fn undo_selected(
+            &mut self,
+            _: &[String],
+            _: &mut dyn FnMut(Progress<'_>),
+        ) -> anyhow::Result<Report> {
+            unreachable!()
+        }
+        fn history(&mut self) -> anyhow::Result<Vec<String>> {
+            unreachable!()
+        }
+        fn can_start(&mut self, _: bool) -> anyhow::Result<()> {
+            unreachable!()
         }
     }
 
