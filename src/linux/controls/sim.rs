@@ -528,6 +528,11 @@ impl Sim {
                     "{\n  \"Devices\": [\n  ]\n}\n"
                 },
             ),
+            "/usr/bin/resolvectl" if args == ["llmnr"] => {
+                let built = self.get("resolved.built");
+                let word = if built.is_empty() { "yes" } else { &built };
+                out(0, &format!("Global: {word}\nLink 2 (enp1s0): {word}\n"))
+            }
             "/usr/bin/mokutil" => match self.get("sb.support").as_str() {
                 "none" => out(255, "This system doesn't support Secure Boot\n"),
                 _ => out(1, "EFI variables are not supported on this system\n"),

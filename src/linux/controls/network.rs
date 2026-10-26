@@ -215,6 +215,7 @@ const RESOLVED_DIRS: [&str; 3] = [
 ];
 const LLMNR_DROPIN: &str = "/etc/systemd/resolved.conf.d/90-secblitz.conf";
 const RESOLVED_UNIT: &str = "systemd-resolved.service";
+const RESOLVECTL: &str = "/usr/bin/resolvectl";
 const SYSTEMCTL: &str = "/usr/bin/systemctl";
 
 /// The word systemd uses for the setting; `None` when the text is not one it knows.
@@ -227,8 +228,19 @@ fn llmnr_word(value: &str) -> Option<&'static str> {
     })
 }
 
+/// What the running resolver does. Distributions build it with different defaults (Ubuntu's never answers, Fedora's
+/// does), so this is the only way to learn the value when no file sets it.
+fn running_llmnr(cx: &Cx) -> Result<Option<&'static str>> {
+    let out = cx.run_ok(RESOLVECTL, &["llmnr"])?;
+    Ok(out
+        .stdout
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("Global:"))
+        .and_then(llmnr_word))
+}
+
 /// What systemd-resolved is told to do: the main file, then the files of the three folders by name, where a file in a
-/// later folder replaces one of the same name and a later name wins. With nothing said, it answers.
+/// later folder replaces one of the same name and a later name wins. With nothing said, it does what it was built to.
 fn effective_llmnr(cx: &Cx) -> Result<Option<&'static str>> {
     let mut by_name = std::collections::BTreeMap::new();
     for dir in RESOLVED_DIRS {
@@ -247,13 +259,16 @@ fn effective_llmnr(cx: &Cx) -> Result<Option<&'static str>> {
             texts.push(text);
         }
     }
-    let mut word = Some("yes");
+    let mut word = None;
     for text in &texts {
         if let Some(value) = ini::get(text, &["Resolve"], "LLMNR") {
-            word = llmnr_word(&value);
+            word = Some(llmnr_word(&value));
         }
     }
-    Ok(word)
+    match word {
+        Some(word) => Ok(word),
+        None => running_llmnr(cx),
+    }
 }
 
 fn resolver_active(cx: &Cx) -> bool {

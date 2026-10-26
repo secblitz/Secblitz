@@ -11,7 +11,14 @@ const REDIRECT_MEMO: &str = "/var/lib/secblitz/Linux/network_redirects.txt";
 
 fn resolved(sim: Sim) -> Sim {
     sim.unit("systemd-resolved.service", "enabled", true);
+    sim.tool("/usr/bin/resolvectl");
     sim
+}
+
+/// Ubuntu and Mint build the resolver so that it never answers; the recorded installs say `Global: no`.
+fn quiet(sim: Sim) -> Sim {
+    sim.set("resolved.built", "no");
+    resolved(sim)
 }
 
 fn snapshot(sim: &Sim) -> BTreeMap<PathBuf, String> {
@@ -363,19 +370,29 @@ fn forwarding_is_never_touched() {
 }
 
 #[test]
-fn name_lookups_read_as_open_on_every_install_with_the_built_in_resolver() {
-    for sim in [
-        resolved(ubuntu()),
-        resolved(fedora()),
-        resolved(linuxmint()),
-    ] {
+fn name_lookups_read_as_open_on_fedora_and_closed_on_ubuntu_and_mint() {
+    let mut b = backend(&resolved(fedora()));
+    assert_eq!(
+        value(&mut b, "linux.llmnr"),
+        json!({"items": {"llmnr": "yes"}})
+    );
+    assert_eq!(status(&mut b, "linux.llmnr"), CheckStatus::Attention);
+    for sim in [quiet(ubuntu()), quiet(linuxmint())] {
         let mut b = backend(&sim);
         assert_eq!(
             value(&mut b, "linux.llmnr"),
-            json!({"items": {"llmnr": "yes"}})
+            json!({"items": {"llmnr": "no"}})
         );
-        assert_eq!(status(&mut b, "linux.llmnr"), CheckStatus::Attention);
+        assert_eq!(status(&mut b, "linux.llmnr"), CheckStatus::Compliant);
     }
+}
+
+#[test]
+fn a_resolver_that_cannot_be_asked_is_not_read_as_safe() {
+    let sim = resolved(fedora());
+    sim.fail("/usr/bin/resolvectl llmnr");
+    let o = backend(&sim).observe("linux.llmnr");
+    assert!(o.is_err() || !o.unwrap().eligible);
 }
 
 #[test]
