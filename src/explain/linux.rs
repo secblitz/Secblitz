@@ -97,6 +97,26 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             "On a page that is not protected, anyone on the same network can read what you type or change what you see.",
             "Firefox warns you first, and you can still open the page. It will say your organization manages it, which only means a setting was made here.",
         ),
+        "linux.bluetooth_autostart" => e(
+            "Your computer switches Bluetooth on by itself every time it starts. People with a Bluetooth keyboard or mouse need that.",
+            "Bluetooth that is on can be found by devices nearby, and weak spots in it have let strangers in before.",
+            "Bluetooth stays off after the next start until you turn it on. Do not choose this if you use a Bluetooth keyboard or mouse. You can undo this.",
+        ),
+        "linux.usage_survey" => e(
+            "A program on this computer sends the list of your installed programs to its makers once a week.",
+            "The list shows what software you use, which says more about you than you might expect.",
+            "Nothing is sent any more. Your programs work as before, and you can undo this.",
+        ),
+        "linux.mint_app_updates" => e(
+            "The Update Manager can update your Flatpak apps and your Cinnamon add-ons by itself. Right now it waits for you.",
+            "Apps and add-ons that nobody remembers to update keep known security holes open.",
+            "Those apps and add-ons update by themselves. Updates for Linux itself work as before, and you can undo this.",
+        ),
+        "linux.app_store_updates" => e(
+            "The Software app can download and install updates for your apps by itself. This checks that it is allowed to.",
+            "Apps that stay out of date keep known security holes open, even when the fixes are already out.",
+            "The Software app downloads updates by itself again, and you can undo this.",
+        ),
         "linux.screen_lock" => e(
             "Your screen should lock when you walk away. This checks that locking is on and that it does not wait forever.",
             "Anyone who walks past can read your screen and use your accounts while you are gone.",
@@ -227,6 +247,21 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             "Those updates fix weak spots in parts such as the startup software, which other updates do not reach.",
             "We leave updating to you. Open your software app and install them. Some need a restart afterwards.",
         ),
+        crate::advice::ADMIN_ACCOUNTS => e(
+            "Some accounts on this computer can change anything on it. This lists them.",
+            "Anyone who signs in to one of those accounts can install programs, read other accounts and remove protections.",
+            "We leave it as it is. Take that right from an account in your system settings if it does not need it.",
+        ),
+        crate::advice::OPEN_PROGRAMS => e(
+            "Some programs on this computer wait for connections from other computers. This lists the ones that are not part of a normal desktop.",
+            "Each one is a door that a stranger on the same network can try, and a weak spot in the program could let them in.",
+            "We leave it as it is. Close a program you do not use, or ask whoever set up this computer.",
+        ),
+        crate::advice::SWAP_PROTECTION => e(
+            "When memory runs low, your computer copies some of it to the drive. That copy is not scrambled here.",
+            "Passwords and open documents can end up on the drive and be read by anyone who gets hold of it.",
+            "We cannot change this safely for you. Encrypting the drive when you install Linux protects it.",
+        ),
         _ => return None,
     })
 }
@@ -235,7 +270,7 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
 mod tests {
     use super::*;
 
-    const FINDINGS: [&str; 10] = [
+    const FINDINGS: [&str; 13] = [
         crate::advice::DISK_ENCRYPTION,
         crate::advice::LINUX_SECURE_BOOT,
         crate::advice::UPDATES_WAITING,
@@ -246,6 +281,9 @@ mod tests {
         crate::advice::UNCHECKED_SOURCES,
         crate::advice::SECURITY_SUPPORT,
         crate::advice::HARDWARE_UPDATES,
+        crate::advice::ADMIN_ACCOUNTS,
+        crate::advice::OPEN_PROGRAMS,
+        crate::advice::SWAP_PROTECTION,
     ];
 
     #[test]

@@ -15,6 +15,7 @@ dated version section when a release is prepared (see `docs/RELEASING.md`).
 - On Linux, Free up space shows and clears install files, old crash reports, picture previews, unused app parts, older copies of apps, old system versions and the Trash.
 - On Linux, Clean up apps removes remote control and file sharing apps and can install them again.
 - On Linux, more checks and fixes cover the network, printers, browsers, location, problem reports and accounts.
+- On Linux, new checks cover Bluetooth at start, the weekly list of installed programs and automatic app updates, and tell you who can make changes, which programs are open to the network and whether memory saved to the drive is protected.
 
 ### Changed
 - Secblitz now says computer instead of PC.

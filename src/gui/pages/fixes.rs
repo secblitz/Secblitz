@@ -352,6 +352,26 @@ fn search_text(shown: &[&str], sources: &[&str], id: &str) -> Haystack {
     )
 }
 
+/// A finding's own sentence in the person's language. A list of names keeps the names and translates the words around them.
+fn finding_detail(lang: Lang, detail: &str) -> String {
+    use secblitz::linux::controls::findings as f;
+    let whole = lang.t(detail);
+    if whole != detail {
+        return whole;
+    }
+    [
+        f::ADMIN_ONE,
+        f::ADMIN_MANY,
+        f::OPEN_ONE,
+        f::OPEN_MANY,
+        f::OPEN_UNNAMED,
+    ]
+    .into_iter()
+    .fold(detail.to_owned(), |shown, part| {
+        shown.replace(part, &lang.t(part))
+    })
+}
+
 fn plain_status(status: &CheckStatus, a: &advice::Advice, lang: Lang) -> (String, String) {
     let (st, next) = crate::app::flow::plain_detail(status, a);
     (lang.t(st), lang.t(next))
@@ -579,6 +599,12 @@ fn build(ctx: &Ctx, report: &Report) -> Rows {
                         secblitz::vbs::blocked_names(&f.detail),
                     )
                     .unwrap_or_default(),
+                    match f.title.as_str() {
+                        advice::ADMIN_ACCOUNTS
+                        | advice::OPEN_PROGRAMS
+                        | advice::SWAP_PROTECTION => finding_detail(lang, &f.detail),
+                        _ => String::new(),
+                    },
                 ],
                 detail: None,
             },
@@ -2668,6 +2694,38 @@ mod tests {
     }
 
     #[test]
+    fn the_names_in_a_linux_finding_survive_translation_around_them() {
+        use secblitz::linux::controls::findings as f;
+        let lists = [
+            (
+                format!("2 {} tester, alex", f::ADMIN_MANY),
+                f::ADMIN_MANY,
+                "tester, alex",
+            ),
+            (format!("1 {} tester", f::ADMIN_ONE), f::ADMIN_ONE, "tester"),
+            (
+                format!("2 {} python3, {}", f::OPEN_MANY, f::OPEN_UNNAMED),
+                f::OPEN_MANY,
+                "python3, ",
+            ),
+            (format!("1 {} sshd", f::OPEN_ONE), f::OPEN_ONE, "sshd"),
+        ];
+        for lang in [Lang::Es, Lang::Fr, Lang::De, Lang::Pt, Lang::It] {
+            for (text, fragment, names) in &lists {
+                let shown = finding_detail(lang, text);
+                assert!(shown.contains(names), "{shown}");
+                assert!(!shown.contains(fragment), "{shown}");
+                assert!(shown.starts_with(&text[..2]), "{shown}");
+                assert!(!shown.contains(f::OPEN_UNNAMED), "{shown}");
+            }
+            for sentence in [f::OPEN_NONE, f::SWAP_SAFE, f::SWAP_OPEN] {
+                assert_ne!(finding_detail(lang, sentence), sentence);
+            }
+        }
+        assert_eq!(finding_detail(Lang::En, f::SWAP_OPEN), f::SWAP_OPEN);
+    }
+
+    #[test]
     fn a_linux_finding_never_opens_a_windows_settings_page_or_speaks_of_windows() {
         for title in [
             advice::DISK_ENCRYPTION,
@@ -2680,6 +2738,9 @@ mod tests {
             advice::UNCHECKED_SOURCES,
             advice::SECURITY_SUPPORT,
             advice::HARDWARE_UPDATES,
+            advice::ADMIN_ACCOUNTS,
+            advice::OPEN_PROGRAMS,
+            advice::SWAP_PROTECTION,
         ] {
             let a = advice::for_finding(title, &CheckStatus::Attention, "");
             for bucket in [Bucket::Look, Bucket::GoodToKnow] {

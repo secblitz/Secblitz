@@ -12,6 +12,7 @@ mod italian;
 mod linux;
 mod linux_browsers;
 mod linux_cleanup;
+mod linux_devices;
 mod linux_feeds;
 mod linux_findings;
 mod linux_network;
@@ -154,6 +155,7 @@ const MAINTENANCE_PARTS: &[&[[&str; 6]]] = &[
     linux_cleanup::ROWS,
     linux_network::ROWS,
     linux_services::ROWS,
+    linux_devices::ROWS,
     linux_person::ROWS,
     linux_browsers::ROWS,
     linux_findings::ROWS,

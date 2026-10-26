@@ -381,6 +381,39 @@ const SPECS: &[LinuxSpec] = &[
         reboot: false,
         keys: &[flag("firefox", true)],
     },
+    // auto_enable: 1 when Bluetooth adapters switch themselves on every time the computer starts, including when nothing says otherwise.
+    LinuxSpec {
+        id: "linux.bluetooth_autostart",
+        scope: Scope::System,
+        ask: true,
+        reboot: false,
+        keys: &[flag("auto_enable", true)],
+    },
+    // participate: 1 when the program that reports the installed programs every week is set to take part.
+    LinuxSpec {
+        id: "linux.usage_survey",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[flag("participate", true)],
+    },
+    // flatpaks, spices: 1 when the Update Manager updates Flatpak apps or Cinnamon add-ons by itself because the person set that,
+    // 0 when the person turned it off, 2 when it is off because nothing was ever set.
+    LinuxSpec {
+        id: "linux.mint_app_updates",
+        scope: Scope::Person,
+        ask: false,
+        reboot: false,
+        keys: &[off_by_default("flatpaks"), off_by_default("spices")],
+    },
+    // download: 0 when the Software app never downloads updates by itself, 1 when it does because the person set that, 2 when it does by default.
+    LinuxSpec {
+        id: "linux.app_store_updates",
+        scope: Scope::Person,
+        ask: false,
+        reboot: false,
+        keys: &[set("download", "", &[1, 2], false, Some(1), 2)],
+    },
 ];
 
 /// The only words these keys can hold. Other text keys hold names or ranges, so they are only kept to plain ASCII.
@@ -486,7 +519,7 @@ mod tests {
         for windows in crate::engine::catalog::ids(Os::Windows) {
             assert!(spec(windows).is_none(), "{windows}");
         }
-        assert_eq!(specs().len(), 34);
+        assert_eq!(specs().len(), 38);
     }
 
     #[test]
@@ -503,6 +536,8 @@ mod tests {
             "linux.app_usage",
             "linux.old_files",
             "linux.home_private",
+            "linux.mint_app_updates",
+            "linux.app_store_updates",
         ];
         let optional = [
             "linux.fedora_open_ports",
@@ -513,6 +548,7 @@ mod tests {
             "linux.app_usage",
             "linux.old_files",
             "linux.browser_https_only",
+            "linux.bluetooth_autostart",
         ];
         for s in specs() {
             let want = if person.contains(&s.id) {

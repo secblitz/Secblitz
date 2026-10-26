@@ -19,7 +19,7 @@ pub struct LinuxBackend<S: Sys> {
     memo: PathBuf,
 }
 
-const TEXT: [(&str, &str, &str); 23] = [
+const TEXT: [(&str, &str, &str); 25] = [
     (
         "linux.firewall",
         "Firewall",
@@ -135,6 +135,16 @@ const TEXT: [(&str, &str, &str); 23] = [
         "Secure connections only",
         "Whether Firefox warns you before it opens a page that is not protected.",
     ),
+    (
+        "linux.bluetooth_autostart",
+        "Bluetooth at start",
+        "Whether Bluetooth switches itself on every time the computer starts.",
+    ),
+    (
+        "linux.usage_survey",
+        "Installed programs report",
+        "Sends the list of programs installed on this computer to its makers once a week.",
+    ),
 ];
 
 /// Every title and description a person can read, for the translation tests.
@@ -171,6 +181,11 @@ impl<S: Sys> LinuxBackend<S> {
             "linux.fedora_open_ports" | "linux.countme" => self.distro.family == Family::Fedora,
             "linux.crash_reports" => self.distro.family == Family::Debian,
             "linux.ubuntu_news" => self.distro.id == "ubuntu",
+            "linux.bluetooth_autostart" => controls::devices::bluetooth_present(&self.cx()),
+            "linux.usage_survey" => {
+                self.distro.family == Family::Debian
+                    && controls::devices::survey_present(&self.cx())
+            }
             _ => true,
         }
     }
@@ -265,6 +280,8 @@ impl<S: Sys> Backend for LinuxBackend<S> {
             "linux.snap_updates" => controls::services::observe_snap_updates(&cx),
             "linux.browser_data_collection" => controls::browsers::observe_data_collection(&cx),
             "linux.browser_https_only" => controls::browsers::observe_https_only(&cx),
+            "linux.bluetooth_autostart" => controls::devices::observe_bluetooth(&cx),
+            "linux.usage_survey" => controls::devices::observe_usage_survey(&cx),
             _ => bail!("Unknown control id: {id}"),
         };
         result.map_err(|e| detail(id, &e, READ_FAILED))
@@ -301,6 +318,8 @@ impl<S: Sys> Backend for LinuxBackend<S> {
                 controls::browsers::write_data_collection(&cx, &want)
             }
             "linux.browser_https_only" => controls::browsers::write_https_only(&cx, &want),
+            "linux.bluetooth_autostart" => controls::devices::write_bluetooth(&cx, &want),
+            "linux.usage_survey" => controls::devices::write_usage_survey(&cx, &want),
             _ => bail!("Unknown control id: {id}"),
         };
         result.map_err(|e| detail(id, &e, CHANGE_FAILED))

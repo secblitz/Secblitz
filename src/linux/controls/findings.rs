@@ -4,13 +4,14 @@
 
 use super::Cx;
 use crate::advice::{
-    ACCOUNTS_WITHOUT_PASSWORD, ADMIN_WITHOUT_PASSWORD, DISK_ENCRYPTION, HARDWARE_UPDATES,
-    LINUX_SECURE_BOOT, PROGRAM_LIMITS, RESTART_NEEDED, SECURITY_SUPPORT, UNCHECKED_SOURCES,
-    UPDATES_WAITING,
+    ACCOUNTS_WITHOUT_PASSWORD, ADMIN_ACCOUNTS, ADMIN_WITHOUT_PASSWORD, DISK_ENCRYPTION,
+    HARDWARE_UPDATES, LINUX_SECURE_BOOT, OPEN_PROGRAMS, PROGRAM_LIMITS, RESTART_NEEDED,
+    SECURITY_SUPPORT, SWAP_PROTECTION, UNCHECKED_SOURCES, UPDATES_WAITING,
 };
 use crate::linux::cmd::Output;
 use crate::linux::distro::{field, Family};
 use crate::model::{CheckStatus, Finding};
+use std::collections::BTreeSet;
 use std::path::Path;
 
 pub const ENCRYPTED: &str = "The main drive is encrypted.";
@@ -45,7 +46,18 @@ pub const SUPPORT_ENDED: &str = "Security updates for your version of Linux have
 pub const NO_HARDWARE_UPDATES: &str = "No updates are waiting for the parts inside your computer.";
 pub const HARDWARE_WAITING: &str = "Updates are waiting for the parts inside your computer.";
 
-pub const SENTENCES: [&str; 27] = [
+pub const ADMIN_ONE: &str = "account can make changes:";
+pub const ADMIN_MANY: &str = "accounts can make changes:";
+pub const OPEN_NONE: &str =
+    "No program besides the usual ones accepts connections from other computers.";
+pub const OPEN_ONE: &str = "program accepts connections from other computers:";
+pub const OPEN_MANY: &str = "programs accept connections from other computers:";
+pub const OPEN_UNNAMED: &str = "a program that could not be named";
+pub const SWAP_SAFE: &str =
+    "Nothing from memory is saved to the drive in a way that others could read.";
+pub const SWAP_OPEN: &str = "Memory is saved to the drive without protection, so passwords and open documents can end up there.";
+
+pub const SENTENCES: [&str; 35] = [
     ENCRYPTED,
     NOT_ENCRYPTED,
     ENCRYPTION_UNKNOWN,
@@ -73,9 +85,17 @@ pub const SENTENCES: [&str; 27] = [
     SUPPORT_ENDED,
     NO_HARDWARE_UPDATES,
     HARDWARE_WAITING,
+    ADMIN_ONE,
+    ADMIN_MANY,
+    OPEN_NONE,
+    OPEN_ONE,
+    OPEN_MANY,
+    OPEN_UNNAMED,
+    SWAP_SAFE,
+    SWAP_OPEN,
 ];
 
-pub const TITLES: [&str; 10] = [
+pub const TITLES: [&str; 13] = [
     DISK_ENCRYPTION,
     LINUX_SECURE_BOOT,
     UPDATES_WAITING,
@@ -86,6 +106,9 @@ pub const TITLES: [&str; 10] = [
     UNCHECKED_SOURCES,
     SECURITY_SUPPORT,
     HARDWARE_UPDATES,
+    ADMIN_ACCOUNTS,
+    OPEN_PROGRAMS,
+    SWAP_PROTECTION,
 ];
 
 const SECURE_BOOT_VARIABLE: &str =
@@ -111,7 +134,11 @@ fn encrypted(cx: &Cx) -> Option<bool> {
     if !source.success() {
         return None;
     }
-    let source = source.stdout.trim();
+    device_encrypted(cx, source.stdout.trim())
+}
+
+/// Whether the device, or something it is stacked on, is an encrypted one. `None` when it cannot be told.
+fn device_encrypted(cx: &Cx, source: &str) -> Option<bool> {
     let device = source.split('[').next().unwrap_or("");
     if !device.starts_with("/dev/") || device.contains(char::is_whitespace) {
         return None;
@@ -434,6 +461,178 @@ fn hardware_updates(cx: &Cx) -> Option<bool> {
     Some(!answer.get("Devices")?.as_array()?.is_empty())
 }
 
+fn account_name_ok(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 32
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
+}
+
+/// The accounts in the groups that may make changes, in the order of the groups. Nothing else in the group file is read out.
+fn admin_names(cx: &Cx) -> Option<Vec<String>> {
+    let groups = cx.text("/etc/group").ok()??;
+    let mut names: Vec<String> = Vec::new();
+    for wanted in ["sudo", "wheel", "admin"] {
+        for line in groups.lines() {
+            let mut fields = line.split(':');
+            if fields.next() != Some(wanted) {
+                continue;
+            }
+            for member in fields.nth(2).unwrap_or("").split(',') {
+                let member = member.trim();
+                if account_name_ok(member) && !names.iter().any(|n| n == member) {
+                    names.push(member.to_string());
+                }
+            }
+        }
+    }
+    (!names.is_empty()).then_some(names)
+}
+
+fn admin_accounts(cx: &Cx) -> Option<Finding> {
+    let names = admin_names(cx)?;
+    let one = names.len() == 1;
+    Some(Finding {
+        title: ADMIN_ACCOUNTS.into(),
+        status: if one {
+            CheckStatus::Ok
+        } else {
+            CheckStatus::Info
+        },
+        detail: format!(
+            "{} {} {}",
+            names.len(),
+            if one { ADMIN_ONE } else { ADMIN_MANY },
+            names.join(", ")
+        ),
+    })
+}
+
+/// What a desktop opens for its own network services, so it is not worth a warning. A UDP socket on a high port is a
+/// program waiting for the answer to its own request, which `ss` lists the same way as a server.
+fn usual_listener(netid: &str, port: &str, program: Option<&str>) -> bool {
+    let udp = netid == "udp";
+    matches!(port, "5355")
+        || (udp && matches!(port, "5353" | "68" | "546"))
+        || (udp && port.parse::<u32>().is_ok_and(|p| p >= 32768))
+        || (udp
+            && program.is_some_and(|p| {
+                matches!(p, "avahi-daemon" | "dhclient" | "dhcpcd" | "NetworkManager")
+            }))
+}
+
+fn is_loopback(host: &str) -> bool {
+    let host = host
+        .split('%')
+        .next()
+        .unwrap_or("")
+        .trim_matches(['[', ']']);
+    let host = host.strip_prefix("::ffff:").unwrap_or(host);
+    host == "::1" || host.starts_with("127.")
+}
+
+/// The first program named in the `users:(("name",pid=1,fd=2))` part of a line of `ss`.
+fn listener_program(rest: &str) -> Option<&str> {
+    let after = rest.split_once("((\"")?.1;
+    let name = after.split('"').next()?;
+    (!name.is_empty() && name.len() <= 64 && !name.chars().any(char::is_control)).then_some(name)
+}
+
+/// The programs that accept connections from other computers, from `ss`; `None` when it cannot be asked.
+fn open_listeners(cx: &Cx) -> Option<Vec<Option<String>>> {
+    let out = cx.run("/usr/bin/ss", &["-Hltnup"]).ok()?;
+    if !out.success() {
+        return None;
+    }
+    let mut found: Vec<Option<String>> = Vec::new();
+    for line in out.stdout.lines() {
+        let mut fields = line.split_whitespace();
+        let netid = fields.next()?;
+        let local = fields.nth(3)?;
+        let (host, port) = local.rsplit_once(':')?;
+        let program = listener_program(line);
+        if is_loopback(host) || usual_listener(netid, port, program) {
+            continue;
+        }
+        let name = program.map(str::to_string);
+        if !found.contains(&name) {
+            found.push(name);
+        }
+    }
+    Some(found)
+}
+
+fn open_programs(cx: &Cx) -> Option<Finding> {
+    let found = open_listeners(cx)?;
+    if found.is_empty() {
+        return Some(Finding {
+            title: OPEN_PROGRAMS.into(),
+            status: CheckStatus::Ok,
+            detail: OPEN_NONE.into(),
+        });
+    }
+    let named: BTreeSet<&str> = found.iter().flatten().map(String::as_str).collect();
+    let mut list: Vec<&str> = named.into_iter().collect();
+    if found.contains(&None) {
+        list.push(OPEN_UNNAMED);
+    }
+    Some(Finding {
+        title: OPEN_PROGRAMS.into(),
+        status: CheckStatus::Attention,
+        detail: format!(
+            "{} {} {}",
+            list.len(),
+            if list.len() == 1 { OPEN_ONE } else { OPEN_MANY },
+            list.join(", ")
+        ),
+    })
+}
+
+/// Whether the memory saved to the drive is out of reach. `None` when a swap area cannot be traced to a device.
+fn swap_protected(cx: &Cx) -> Option<bool> {
+    let table = cx.text("/proc/swaps").ok()??;
+    let mut protected = true;
+    for line in table.lines().skip(1).filter(|l| !l.trim().is_empty()) {
+        let mut fields = line.split_whitespace();
+        let (name, kind) = (fields.next()?, fields.next()?);
+        if name.starts_with("/dev/zram") {
+            continue;
+        }
+        let device = match kind {
+            "partition" => name.to_string(),
+            "file" if name.starts_with('/') && !name.contains('\\') => {
+                let on = cx
+                    .run(
+                        "/usr/bin/findmnt",
+                        &["-n", "-o", "SOURCE", "--target", name],
+                    )
+                    .ok()?;
+                if !on.success() {
+                    return None;
+                }
+                on.stdout.trim().to_string()
+            }
+            _ => return None,
+        };
+        protected &= device_encrypted(cx, &device)?;
+    }
+    Some(protected)
+}
+
+fn swap_protection(cx: &Cx) -> Option<Finding> {
+    let safe = swap_protected(cx)?;
+    Some(Finding {
+        title: SWAP_PROTECTION.into(),
+        status: if safe {
+            CheckStatus::Ok
+        } else {
+            CheckStatus::Attention
+        },
+        detail: if safe { SWAP_SAFE } else { SWAP_OPEN }.into(),
+    })
+}
+
 pub fn collect(cx: &Cx) -> Vec<Finding> {
     let mut found = vec![
         finding(
@@ -530,5 +729,8 @@ pub fn collect(cx: &Cx) -> Vec<Finding> {
             detail: detail.into(),
         });
     }
+    found.extend(admin_accounts(cx));
+    found.extend(open_programs(cx));
+    found.extend(swap_protection(cx));
     found
 }

@@ -14,3 +14,4 @@
 /usr/lib/NetworkManager/conf.d
 /usr/lib/systemd/resolved.conf.d
 /usr/share/lightdm/lightdm.conf.d
+/etc/bluetooth

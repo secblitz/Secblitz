@@ -137,6 +137,7 @@ pub(super) fn dispatch(sim: &Sim, program: &str, args: &[&str]) -> Option<Result
         "/usr/sbin/cupsctl" => cupsctl(sim, args),
         "/usr/bin/pro" => pro(sim, args),
         "/usr/bin/snap" => snap(sim, args),
+        "/usr/bin/ss" if args == ["-Hltnup"] => out(0, &sim.get("rec.ss")),
         "/usr/bin/date" if args.last() == Some(&"+%s") => out(0, &format!("{}\n", sim.now())),
         "/usr/bin/systemctl"
             if args.first() == Some(&"try-restart")

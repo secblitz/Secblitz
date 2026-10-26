@@ -193,9 +193,34 @@ const CINNAMON_PREVIEWS: &[Gs] = &[gs(
     Shape::OnByDefault,
 )];
 
+const MINT_UPDATES: &[Gs] = &[
+    gs(
+        "flatpaks",
+        "com.linuxmint.updates",
+        "auto-update-flatpaks",
+        Shape::OffByDefault,
+    ),
+    gs(
+        "spices",
+        "com.linuxmint.updates",
+        "auto-update-cinnamon-spices",
+        Shape::OffByDefault,
+    ),
+];
+const GNOME_SOFTWARE: &[Gs] = &[gs(
+    "download",
+    "org.gnome.software",
+    "download-updates",
+    Shape::Lock,
+)];
+/// Controls whose settings belong to an app that may not be installed: they are offered only where its schema exists.
+const APP_CONTROLS: [&str; 2] = ["linux.mint_app_updates", "linux.app_store_updates"];
+
 /// The desktop settings behind a control on this desktop; empty when the control has none here.
 fn desktop_keys(id: &str, desktop: Desktop) -> &'static [Gs] {
     match (id, desktop) {
+        ("linux.mint_app_updates", _) => MINT_UPDATES,
+        ("linux.app_store_updates", _) => GNOME_SOFTWARE,
         ("linux.screen_lock", Desktop::Gnome) => GNOME_LOCK,
         ("linux.screen_lock", Desktop::Cinnamon) => CINNAMON_LOCK,
         ("linux.remote_desktop", Desktop::Gnome) => GNOME_REMOTE,
@@ -286,7 +311,14 @@ impl<S: Sys> PersonBackend<S> {
                 } else if s.id == HOME_CONTROL {
                     true
                 } else {
-                    session_bus && !desktop_keys(s.id, distro.desktop).is_empty()
+                    let keys = desktop_keys(s.id, distro.desktop);
+                    session_bus
+                        && !keys.is_empty()
+                        && (!APP_CONTROLS.contains(&s.id)
+                            || keys.iter().all(|g| {
+                                sys.run(GSETTINGS, &["get", g.schema, g.key])
+                                    .is_ok_and(|out| out.success())
+                            }))
                 }
             })
             .map(|s| Control {
@@ -1608,6 +1640,132 @@ mod tests {
         );
         e.revert(|_| {}).unwrap();
         assert_eq!(desk.set.borrow().clone(), before);
+    }
+
+    const UPDATES: &str = "com.linuxmint.updates";
+    const FLATPAKS: &str = "auto-update-flatpaks";
+    const SPICES: &str = "auto-update-cinnamon-spices";
+
+    #[test]
+    fn mint_app_updates_are_turned_on_and_undo_resets_what_was_never_set() {
+        let desk = Rc::new(Desk::mint());
+        let state = tempfile::tempdir().unwrap();
+        let mut e = engine_on(&desk, "linuxmint", Desktop::Cinnamon, state.path());
+        let mut b = backend(&desk, "linuxmint", Desktop::Cinnamon, true);
+        assert_eq!(
+            items(&mut b, "linux.mint_app_updates"),
+            json!({"flatpaks": 2, "spices": 2})
+        );
+        assert_eq!(status(&mut e, "linux.mint_app_updates"), "attention");
+        assert!(desk.set.borrow().is_empty());
+        e.apply_selected(&["linux.mint_app_updates".into()], |_| {})
+            .unwrap();
+        for k in [FLATPAKS, SPICES] {
+            assert_eq!(desk.current(UPDATES, k).unwrap(), "true");
+        }
+        assert_eq!(status(&mut e, "linux.mint_app_updates"), "compliant");
+        desk.calls.borrow_mut().clear();
+        e.revert(|_| {}).unwrap();
+        assert!(desk.set.borrow().is_empty(), "{:?}", desk.set.borrow());
+        assert!(calls(&desk).contains("reset com.linuxmint.updates auto-update-flatpaks"));
+        assert!(calls(&desk).contains("reset com.linuxmint.updates auto-update-cinnamon-spices"));
+        assert!(!calls(&desk).contains(" set "), "{}", calls(&desk));
+    }
+
+    #[test]
+    fn only_the_mint_update_switch_that_is_off_is_changed_and_a_choice_comes_back_as_that_choice() {
+        let desk = Rc::new(Desk::mint());
+        desk.put(UPDATES, FLATPAKS, "true");
+        desk.put(UPDATES, SPICES, "false");
+        let state = tempfile::tempdir().unwrap();
+        let mut e = engine_on(&desk, "linuxmint", Desktop::Cinnamon, state.path());
+        let mut b = backend(&desk, "linuxmint", Desktop::Cinnamon, true);
+        assert_eq!(
+            items(&mut b, "linux.mint_app_updates"),
+            json!({"flatpaks": 1, "spices": 0})
+        );
+        desk.calls.borrow_mut().clear();
+        e.apply_selected(&["linux.mint_app_updates".into()], |_| {})
+            .unwrap();
+        assert!(!calls(&desk).contains("set com.linuxmint.updates auto-update-flatpaks"));
+        assert_eq!(desk.current(UPDATES, SPICES).unwrap(), "true");
+        e.revert(|_| {}).unwrap();
+        assert_eq!(desk.current(UPDATES, FLATPAKS).unwrap(), "true");
+        assert_eq!(desk.current(UPDATES, SPICES).unwrap(), "false");
+        assert_eq!(desk.set.borrow().len(), 2);
+    }
+
+    #[test]
+    fn mint_app_updates_are_not_offered_where_the_update_manager_is_missing() {
+        for (desk, id, desktop) in [
+            (Desk::stock(), "ubuntu", Desktop::Gnome),
+            (Desk::fedora(), "fedora", Desktop::Gnome),
+        ] {
+            let desk = Rc::new(desk);
+            let listed = ids(&backend(&desk, id, desktop, true));
+            assert!(
+                !listed.contains(&"linux.mint_app_updates".to_string()),
+                "{id}"
+            );
+        }
+        let desk = Rc::new(Desk::mint());
+        assert!(!ids(&backend(&desk, "linuxmint", Desktop::Cinnamon, false))
+            .contains(&"linux.mint_app_updates".to_string()));
+        let mut half = Desk::mint();
+        half.defaults.remove(&key(UPDATES, SPICES));
+        let desk = Rc::new(half);
+        assert!(!ids(&backend(&desk, "linuxmint", Desktop::Cinnamon, true))
+            .contains(&"linux.mint_app_updates".to_string()));
+    }
+
+    #[test]
+    fn the_software_app_downloads_updates_by_default_and_a_turned_off_switch_is_fixed_and_put_back()
+    {
+        const SCHEMA: &str = "org.gnome.software";
+        const KEY: &str = "download-updates";
+        let desk = Rc::new(Desk::fedora());
+        let state = tempfile::tempdir().unwrap();
+        let mut e = engine_on(&desk, "fedora", Desktop::Gnome, state.path());
+        let mut b = backend(&desk, "fedora", Desktop::Gnome, true);
+        assert_eq!(
+            items(&mut b, "linux.app_store_updates"),
+            json!({"download": 2})
+        );
+        assert_eq!(status(&mut e, "linux.app_store_updates"), "compliant");
+
+        desk.put(SCHEMA, KEY, "false");
+        assert_eq!(
+            items(&mut b, "linux.app_store_updates"),
+            json!({"download": 0})
+        );
+        assert_eq!(status(&mut e, "linux.app_store_updates"), "attention");
+        e.apply_selected(&["linux.app_store_updates".into()], |_| {})
+            .unwrap();
+        assert_eq!(desk.current(SCHEMA, KEY).unwrap(), "true");
+        assert_eq!(status(&mut e, "linux.app_store_updates"), "compliant");
+        e.revert(|_| {}).unwrap();
+        assert_eq!(desk.current(SCHEMA, KEY).unwrap(), "false");
+        assert_eq!(desk.set.borrow().len(), 1);
+    }
+
+    #[test]
+    fn the_software_app_check_is_not_offered_where_the_app_is_missing() {
+        for (desk, id, desktop) in [
+            (Desk::stock(), "ubuntu", Desktop::Gnome),
+            (Desk::mint(), "linuxmint", Desktop::Cinnamon),
+        ] {
+            let desk = Rc::new(desk);
+            let listed = ids(&backend(&desk, id, desktop, true));
+            assert!(
+                !listed.contains(&"linux.app_store_updates".to_string()),
+                "{id}"
+            );
+        }
+        let desk = Rc::new(Desk::fedora());
+        let listed = ids(&backend(&desk, "fedora", Desktop::Gnome, true));
+        assert!(listed.contains(&"linux.app_store_updates".to_string()));
+        assert!(!ids(&backend(&desk, "fedora", Desktop::Gnome, false))
+            .contains(&"linux.app_store_updates".to_string()));
     }
 
     #[test]

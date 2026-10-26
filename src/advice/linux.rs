@@ -12,6 +12,9 @@ pub const ADMIN_WITHOUT_PASSWORD: &str = "Linux admin rights without a password"
 pub const UNCHECKED_SOURCES: &str = "Linux software sources without checks";
 pub const SECURITY_SUPPORT: &str = "Linux security support";
 pub const HARDWARE_UPDATES: &str = "Linux hardware updates";
+pub const ADMIN_ACCOUNTS: &str = "Linux admin accounts";
+pub const OPEN_PROGRAMS: &str = "Linux programs open to the network";
+pub const SWAP_PROTECTION: &str = "Linux memory saved to the drive";
 
 pub(super) fn label(id: &str) -> Option<&'static str> {
     Some(match id {
@@ -49,6 +52,10 @@ pub(super) fn label(id: &str) -> Option<&'static str> {
         "linux.home_private" => "Privacy of your home folder",
         "linux.browser_data_collection" => "Browser usage data",
         "linux.browser_https_only" => "Secure connections only",
+        "linux.bluetooth_autostart" => "Bluetooth at start",
+        "linux.usage_survey" => "Installed programs report",
+        "linux.mint_app_updates" => "Automatic app updates",
+        "linux.app_store_updates" => "Automatic app downloads",
         _ => return None,
     })
 }
@@ -129,6 +136,14 @@ pub(super) fn impact(id: &str) -> Option<&'static str> {
         "linux.browser_https_only" => {
             "Someone on the same network reading or changing a page that is not protected"
         }
+        "linux.bluetooth_autostart" => {
+            "Someone nearby trying to connect to your computer while Bluetooth is on without you knowing"
+        }
+        "linux.usage_survey" => {
+            "A list of every program on your computer being sent out each week"
+        }
+        "linux.mint_app_updates" => "Apps and add-ons staying out of date with known security holes",
+        "linux.app_store_updates" => "Apps staying out of date with known security holes",
         _ => return None,
     })
 }
@@ -181,6 +196,11 @@ pub(super) fn repair(id: &str) -> Option<&'static str> {
         "linux.browser_data_collection" => {
             "Your browsers will stop sending usage data to the companies that make them."
         }
+        "linux.usage_survey" => "Your computer will stop sending the list of installed programs.",
+        "linux.mint_app_updates" => {
+            "Apps and add-ons will update by themselves. Updates for Linux itself stay as they are."
+        }
+        "linux.app_store_updates" => "The Software app will download updates by itself.",
         _ => return None,
     })
 }
@@ -195,6 +215,7 @@ pub(super) fn consequence(id: &str) -> Option<&'static str> {
         "linux.app_usage" => "Your computer stops keeping track of which apps you use most. Search may list apps in a different order. You can undo this.",
         "linux.old_files" => "Files in the Trash for over 30 days, and old temporary files, are deleted for good. Undo cannot bring them back.",
         "linux.browser_https_only" => "Firefox warns you before opening a page that is not protected. You can still open it. You can undo this.",
+        "linux.bluetooth_autostart" => "Bluetooth stays off after each start until you turn it on. Skip this if you use a Bluetooth keyboard or mouse. You can undo this.",
         _ => return None,
     })
 }
@@ -251,6 +272,21 @@ pub(super) fn finding(title: &str) -> Option<(&'static str, &'static str, NextSt
             "Open your software app and install the updates for your computer's parts.",
             NextStep::None,
         ),
+        ADMIN_ACCOUNTS => (
+            "Who can make changes to this computer",
+            "Look at the accounts listed. If someone there should not change this computer, take that right from them in your system settings.",
+            NextStep::None,
+        ),
+        OPEN_PROGRAMS => (
+            "Programs open to the network",
+            "Look at the programs listed. If you do not use one of them, close it, or ask whoever set up this computer.",
+            NextStep::ReviewWithAdministrator,
+        ),
+        SWAP_PROTECTION => (
+            "Memory saved to the drive",
+            "Encrypting the drive when you install Linux also protects this. We cannot change it safely for you.",
+            NextStep::ReviewWithAdministrator,
+        ),
         _ => return None,
     })
 }
@@ -273,6 +309,15 @@ pub(super) fn finding_impact(title: &str) -> Option<&'static str> {
         UNCHECKED_SOURCES => "Tampered software being installed on your computer",
         SECURITY_SUPPORT => "New security holes never being fixed on your computer",
         HARDWARE_UPDATES => "Known weak spots staying open in your computer's parts",
+        ADMIN_ACCOUNTS => {
+            "Someone changing or removing anything on your computer without you knowing"
+        }
+        OPEN_PROGRAMS => {
+            "Other computers on the network reaching programs you did not mean to share"
+        }
+        SWAP_PROTECTION => {
+            "Someone who finds your computer reading passwords and open documents from the drive"
+        }
         _ => return None,
     })
 }
@@ -294,6 +339,8 @@ pub(super) fn not_offered(reason: &str) -> Option<&'static str> {
         c::services::NO_PRINTING,
         c::services::NO_PRINTER_FINDER,
         c::services::NO_SNAP_STORE,
+        c::devices::NO_BLUETOOTH,
+        c::devices::NO_USAGE_SURVEY,
         c::UNRECOGNISED,
         c::browsers::NO_BROWSER,
         c::browsers::NO_FIREFOX,
@@ -405,6 +452,9 @@ mod tests {
             UNCHECKED_SOURCES,
             SECURITY_SUPPORT,
             HARDWARE_UPDATES,
+            ADMIN_ACCOUNTS,
+            OPEN_PROGRAMS,
+            SWAP_PROTECTION,
         ] {
             let a = for_finding(title, &CheckStatus::Attention, "");
             assert_ne!(a.label, "Protection check", "{title}");
@@ -433,6 +483,8 @@ mod tests {
             c::UNRECOGNISED,
             c::browsers::NO_BROWSER,
             c::browsers::NO_FIREFOX,
+            c::devices::NO_BLUETOOTH,
+            c::devices::NO_USAGE_SURVEY,
             crate::linux::person::UNAVAILABLE,
         ] {
             let a = for_control("linux.firewall", &CheckStatus::Skipped, reason);

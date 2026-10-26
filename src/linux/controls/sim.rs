@@ -595,15 +595,24 @@ impl Sim {
                 "none" => out(255, "This system doesn't support Secure Boot\n"),
                 _ => out(1, "EFI variables are not supported on this system\n"),
             },
-            "/usr/bin/findmnt" => out(0, &format!("{}\n", self.get("root.source"))),
-            "/usr/bin/lsblk" => out(
-                0,
-                &if self.get("root.crypt") == "1" {
-                    "part\ncrypt\n".to_string()
-                } else {
-                    "part\n".to_string()
-                },
-            ),
+            "/usr/bin/findmnt" => match args {
+                ["-n", "-o", "SOURCE", "--target", path] => {
+                    let own = self.get(&format!("mount:{path}"));
+                    let source = if own.is_empty() {
+                        self.get("root.source")
+                    } else {
+                        own
+                    };
+                    out(0, &format!("{source}\n"))
+                }
+                _ => out(0, &format!("{}\n", self.get("root.source"))),
+            },
+            "/usr/bin/lsblk" => {
+                let device = args.last().copied().unwrap_or("");
+                let crypt = (self.get("root.crypt") == "1" && device == self.get("root.source"))
+                    || self.get(&format!("crypt:{device}")) == "1";
+                out(0, if crypt { "part\ncrypt\n" } else { "part\n" })
+            }
             "/usr/lib/update-notifier/apt-check" => Ok(Output {
                 status: 0,
                 stdout: String::new(),

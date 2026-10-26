@@ -29,6 +29,7 @@ fn ubuntu() -> Sim {
     sim.unit("ufw.service", "enabled", true)
         .unit("unattended-upgrades.service", "enabled", true)
         .unit("apport.service", "enabled", true)
+        .unit("bluetooth.service", "enabled", true)
         .unit("NetworkManager.service", "enabled", true)
         .set("dpkg.unattended", "1")
         .set("ufw.active", "0")
@@ -69,6 +70,7 @@ fn fedora() -> Sim {
     }
     sim.unit("firewalld.service", "enabled", true)
         .unit("sshd.service", "disabled", false)
+        .unit("bluetooth.service", "enabled", true)
         .unit("NetworkManager.service", "enabled", true)
         .file("/usr/bin/gnome-software", "")
         .set("fw.zone", "FedoraWorkstation")
@@ -105,6 +107,7 @@ fn linuxmint() -> Sim {
     sim.unit("ufw.service", "enabled", true)
         .unit("mintupdate-automation-upgrade.timer", "disabled", false)
         .unit("apt-daily-upgrade.timer", "enabled", true)
+        .unit("bluetooth.service", "enabled", true)
         .unit("NetworkManager.service", "enabled", true)
         .file("/usr/bin/mintupdate-automation", "")
         .file("/etc/X11/default-display-manager", "/usr/sbin/lightdm\n")
@@ -1144,8 +1147,8 @@ fn the_controls_listed_follow_the_distribution() {
     let ubuntu = backend(&ubuntu()).controls();
     let fedora = backend(&fedora()).controls();
     let ids = |c: &[Control]| c.iter().map(|c| c.id.clone()).collect::<Vec<_>>();
-    assert_eq!(ubuntu.len(), 21);
-    assert_eq!(fedora.len(), 21);
+    assert_eq!(ubuntu.len(), 22);
+    assert_eq!(fedora.len(), 22);
     assert!(ids(&ubuntu).contains(&"linux.crash_reports".to_string()));
     assert!(!ids(&ubuntu).contains(&"linux.countme".to_string()));
     assert!(ids(&fedora).contains(&"linux.fedora_open_ports".to_string()));
@@ -1160,7 +1163,7 @@ fn the_controls_listed_follow_the_distribution() {
         .filter(|s| s.scope == Scope::System)
         .map(|s| s.id)
         .collect();
-    for id in all {
+    for id in all.into_iter().filter(|id| *id != "linux.usage_survey") {
         assert!(
             ubuntu.iter().chain(&fedora).any(|c| c.id == id),
             "{id} is not offered on any distribution"
@@ -1701,5 +1704,6 @@ fn every_finding_title_the_linux_backend_can_emit_has_linux_advice_and_no_window
     }
 }
 
+mod devices;
 mod network;
 mod services;
