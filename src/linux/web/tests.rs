@@ -42,6 +42,12 @@ fn computer() -> FakeSys {
     );
     sys.reply(MKDIR, &["-p", DROPIN_DIR], 0, "");
     sys.reply(SYSTEMCTL, &["try-restart", RESOLVED_UNIT], 0, "");
+    sys.reply(
+        SYSTEMCTL,
+        &["--no-block", "try-restart", RESOLVED_UNIT],
+        0,
+        "",
+    );
     sys.reply(RESOLVECTL, &["flush-caches"], 0, "");
     sys.reply(SYSTEMCTL, &["is-system-running"], 1, "running\n");
     sys.reply(
@@ -282,6 +288,26 @@ fn the_unit_adds_the_setting_after_it_reports_ready_even_before_it_counts_as_run
     assert!(
         file(&idle, DROPIN).is_none(),
         "nothing is on, so nothing is added"
+    );
+}
+
+#[test]
+fn the_units_own_steps_never_wait_for_the_lookup_service_to_restart() {
+    let sys = computer();
+    put(&sys, config_path(), &on());
+    put(&sys, data("status.json"), &listening(NOW));
+    add_rule_when_ready(&sys, NOW).unwrap();
+    assert!(file(&sys, DROPIN).is_some());
+    remove_rule_from_unit(&sys).unwrap();
+    assert!(file(&sys, DROPIN).is_none());
+    let restarts: Vec<String> = ran(&sys)
+        .into_iter()
+        .filter(|c| c.contains("try-restart"))
+        .collect();
+    assert_eq!(restarts.len(), 2, "{restarts:?}");
+    assert!(
+        restarts.iter().all(|c| c.contains("--no-block")),
+        "a restart that waits would hold up the filter's own start or stop: {restarts:?}"
     );
 }
 

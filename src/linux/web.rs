@@ -278,8 +278,14 @@ fn settle(sys: &dyn Sys) {
     let _ = sys.run(RESOLVECTL, &["flush-caches"]);
 }
 
-fn restart_resolver(sys: &dyn Sys) -> Result<()> {
-    let out = sys.run(SYSTEMCTL, &["try-restart", RESOLVED_UNIT])?;
+/// `wait` is false for the filter unit's own steps: the lookup service starts after the filter and stops before it, so a
+/// restart that waited would hold up the very start or stop that is running the step.
+fn restart_resolver(sys: &dyn Sys, wait: bool) -> Result<()> {
+    let out = if wait {
+        sys.run(SYSTEMCTL, &["try-restart", RESOLVED_UNIT])?
+    } else {
+        sys.run(SYSTEMCTL, &["--no-block", "try-restart", RESOLVED_UNIT])?
+    };
     anyhow::ensure!(
         out.success(),
         "systemctl try-restart {RESOLVED_UNIT} failed: {}",
@@ -296,15 +302,24 @@ fn system_stopping(sys: &dyn Sys) -> bool {
 
 /// Takes the setting away and has the lookup service forget it. Lookups go back to the network's own servers.
 pub fn remove_rule(sys: &dyn Sys) -> Result<()> {
+    remove_rule_with(sys, true)
+}
+
+/// The unit's own step after the filter stops or crashes.
+pub fn remove_rule_from_unit(sys: &dyn Sys) -> Result<()> {
+    remove_rule_with(sys, false)
+}
+
+fn remove_rule_with(sys: &dyn Sys, wait: bool) -> Result<()> {
     let was_there = routed(sys);
     sys.remove(std::path::Path::new(DROPIN))?;
     if was_there && !system_stopping(sys) {
-        restart_resolver(sys)?;
+        restart_resolver(sys, wait)?;
     }
     Ok(())
 }
 
-fn add_rule_file(sys: &dyn Sys) -> Result<()> {
+fn add_rule_file(sys: &dyn Sys, wait: bool) -> Result<()> {
     if !resolver_in_use(sys) {
         return Err(plain(NOT_AVAILABLE));
     }
@@ -315,9 +330,9 @@ fn add_rule_file(sys: &dyn Sys) -> Result<()> {
         dropin_text().as_bytes(),
         0o644,
     )?;
-    if let Err(error) = restart_resolver(sys) {
+    if let Err(error) = restart_resolver(sys, wait) {
         let _ = sys.remove(std::path::Path::new(DROPIN));
-        let _ = restart_resolver(sys);
+        let _ = restart_resolver(sys, wait);
         return Err(error);
     }
     Ok(())
@@ -354,6 +369,10 @@ pub fn next_step(
 
 /// Brings the lookup setting in line with what is true now.
 pub fn reconcile(sys: &dyn Sys, service: ServiceState, now: u64) -> Result<()> {
+    reconcile_with(sys, service, now, true)
+}
+
+fn reconcile_with(sys: &dyn Sys, service: ServiceState, now: u64, wait: bool) -> Result<()> {
     let current = sys
         .read(std::path::Path::new(DROPIN))
         .ok()
@@ -368,15 +387,15 @@ pub fn reconcile(sys: &dyn Sys, service: ServiceState, now: u64) -> Result<()> {
         now,
     ) {
         Step::Nothing => Ok(()),
-        Step::Add => add_rule_file(sys),
-        Step::Remove => remove_rule(sys),
+        Step::Add => add_rule_file(sys, wait),
+        Step::Remove => remove_rule_with(sys, wait),
     }
 }
 
 /// The unit's own step after it reports that it is answering. It may not be called "running" yet by the system
 /// manager, so the state is given.
 pub fn add_rule_when_ready(sys: &dyn Sys, now: u64) -> Result<()> {
-    reconcile(sys, ServiceState::Running, now)
+    reconcile_with(sys, ServiceState::Running, now, false)
 }
 
 fn wait_until_listening(sys: &dyn Sys, now: impl Fn() -> u64) -> bool {

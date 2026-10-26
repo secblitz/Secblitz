@@ -378,7 +378,7 @@ fn run_filter_linux(action: FilterCommand) -> Result<i32> {
         FilterCommand::Uninstall => web::remove_everything(&sys)?,
         FilterCommand::AllowOnce(site) => web::allow_site_once(&sys, &site, now)?,
         FilterCommand::AddRule => web::add_rule_when_ready(&sys, now)?,
-        FilterCommand::RemoveRule => web::remove_rule(&sys)?,
+        FilterCommand::RemoveRule => web::remove_rule_from_unit(&sys)?,
     }
     Ok(0)
 }
