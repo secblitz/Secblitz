@@ -61,6 +61,24 @@ impl Page {
         Page::History,
         Page::Settings,
     ];
+    /// Pages with nothing to offer on a system are left out of the sidebar and every way to reach them.
+    pub fn shown_on(self, os: secblitz::os::Os) -> bool {
+        !(os == secblitz::os::Os::Linux && matches!(self, Page::Web | Page::Tools))
+    }
+    /// The page itself where this system has it, Home otherwise.
+    pub fn on(self, os: secblitz::os::Os) -> Page {
+        if self.shown_on(os) {
+            self
+        } else {
+            Page::Home
+        }
+    }
+    pub fn visible(os: secblitz::os::Os) -> Vec<Page> {
+        Page::ALL
+            .into_iter()
+            .filter(|page| page.shown_on(os))
+            .collect()
+    }
     pub fn parse(s: &str) -> Option<Self> {
         Some(match s {
             "home" => Page::Home,
@@ -590,6 +608,10 @@ impl App {
     fn handle(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Navigate(page) => {
+                if page == self.page {
+                    return Task::none();
+                }
+                let page = page.on(secblitz::os::Os::CURRENT);
                 if page == self.page {
                     return Task::none();
                 }
@@ -1405,7 +1427,8 @@ impl App {
         .align_y(Alignment::Center)
         .padding([0.0, theme::S3]);
         let mut nav = column![].spacing(NAV_GAP);
-        for page in Page::ALL {
+        let pages = Page::visible(secblitz::os::Os::CURRENT);
+        for &page in &pages {
             let active = self.page == page;
             let fg = if active { p.text } else { p.text_muted };
             let glyph = if active {
@@ -1471,9 +1494,9 @@ impl App {
                     }),
             ));
         }
-        let index = Page::ALL.iter().position(|q| *q == self.page).unwrap_or(0);
+        let index = pages.iter().position(|q| *q == self.page).unwrap_or(0);
         let nav = stack![
-            widgets::slide_marker(p, index, Page::ALL.len(), theme::CONTROL, NAV_GAP),
+            widgets::slide_marker(p, index, pages.len(), theme::CONTROL, NAV_GAP),
             nav
         ]
         .width(Length::Fill);
