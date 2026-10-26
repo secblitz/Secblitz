@@ -1,6 +1,7 @@
 //! The Secblitz window (iced, CPU renderer).
 #[cfg(test)]
 mod bench;
+mod hook;
 pub mod icons;
 pub mod pages;
 mod persist;
@@ -342,6 +343,7 @@ pub struct App {
     pub settings: settings::State,
     pub app_access: app_access::State,
     privacy_shown: bool,
+    hook: hook::Hook,
     whats_new: bool,
     toast_gen: u32,
     toast_leaving: bool,
@@ -500,6 +502,7 @@ impl App {
             settings: Default::default(),
             app_access: Default::default(),
             privacy_shown: false,
+            hook: hook::Hook::from_env(),
             whats_new,
             toast_gen: 0,
             toast_leaving: false,
@@ -576,6 +579,11 @@ impl App {
         if self.ctx.busy && !was_busy {
             self.ctx.forget_check();
         }
+        self.hook.after_update(
+            self.page,
+            self.ctx.checking.is_some(),
+            self.ctx.report.as_ref(),
+        );
         task
     }
 

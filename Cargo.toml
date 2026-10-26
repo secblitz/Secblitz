@@ -48,6 +48,10 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphic
 # UI Automation reads the Firefox address bar. Already in the lock file through other crates.
 windows = { version = "0.58", default-features = false, features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Variant", "Win32_UI_Accessibility"] }
 
+[features]
+# Lets a release build write the page and last report to the file named by SECBLITZ_TEST_HOOK, for the machine that drives the window in tests.
+test-hook = []
+
 [build-dependencies]
 embed-resource = "3"
 
