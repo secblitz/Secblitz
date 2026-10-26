@@ -31,7 +31,7 @@ const NEXT_WAIT: Duration = Duration::from_millis(250);
 /// A finished job nobody collected makes room for the next one after this long.
 const ABANDONED_AFTER: Duration = Duration::from_secs(30);
 
-const BUSY: &str = "Secblitz is busy with another task. Try again in a moment.";
+pub(crate) const BUSY: &str = "Secblitz is busy with another task. Try again in a moment.";
 const STOPPED: &str = "Secblitz stopped unexpectedly. Try again in a moment.";
 const TOO_LARGE: &str =
     "Secblitz could not send all the results at once. Try again with fewer settings.";
@@ -815,6 +815,25 @@ mod tests {
         assert!(asked.iter().any(|(_, a)| *a == Action::Check));
         assert!(asked.iter().any(|(_, a)| *a == Action::Change));
         assert!(asked.iter().all(|(name, _)| name.starts_with(':')));
+    }
+
+    #[test]
+    fn two_requests_sent_at_once_from_the_window_both_get_their_answer() {
+        let Some(run) = running(true, false, Duration::from_secs(60)) else {
+            return;
+        };
+        let both: Vec<_> = (0..2)
+            .map(|_| {
+                let address = run.address.clone();
+                std::thread::spawn(move || {
+                    let mut session = RemoteSession::connect(DbusTransport::at(&address))?;
+                    session.audit(&mut |_| {}).map(drop)
+                })
+            })
+            .collect();
+        for thread in both {
+            thread.join().unwrap().unwrap();
+        }
     }
 
     #[test]

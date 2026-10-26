@@ -1,8 +1,13 @@
 //! The window's side of the helper: sends each request over the system bus and hands back the events as they arrive.
-use super::helper::{INTERFACE, NAME, PATH};
+use super::helper::{BUSY, INTERFACE, NAME, PATH};
 use crate::app::remote::{self, RemoteSession, Transport};
 use crate::launcher::NOT_INSTALLED;
 use zbus::{fdo, Connection};
+
+/// The helper runs one job at a time and turns away a second one, so this window sends one request at a time.
+static ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+/// How often a request the helper turned away for another program's job is sent again, a second apart.
+const BUSY_TRIES: u32 = 30;
 
 const UNREACHABLE: &str = "Secblitz could not reach its helper. Try again, and reinstall Secblitz from the software app if it keeps happening.";
 
@@ -79,18 +84,29 @@ impl Transport for DbusTransport {
         request: &[u8],
         on_event: &mut dyn FnMut(&[u8]) -> anyhow::Result<()>,
     ) -> anyhow::Result<()> {
+        let _turn = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
         zbus::block_on(async {
             let connection = self.connect().await?;
-            let reply = connection
-                .call_method(
-                    Some(NAME),
-                    PATH,
-                    Some(INTERFACE),
-                    "Begin",
-                    &request.to_vec(),
-                )
-                .await
-                .map_err(plain)?;
+            let mut tries = 0;
+            let reply = loop {
+                match connection
+                    .call_method(
+                        Some(NAME),
+                        PATH,
+                        Some(INTERFACE),
+                        "Begin",
+                        &request.to_vec(),
+                    )
+                    .await
+                    .map_err(plain)
+                {
+                    Err(e) if e.to_string() == BUSY && tries < BUSY_TRIES => {
+                        tries += 1;
+                        std::thread::sleep(std::time::Duration::from_secs(1));
+                    }
+                    other => break other?,
+                }
+            };
             let job: u64 = reply.body().deserialize().map_err(plain)?;
             loop {
                 let reply = connection

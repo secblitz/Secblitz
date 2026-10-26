@@ -1,4 +1,5 @@
 //! Plain-words explanations for the raw reasons the app clean-up records.
+use crate::os::Os;
 
 pub fn removal_failure(raw: &str) -> &'static str {
     if let Some(plain) = super::linux::plain(raw) {
@@ -53,8 +54,16 @@ pub fn no_copy(raw: &str) -> &'static str {
 }
 
 pub fn run_failure(raw: &str) -> &'static str {
+    run_failure_on(Os::CURRENT, raw)
+}
+
+/// Every reason the list could not be read with on `os`; on Linux only Secblitz's own sentences are ever shown.
+fn run_failure_on(os: Os, raw: &str) -> &'static str {
     if let Some(plain) = super::linux::plain(raw) {
         return plain;
+    }
+    if os != Os::Windows {
+        return super::linux::LIST_FAILED;
     }
     let r = raw.to_lowercase();
     if r.contains("took too long") {
@@ -67,8 +76,15 @@ pub fn run_failure(raw: &str) -> &'static str {
 }
 
 pub fn removal_run_failure(raw: &str) -> &'static str {
+    removal_run_failure_on(Os::CURRENT, raw)
+}
+
+fn removal_run_failure_on(os: Os, raw: &str) -> &'static str {
     if let Some(plain) = super::linux::plain(raw) {
         return plain;
+    }
+    if os != Os::Windows {
+        return super::linux::RUN_FAILED;
     }
     let r = raw.to_lowercase();
     if r.contains("took too long") {
@@ -96,16 +112,18 @@ mod tests {
             "The process cannot access the file because it is being used by another process."
         )
         .contains("still running"));
-        assert!(run_failure("Windows took too long to answer").contains("too long"));
-        assert!(removal_run_failure("Windows took too long to answer").contains("too long"));
-        assert!(removal_run_failure("odd failure").contains("remove the apps"));
-        assert!(!run_failure("odd failure").contains("remove the apps"));
+        let run = |raw| run_failure_on(Os::Windows, raw);
+        let removal = |raw| removal_run_failure_on(Os::Windows, raw);
+        assert!(run("Windows took too long to answer").contains("too long"));
+        assert!(removal("Windows took too long to answer").contains("too long"));
+        assert!(removal("odd failure").contains("remove the apps"));
+        assert!(!run("odd failure").contains("remove the apps"));
         assert_eq!(
-            run_failure("Only available on Windows"),
+            run("Only available on Windows"),
             "This works on Windows only."
         );
         assert_eq!(
-            removal_run_failure("Only available on Windows"),
+            removal("Only available on Windows"),
             "This works on Windows only."
         );
         for out in [
@@ -128,9 +146,27 @@ mod tests {
     }
 
     #[test]
+    fn other_systems_never_get_a_sentence_that_names_windows() {
+        use super::super::linux;
+        for raw in [
+            "Secblitz is busy with another task. Try again in a moment.",
+            "took too long",
+            "Only available on Windows",
+            "",
+        ] {
+            assert_eq!(run_failure_on(Os::Linux, raw), linux::LIST_FAILED);
+            assert_eq!(removal_run_failure_on(Os::Linux, raw), linux::RUN_FAILED);
+        }
+    }
+
+    #[test]
     fn unknown_reasons_never_echo_raw_text() {
         let raw = "Deployment failed with HRESULT: 0x8007ZZZZ, Add-AppxPackage";
-        for out in [removal_failure(raw), no_copy(raw), run_failure(raw)] {
+        for out in [
+            removal_failure(raw),
+            no_copy(raw),
+            run_failure_on(Os::Windows, raw),
+        ] {
             assert!(!out.contains("HRESULT") && !out.contains("Appx"));
             assert!(out.contains("Restart your computer"));
         }
