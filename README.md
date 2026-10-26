@@ -7,9 +7,9 @@
 
 Secblitz turns on the security and privacy settings your computer leaves off, in one click. It runs on Windows and Linux, removes unwanted apps and blocks ads, trackers and malware sites on your whole computer. Every change can be undone.
 
-[**Download for Windows**](https://secblitz.lol/downloads/secblitz-1.1.0-windows-x64-setup.exe) · [**Install on Linux**](#linux) · [Website](https://secblitz.lol) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
+[**Download for Windows**](https://secblitz.lol/downloads/secblitz-1.5.0-windows-x64-setup.exe) · [**Install on Linux**](#linux) · [Website](https://secblitz.lol) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
 
-![Version 1.1.0](https://img.shields.io/badge/version-1.1.0-18181B) ![Windows 10 and 11, x64 and ARM](https://img.shields.io/badge/Windows%2010%20%26%2011-x64%20%7C%20ARM-18181B) ![Ubuntu, Linux Mint, Fedora and Debian](https://img.shields.io/badge/Linux-Ubuntu%20%7C%20Mint%20%7C%20Fedora%20%7C%20Debian-18181B) ![MIT license](https://img.shields.io/badge/license-MIT-18181B)
+![Version 1.5.0](https://img.shields.io/badge/version-1.5.0-18181B) ![Windows 10 and 11, x64 and ARM](https://img.shields.io/badge/Windows%2010%20%26%2011-x64%20%7C%20ARM-18181B) ![Ubuntu, Linux Mint, Fedora and Debian](https://img.shields.io/badge/Linux-Ubuntu%20%7C%20Mint%20%7C%20Fedora%20%7C%20Debian-18181B) ![MIT license](https://img.shields.io/badge/license-MIT-18181B)
 
 <img src="docs/tour.webp" width="900" alt="A tour of Secblitz: checking the PC, fixing problems, blocking a dangerous site, removing apps and undoing a change.">
 
@@ -40,12 +40,12 @@ Secblitz is not an antivirus. It turns on and configures the protection built in
 
 ### Windows
 
-Download the [installer](https://secblitz.lol/downloads/secblitz-1.1.0-windows-x64-setup.exe) (about 11 MB) and run it. For a PC with an ARM processor, like a Snapdragon laptop, use the [ARM installer](https://secblitz.lol/downloads/secblitz-1.1.0-windows-arm64-setup.exe) instead. Secblitz asks for administrator permission because it reads and changes system settings.
+Download the [installer](https://secblitz.lol/downloads/secblitz-1.5.0-windows-x64-setup.exe) (about 11 MB) and run it. For a PC with an ARM processor, like a Snapdragon laptop, use the [ARM installer](https://secblitz.lol/downloads/secblitz-1.5.0-windows-arm64-setup.exe) instead. Secblitz asks for administrator permission because it reads and changes system settings.
 
 The installer is not code-signed yet, so Windows may show an unknown publisher warning. Choose **More info**, then **Run anyway**. To check the file, compare its SHA-256 with the one on the [download page](https://secblitz.lol/#download):
 
 ```powershell
-Get-FileHash .\secblitz-1.1.0-windows-x64-setup.exe -Algorithm SHA256
+Get-FileHash .\secblitz-1.5.0-windows-x64-setup.exe -Algorithm SHA256
 ```
 
 Each release also has a parts list (`.cdx.json`) on its [GitHub release page](https://github.com/secblitz/Secblitz/releases) that names every piece of code Secblitz is built from.
@@ -58,6 +58,12 @@ Open a terminal and run:
 
 ```sh
 curl -fsSL https://secblitz.lol/install.sh | bash
+```
+
+On Ubuntu, which comes without `curl`, use this instead:
+
+```sh
+wget -qO- https://secblitz.lol/install.sh | bash
 ```
 
 It finds your kind of Linux and processor, downloads the matching package, checks it against the fingerprint published with the release and installs it. It asks for your password once, to install. Running it again updates Secblitz. Then open Secblitz from your app menu.

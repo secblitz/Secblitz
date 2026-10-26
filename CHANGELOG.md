@@ -9,12 +9,15 @@ dated version section when a release is prepared (see `docs/RELEASING.md`).
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-26
+
 ### Added
-- Secblitz now runs on Ubuntu, Linux Mint and Fedora, with checks and fixes made for each.
+- Secblitz now runs on Ubuntu, Linux Mint, Fedora and Debian, with checks and fixes made for each.
 - On Linux, Secblitz can look once a day for a newer version of itself and install it when you say yes.
 - On Linux, Free up space shows and clears install files, old crash reports, picture previews, unused app parts, older copies of apps, old system versions and the Trash.
 - On Linux, Clean up apps removes remote control and file sharing apps and can install them again.
-- On Linux, web protection can block scam sites, ads and trackers, with lookups that stay on this computer and a plain way to pause or allow a site.
+- On Linux, web protection blocks ads, trackers and dangerous sites in every browser and app, and you can pause it or allow a site.
+- Linux has its own install command, and each release now includes .deb and .rpm packages for x64 and ARM.
 - On Linux, more checks and fixes cover the network, printers, browsers, location, problem reports and accounts.
 - On Linux, more than 30 new checks and fixes protect the system, the network, the screen lock and your browsers.
 - On Linux, Secblitz now tells you who can make changes, which programs are open to the network and whether memory saved to the drive is protected.
