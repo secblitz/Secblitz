@@ -24,10 +24,13 @@ bump PR -> merge -> tag -> release build (tests, installer tests, attestations) 
 | `.github/workflows/ci.yml` | Tests, lints, tool tests and the workflow security audit (zizmor) on every pull request; the app tests and license check are skipped when only the website or prose changed |
 | `.github/workflows/bump-version.yml` | Runs the bump script and opens a pull request |
 | `.github/workflows/tag-release.yml` | Tags a merged "Release X.Y.Z" commit and starts the release build on that tag |
-| `.github/workflows/release.yml` | Builds, tests the installer, optionally signs, attests and drafts the GitHub Release |
+| `.github/workflows/release.yml` | Builds the Windows files and the Linux packages, tests the installer, optionally signs, attests and drafts the GitHub Release |
 | `.github/workflows/publish-website.yml` | After you publish: verifies the release, deploys the website, checks the live site |
 | `.github/workflows/windows.yml` | RustSec audit and the installer harnesses on every pull request, skipped when only the website or prose changed (the release always runs the harnesses) |
 | `scripts/build-release.ps1` | The build itself (`-Stage Exe`, `-Stage Setup` or both) |
+| `scripts/build-linux-packages.py` | Builds the Linux program and the `.deb` and `.rpm` of one architecture |
+| `scripts/linux-install-check.py` | Installs the real built packages in distro containers before they are uploaded |
+| `scripts/release-files.py` | Lists the files a release build must produce for a version (the Linux packages from 1.5.0) |
 | `scripts/assemble-site.py` | Builds the exact site tree to deploy from the verified release files |
 | `scripts/finalize-site.py` | Writes the real checksum and size into the staged page |
 | `scripts/historical-downloads.py` | Older installers that every deploy must carry, with pinned hashes |
@@ -278,15 +281,28 @@ is drafted.
    codes) and `installer/test-lifecycle.ps1` (install, upgrade with a running
    monitor, uninstall preservation). A broken installer stops the release here,
    before any attestation or draft exists.
-7. `attest`: writes `SHA256SUMS`, creates build provenance attestations for
-   the exe and the setup of each architecture, writes the parts list
+7. `build-linux`: runs beside the Windows jobs, for x86_64 on `ubuntu-24.04`
+   and for aarch64 natively on `ubuntu-24.04-arm`. It runs the tests and clippy,
+   builds the program in `debian:12` (so it runs on older systems), builds the
+   `.deb` and the `.rpm` with `build-linux-packages.py --build-binary
+   --without-repository`, names them `secblitz-X.Y.Z-linux-x64.deb`, `.rpm`,
+   `secblitz-X.Y.Z-linux-arm64.deb` and `.rpm`, and then installs those exact
+   files with `linux-install-check.py` in Ubuntu 24.04 and 26.04, Debian 12 and
+   13, and Fedora 43 and 44 (install, check, remove). The packages have no
+   repository entry or key, because the repository signing key never reaches
+   CI. A broken package stops the release here.
+8. `attest`: writes `SHA256SUMS`, creates build provenance attestations for
+   the exe and the setup of each architecture and for the four Linux
+   packages, writes the parts list
    (`secblitz-X.Y.Z-windows-x64.cdx.json` and `...-windows-arm64.cdx.json`,
    CycloneDX, from the tagged source by `scripts/make-sbom.py`) and attests each
-   one to the portable exe of its architecture.
-8. `draft-release`: creates a **draft** GitHub Release named "Secblitz X.Y.Z"
-   with the changelog section as text and the setup, the portable exe and
-   `SHA256SUMS` and the two parts lists attached. `SHA256SUMS` still lists only
-   the four programs.
+   one to the portable exe of its architecture. It then checks the file list
+   with `release-files.py`.
+9. `draft-release`: creates a **draft** GitHub Release named "Secblitz X.Y.Z"
+   with the changelog section as text and the setup, the portable exe, the four
+   Linux packages, `SHA256SUMS` and the two parts lists attached. `SHA256SUMS`
+   still lists only the four Windows programs; the Linux packages are covered
+   by their attestations and by the signed feeds.
 
 Only one release build runs at a time (`concurrency`). To rebuild an existing
 tag: Actions, Release, Run workflow, tag chosen under "Use workflow from" and
@@ -317,6 +333,10 @@ git fetch origin && git merge-base --is-ancestor "$(git rev-parse origin/main)" 
 Use the commit of the "Release X.Y.Z" merge as the digest (check it in the
 Actions run, and `git log origin/main`), not just any commit. A tag someone else
 created on a different commit fails the digest check.
+
+The four Linux packages are attested the same way. Check them with the same
+command, one `secblitz-0.8.1-linux-x64.deb`, `.rpm`, `-linux-arm64.deb` and
+`.rpm` at a time (from 1.5.0 on).
 
 Each draft also carries the two parts lists. To check that one is the parts list
 attested for its program (the website deploy checks the same):
@@ -355,6 +375,20 @@ python3 scripts/prepare-pages.py --verify-feed check/stable-arm64.json --arch ar
   --installer-directory check --expected-version 0.8.1
 ```
 
+From 1.5.0 on, sign the four Linux feeds too, one per package, from the
+packages in the draft:
+
+```sh
+for arch in linux-x64 linux-arm64; do
+  for package in deb rpm; do
+    python3 scripts/sign-release.py --key /path/to/secret.pem --arch $arch --package $package \
+      --public-key assets/update-public-key.hex --version 1.5.0 \
+      --installer check/secblitz-1.5.0-$arch.$package \
+      --output check/stable-$arch-$package.json
+  done
+done
+```
+
 Sign only the final bytes you will publish. If the setup changes later (for
 example it is re-signed), sign again. The feed is valid for 90 days by default:
 do not sign it long before you publish.
@@ -366,6 +400,9 @@ Attach the signed feeds to the draft **under the exact names `stable.json` and
 
 ```sh
 gh release upload v0.8.1 check/stable.json check/stable-arm64.json
+# From 1.5.0 on, also the four Linux feeds:
+gh release upload v1.5.0 check/stable-linux-x64-deb.json check/stable-linux-x64-rpm.json \
+  check/stable-linux-arm64-deb.json check/stable-linux-arm64-rpm.json
 ```
 
 The release must then carry exactly nine files: the setup and the portable exe
@@ -434,10 +471,14 @@ days, the longest an approval can wait.
 
 Linux ships as a `.deb` and an `.rpm`, served from a signed APT and DNF
 repository at `https://secblitz.lol/linux/apt` and `https://secblitz.lol/linux/rpm`.
-All of this is done by the owner on their own machine; CI only tests packages
-built with a throwaway key.
+The release build in CI makes the `.deb` and `.rpm` for x86_64 and aarch64,
+tests them, attests them and attaches them to the draft release (step 4.7). Those
+packages have no repository entry. The signed repository below is an optional
+owner step on top, done on the owner's own machine. The owner also signs the
+four Linux update feeds (step 7) and uploads them with `stable.json` (step 8).
+The package tests in CI use a throwaway key.
 
-One-time: create the repository signing key (separate from the update feed key),
+Optional, and only for a signed repository. One-time: create the repository signing key (separate from the update feed key),
 keep it on your machine only, and export the public half:
 
 ```sh
