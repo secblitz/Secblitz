@@ -158,7 +158,7 @@ pub fn view<'a>(state: &State, ctx: &Ctx) -> Element<'a, Message> {
     let (title, text) = match state.step {
         0 => (
             "Secblitz checks how your computer is set up",
-            "It looks at the security and privacy settings of Windows and your browsers. Checking never changes anything.",
+            crate::app::os_text::WELCOME_CHECKS,
         ),
         1 => (
             "You decide what changes",
@@ -280,7 +280,7 @@ mod tests {
         use crate::i18n::Lang;
         let texts = [
             "Secblitz checks how your computer is set up",
-            "It looks at the security and privacy settings of Windows and your browsers. Checking never changes anything.",
+            crate::app::os_text::WELCOME_CHECKS,
             "You decide what changes",
             "Secblitz explains what it found and fixes only what you agree to.",
             "You can undo anything",
