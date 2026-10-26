@@ -72,6 +72,20 @@ file="$FAKE_DOWNLOADS/${url##*/}"
 [ -f "$file" ] || exit 22
 cp "$file" "$out"
 ''',
+    "wget": '''#!/bin/bash
+out="" url=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --output-document=*) out=${1#--output-document=}; shift ;;
+    -*) shift ;;
+    *) url=$1; shift ;;
+  esac
+done
+echo "wget $url" >>"$FAKE_LOG"
+file="$FAKE_DOWNLOADS/${url##*/}"
+[ -f "$file" ] || exit 8
+cp "$file" "$out"
+''',
     "sudo": '''#!/bin/bash
 echo "sudo $*" >>"$FAKE_LOG"
 [ "${1:-}" = "-v" ] && exit 0
@@ -220,6 +234,20 @@ class InstallScriptTests(unittest.TestCase):
         self.assertIn("needs your password", done.stdout)
         self.assertNotIn("\x1b", done.stdout + done.stderr)
         self.assertEqual(list(self.scratch.iterdir()), [])
+
+    def test_wget_downloads_when_curl_is_missing_like_on_ubuntu(self):
+        only = Path(self.tmp.name) / "only"
+        only.mkdir()
+        for name in STUBS:
+            if name != "curl":
+                (only / name).symlink_to(self.bin / name)
+        for tool in ("bash", "cat", "rm", "tr", "sed", "tail", "mktemp", "chmod", "sha256sum", "cut", "install", "sleep",
+                     "env", "basename", "cp"):
+            (only / tool).symlink_to(shutil.which(tool))
+        done = self.run_script(self.script, "ubuntu-24.04", PATH=str(only))
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(self.calls()[0], f"wget https://secblitz.lol/downloads/secblitz-{VERSION}-linux-x64.deb")
+        self.assertIn("Installing Secblitz... done", done.stdout)
 
     def test_package_is_installed_from_a_copy_the_user_cannot_swap(self):
         (self.bin / "apt-get").write_text('''#!/bin/bash

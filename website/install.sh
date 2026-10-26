@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Installs Secblitz on Linux:  curl -fsSL https://secblitz.lol/install.sh | bash
+#                         or:  wget -qO- https://secblitz.lol/install.sh | bash
 # The version and the SHA-256 of each package are written in when the website is
 # built, from the files the release published (scripts/finalize-site.py).
 set -euo pipefail
@@ -178,10 +179,16 @@ detect_system() {
   printf '%s %s\n' "$KIND" "$ARCH_TAG" >"$WORK/system"
 }
 
+# Ubuntu comes with wget but not curl; Fedora comes with curl.
 download_package() {
-  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
-    --connect-timeout 20 --retry 2 \
-    --output "$PACKAGE_FILE" "$DOWNLOAD_BASE/$PACKAGE_NAME"
+  if command -v curl >/dev/null 2>&1; then
+    curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+      --connect-timeout 20 --retry 2 \
+      --output "$PACKAGE_FILE" "$DOWNLOAD_BASE/$PACKAGE_NAME"
+  else
+    wget --quiet --https-only --timeout=20 --tries=3 \
+      --output-document="$PACKAGE_FILE" "$DOWNLOAD_BASE/$PACKAGE_NAME"
+  fi
 }
 
 check_download() {
@@ -241,12 +248,12 @@ main() {
   if [ "$(uname -s)" != "Linux" ]; then
     die "This installer is for Linux. Visit https://secblitz.lol to download Secblitz for Windows."
   fi
-  local tool
-  for tool in curl sha256sum; do
-    if ! command -v "$tool" >/dev/null 2>&1; then
-      die "This installer needs the tool \"$tool\", which is missing. Install it with your package manager and run the command again."
-    fi
-  done
+  if ! command -v sha256sum >/dev/null 2>&1; then
+    die "This installer needs the tool \"sha256sum\", which is missing. Install it with your package manager and run the command again."
+  fi
+  if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
+    die "This installer needs \"curl\" or \"wget\" to download Secblitz, and neither is installed. Install one with your package manager and run the command again."
+  fi
   case "$SECBLITZ_VERSION" in
     [0-9]*.[0-9]*.[0-9]*) ;;
     *) die "This copy of the installer is incomplete. Get a fresh one from https://secblitz.lol." ;;
