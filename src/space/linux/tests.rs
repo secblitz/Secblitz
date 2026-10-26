@@ -88,9 +88,10 @@ impl Fs for Mem {
 const UBUNTU: &str = "ID=ubuntu\nID_LIKE=debian\nVERSION_ID=\"26.04\"\n";
 const FEDORA: &str = "ID=fedora\nVERSION_ID=44\n";
 
+/// The file is only in /usr/lib, as on Ubuntu, where /etc/os-release is a link that is never read.
 fn sys_with(os_release: &str) -> FakeSys {
     let sys = FakeSys::default();
-    sys.file("/etc/os-release", os_release.as_bytes());
+    sys.file("/usr/lib/os-release", os_release.as_bytes());
     sys
 }
 

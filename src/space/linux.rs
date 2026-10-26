@@ -9,7 +9,7 @@ use super::{
     MEASURE_BUDGET,
 };
 use crate::linux::cmd::Sys;
-use crate::linux::distro::{distro, Family};
+use crate::linux::distro::{detect, Family};
 use anyhow::{bail, ensure, Result};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -90,11 +90,7 @@ enum Manager {
 }
 
 fn manager(sys: &dyn Sys) -> Result<Manager> {
-    let text = sys
-        .read(Path::new("/etc/os-release"))?
-        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-        .unwrap_or_default();
-    match distro(&text, None).family {
+    match detect(sys, None).family {
         Family::Debian => Ok(Manager::Apt),
         Family::Fedora => Ok(Manager::Dnf),
         Family::Other => bail!(NOT_ON_THIS_SYSTEM),

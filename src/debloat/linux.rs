@@ -6,9 +6,8 @@
 //! go with it. Nothing like `autoremove` ever runs.
 use super::{App, Group, Installed, PackageOutcome};
 use crate::linux::cmd::Sys;
-use crate::linux::distro::{distro, Family};
+use crate::linux::distro::{detect, Family};
 use anyhow::{bail, ensure, Result};
-use std::path::Path;
 
 pub static CATALOG: &[App] = &[
     app("teamviewer*", "TeamViewer"),
@@ -81,11 +80,7 @@ pub enum Manager {
 }
 
 pub fn manager(sys: &dyn Sys) -> Result<Manager> {
-    let text = sys
-        .read(Path::new("/etc/os-release"))?
-        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-        .unwrap_or_default();
-    match distro(&text, None).family {
+    match detect(sys, None).family {
         Family::Debian => Ok(Manager::Apt),
         Family::Fedora => Ok(Manager::Dnf),
         Family::Other => bail!(crate::space::linux::NOT_ON_THIS_SYSTEM),

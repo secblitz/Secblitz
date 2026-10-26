@@ -1,12 +1,14 @@
 use super::*;
 use crate::linux::cmd::fake::FakeSys;
+use std::path::Path;
 
 const UBUNTU: &[u8] = b"ID=ubuntu\nID_LIKE=debian\nVERSION_ID=\"26.04\"\n";
 const FEDORA: &[u8] = b"ID=fedora\nVERSION_ID=44\n";
 
+/// Ubuntu's /etc/os-release is a link, which is never read, so only the copy in /usr/lib is there.
 fn ubuntu() -> FakeSys {
     let sys = FakeSys::default();
-    sys.file("/etc/os-release", UBUNTU);
+    sys.file("/usr/lib/os-release", UBUNTU);
     sys
 }
 
