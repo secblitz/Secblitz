@@ -104,6 +104,7 @@ fn site_args_are_plain(args: &[String]) -> bool {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(not(windows), allow(dead_code))]
 pub enum AllowOnce {
     Done,
     /// The person said no at the Windows permission prompt.

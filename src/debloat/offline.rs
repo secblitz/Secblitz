@@ -1,9 +1,15 @@
 //! Saving a copy before removal and bringing an app back from it. Decisions live
 //! here (tested with a fake `Host`); `WindowsHost` does the real work.
-use super::backup::{self, FileEntry, FrameworkCopy, Kind, Manifest, Store, SCHEMA};
+use super::backup::{self, FileEntry, Kind, Store};
+#[cfg(any(windows, test))]
+use super::backup::{FrameworkCopy, Manifest, SCHEMA};
 use super::vault::Sealer;
+#[cfg(any(windows, test))]
 use super::Kept;
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{bail, Result};
+#[cfg(any(windows, test))]
+use anyhow::{ensure, Context};
+#[cfg(any(windows, test))]
 use serde::Deserialize;
 use std::io::{Read, Write};
 use std::path::Path;
@@ -86,6 +92,7 @@ pub trait Host {
 
 /// True when `installed` holds `full` or a newer version of the same package
 /// (same name, architecture and publisher).
+#[cfg(any(windows, test))]
 pub(crate) fn same_or_newer<'a>(full: &str, installed: impl IntoIterator<Item = &'a str>) -> bool {
     let Ok(want) = backup::parse_full_name(full) else {
         return false;
@@ -111,21 +118,26 @@ pub(crate) fn same_or_newer<'a>(full: &str, installed: impl IntoIterator<Item = 
     })
 }
 
+#[cfg(any(windows, test))]
 #[derive(Debug)]
 struct LowSpace;
+#[cfg(any(windows, test))]
 impl std::fmt::Display for LowSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Not enough free space")
     }
 }
+#[cfg(any(windows, test))]
 impl std::error::Error for LowSpace {}
 
 pub const PENDING: &str = "pending.json";
 
+#[cfg(any(windows, test))]
 fn no_copy(e: impl std::fmt::Display) -> Kept {
     Kept::NoCopy(crate::text::excerpt(&e.to_string(), 300))
 }
 
+#[cfg(any(windows, test))]
 pub(crate) fn backup_family_with(
     host: &dyn Host,
     store: &Store,
@@ -260,6 +272,7 @@ pub(crate) fn backup_family_with(
 
 /// The package's own permissions, if they pass the same checks restore
 /// applies (otherwise restore falls back to a live app's permissions).
+#[cfg(any(windows, test))]
 fn recorded_sddl(host: &dyn Host, full: &str) -> Option<Template> {
     let family = backup::parse_full_name(full).ok()?.family();
     let s = host.package_sddl(full).ok()?;
@@ -269,6 +282,7 @@ fn recorded_sddl(host: &dyn Host, full: &str) -> Option<Template> {
     })
 }
 
+#[cfg(any(windows, test))]
 fn permissions_for(
     host: &dyn Host,
     full: &str,
@@ -291,6 +305,7 @@ fn permissions_for(
     Ok(fallback.clone().expect("set above"))
 }
 
+#[cfg(any(windows, test))]
 fn ensure_or(ok: bool, why: &str) -> std::result::Result<(), Kept> {
     if ok {
         Ok(())
@@ -299,6 +314,7 @@ fn ensure_or(ok: bool, why: &str) -> std::result::Result<(), Kept> {
     }
 }
 
+#[cfg(any(windows, test))]
 fn verify(store: &Store, m: &Manifest) -> Result<()> {
     let dir = store.family_dir(&m.family);
     for p in &m.packages {
@@ -316,6 +332,7 @@ fn verify(store: &Store, m: &Manifest) -> Result<()> {
     Ok(())
 }
 
+#[cfg(any(windows, test))]
 pub(crate) fn restore_with(host: &dyn Host, store: &Store, index: u16) -> Result<Restored> {
     let manifests = store.for_index(index);
     if manifests.is_empty() {
@@ -417,6 +434,7 @@ pub(crate) fn restore_with(host: &dyn Host, store: &Store, index: u16) -> Result
     Ok(outcome)
 }
 
+#[cfg(any(windows, test))]
 fn put_back(host: &dyn Host, store: &Store, m: &Manifest, sid: &str) -> Result<()> {
     let dir = store.family_dir(&m.family);
     let sealer = host.open_key(&std::fs::read(dir.join(backup::KEY))?)?;
@@ -434,6 +452,7 @@ fn read_pending(store: &Store, family: &str) -> Vec<String> {
         .collect()
 }
 
+#[cfg(any(windows, test))]
 pub(crate) fn finish_pending_with(host: &dyn Host, store: &Store) -> Result<()> {
     let me = host.current_sid()?;
     for index in 0..super::catalog().len() as u16 {
@@ -536,6 +555,7 @@ pub fn restore_index(index: u16) -> Result<Restored> {
     }
 }
 
+#[cfg(any(windows, test))]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RawDescribed {
@@ -550,17 +570,20 @@ struct RawDescribed {
     template: Option<RawTemplate>,
     error: Option<String>,
 }
+#[cfg(any(windows, test))]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RawPkg {
     full_name: String,
     kind: String,
 }
+#[cfg(any(windows, test))]
 #[derive(Deserialize)]
 struct RawTemplate {
     family: String,
 }
 
+#[cfg(any(windows, test))]
 pub(crate) fn parse_described(json: &str) -> Result<Described> {
     let raw: RawDescribed = serde_json::from_str(json).context("Read the app description")?;
     if let Some(e) = raw.error {

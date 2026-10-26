@@ -25,6 +25,7 @@ fn path() -> Option<PathBuf> {
     Some(PathBuf::from(base).join("Secblitz").join(FILE))
 }
 
+#[cfg(windows)]
 pub fn write(page: &str, now: u64) {
     let Some(path) = path() else {
         return;

@@ -81,6 +81,7 @@ is `secblitz/Secblitz`.
   request) lets the built-in token approve pull requests, so once you require
   approvals, an approval from `github-actions[bot]` counts. Review what you merge.
 - Require status checks to pass: `Rust tests and lints (Windows, MSVC)`,
+  `Rust tests and lints (Linux x64)`,
   `Locales, release tools, version bump and website tests`,
   `Workflow security audit (zizmor)`. Require branches to be up to date.
 - Block force pushes. Restrict deletions.

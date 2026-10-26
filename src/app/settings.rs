@@ -222,15 +222,9 @@ pub fn tray_enabled() -> bool {
 
 /// True only when Windows confirms the startup entry is gone, never on a failed read,
 /// so a running tray closes when the user turns it off and not on a passing error.
+#[cfg(windows)]
 pub fn tray_turned_off() -> bool {
-    #[cfg(windows)]
-    {
-        run_key::absent()
-    }
-    #[cfg(not(windows))]
-    {
-        false
-    }
+    run_key::absent()
 }
 
 pub fn set_tray_enabled(on: bool) -> anyhow::Result<()> {
