@@ -36,6 +36,12 @@ pub(super) fn label(id: &str) -> Option<&'static str> {
         "linux.printer_discovery" => "Network printer finder",
         "linux.ubuntu_news" => "Ubuntu news downloads",
         "linux.snap_updates" => "App store updates",
+        "linux.media_autorun" => "Auto-start of plugged-in drives",
+        "linux.location" => "Location sharing",
+        "linux.problem_reports" => "Problem and usage reports",
+        "linux.app_usage" => "Most-used apps list",
+        "linux.old_files" => "Automatic Trash cleanup",
+        "linux.home_private" => "Privacy of your home folder",
         _ => return None,
     })
 }
@@ -100,6 +106,16 @@ pub(super) fn impact(id: &str) -> Option<&'static str> {
         "linux.snap_updates" => {
             "Apps from Ubuntu's app store staying out of date with known security holes"
         }
+        "linux.media_autorun" => "A plugged-in drive or disc starting programs without you asking",
+        "linux.location" => "Apps and websites finding out where you are",
+        "linux.problem_reports" => {
+            "Details about problems and how you use your software being sent to its makers"
+        }
+        "linux.app_usage" => "Other people seeing which apps you use the most",
+        "linux.old_files" => {
+            "Deleted files and leftovers staying on your computer for anyone to find"
+        }
+        "linux.home_private" => "Other people with an account on this computer reading your files",
         _ => return None,
     })
 }
@@ -141,6 +157,14 @@ pub(super) fn repair(id: &str) -> Option<&'static str> {
         }
         "linux.ubuntu_news" => "Ubuntu will stop downloading news and advertising.",
         "linux.snap_updates" => "The hold on app store updates will end.",
+        "linux.media_autorun" => {
+            "Drives and discs you plug in will no longer start anything by themselves."
+        }
+        "linux.location" => "Location sharing will be switched off. Apps will not be told where you are.",
+        "linux.problem_reports" => "Problem reports and usage statistics will stop being sent.",
+        "linux.home_private" => {
+            "Other accounts on this computer will no longer be able to open your home folder."
+        }
         _ => return None,
     })
 }
@@ -152,6 +176,8 @@ pub(super) fn consequence(id: &str) -> Option<&'static str> {
         "linux.connectivity_check" => "Your computer stops contacting an outside address. Wi-Fi sign-in pages may no longer pop up by themselves.",
         "linux.wifi_mac" => "Each Wi-Fi network sees a made-up address. A network that knew your old one may ask you to sign in again.",
         "linux.recent_files" => "The list of recent files is forgotten after 30 days. Your files stay where they are. You can undo this.",
+        "linux.app_usage" => "Your computer stops keeping track of which apps you use most. Search may list apps in a different order. You can undo this.",
+        "linux.old_files" => "Files in the Trash for over 30 days, and old temporary files, are deleted for good. Undo cannot bring them back.",
         _ => return None,
     })
 }
@@ -300,6 +326,8 @@ mod tests {
             "linux.connectivity_check",
             "linux.wifi_mac",
             "linux.recent_files",
+            "linux.app_usage",
+            "linux.old_files",
         ] {
             assert_eq!(crate::advice::extra_section(id), Some("Privacy extras"));
             let a = for_control(id, &CheckStatus::Attention, "Eligible");

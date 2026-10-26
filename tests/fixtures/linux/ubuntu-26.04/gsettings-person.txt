@@ -1,0 +1,8 @@
+org.gnome.desktop.media-handling autorun-never true
+org.gnome.desktop.privacy old-files-age uint32 30
+org.gnome.desktop.privacy remember-app-usage true
+org.gnome.desktop.privacy remove-old-temp-files false
+org.gnome.desktop.privacy remove-old-trash-files false
+org.gnome.desktop.privacy report-technical-problems false
+org.gnome.desktop.privacy send-software-usage-stats false
+org.gnome.system.location enabled false

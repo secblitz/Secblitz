@@ -15,12 +15,16 @@ use std::path::PathBuf;
 
 const GSETTINGS: &str = "/usr/bin/gsettings";
 const DCONF: &str = "/usr/bin/dconf";
+const GETENT: &str = "/usr/bin/getent";
+const STAT: &str = "/usr/bin/stat";
+const CHMOD: &str = "/usr/bin/chmod";
 const NO_IDENTITY: &str =
     "Secblitz could not identify this computer, so it will not change anything.";
 pub const UNAVAILABLE: &str = "This setting is not available on your desktop yet.";
 const NOT_CONFIRMED: &str = "Secblitz could not confirm that the setting changed.";
 const RECENT_AGE_KEY: &str = "recent-files-max-age";
 const RECENT_REMEMBER_KEY: &str = "remember-recent-files";
+const HOME_CONTROL: &str = "linux.home_private";
 const INSIGHTS_SOURCES: [&str; 3] = ["linux", "desktop_provision", "release_upgrader"];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -33,6 +37,8 @@ enum Shape {
     Plain,
     /// The idle delay: 1 when it is 0 (never), otherwise 0.
     Idle,
+    /// A switch where on is safe and off is the default: 0 off because the person set it, 1 on, 2 off by default.
+    OffByDefault,
     /// Recent files kept with no age limit: 0 not forever, 1 forever because the person set it, 2 forever by default.
     Age,
 }
@@ -114,6 +120,79 @@ const GNOME_PREVIEWS: &[Gs] = &[gs(
     Shape::OnByDefault,
 )];
 
+const GNOME_AUTORUN: &[Gs] = &[gs(
+    "never",
+    "org.gnome.desktop.media-handling",
+    "autorun-never",
+    Shape::OffByDefault,
+)];
+const CINNAMON_AUTORUN: &[Gs] = &[gs(
+    "never",
+    "org.cinnamon.desktop.media-handling",
+    "autorun-never",
+    Shape::OffByDefault,
+)];
+const GNOME_LOCATION: &[Gs] = &[gs(
+    "enabled",
+    "org.gnome.system.location",
+    "enabled",
+    Shape::Plain,
+)];
+const GNOME_PROBLEMS: &[Gs] = &[
+    gs(
+        "report_problems",
+        "org.gnome.desktop.privacy",
+        "report-technical-problems",
+        Shape::Plain,
+    ),
+    gs(
+        "send_usage_stats",
+        "org.gnome.desktop.privacy",
+        "send-software-usage-stats",
+        Shape::Plain,
+    ),
+];
+const GNOME_APP_USAGE: &[Gs] = &[gs(
+    "remember_usage",
+    "org.gnome.desktop.privacy",
+    "remember-app-usage",
+    Shape::OnByDefault,
+)];
+const GNOME_OLD_FILES: &[Gs] = &[
+    gs(
+        "trash",
+        "org.gnome.desktop.privacy",
+        "remove-old-trash-files",
+        Shape::OffByDefault,
+    ),
+    gs(
+        "temp",
+        "org.gnome.desktop.privacy",
+        "remove-old-temp-files",
+        Shape::OffByDefault,
+    ),
+];
+const CINNAMON_OLD_FILES: &[Gs] = &[
+    gs(
+        "trash",
+        "org.cinnamon.desktop.privacy",
+        "remove-old-trash-files",
+        Shape::OffByDefault,
+    ),
+    gs(
+        "temp",
+        "org.cinnamon.desktop.privacy",
+        "remove-old-temp-files",
+        Shape::OffByDefault,
+    ),
+];
+const CINNAMON_PREVIEWS: &[Gs] = &[gs(
+    "show_on_lock",
+    "org.cinnamon.desktop.screensaver",
+    "show-notifications",
+    Shape::OnByDefault,
+)];
+
 /// The desktop settings behind a control on this desktop; empty when the control has none here.
 fn desktop_keys(id: &str, desktop: Desktop) -> &'static [Gs] {
     match (id, desktop) {
@@ -123,6 +202,14 @@ fn desktop_keys(id: &str, desktop: Desktop) -> &'static [Gs] {
         ("linux.recent_files", Desktop::Gnome) => GNOME_RECENT,
         ("linux.recent_files", Desktop::Cinnamon) => CINNAMON_RECENT,
         ("linux.lock_previews", Desktop::Gnome) => GNOME_PREVIEWS,
+        ("linux.lock_previews", Desktop::Cinnamon) => CINNAMON_PREVIEWS,
+        ("linux.media_autorun", Desktop::Gnome) => GNOME_AUTORUN,
+        ("linux.media_autorun", Desktop::Cinnamon) => CINNAMON_AUTORUN,
+        ("linux.location", Desktop::Gnome) => GNOME_LOCATION,
+        ("linux.problem_reports", Desktop::Gnome) => GNOME_PROBLEMS,
+        ("linux.app_usage", Desktop::Gnome) => GNOME_APP_USAGE,
+        ("linux.old_files", Desktop::Gnome) => GNOME_OLD_FILES,
+        ("linux.old_files", Desktop::Cinnamon) => CINNAMON_OLD_FILES,
         _ => &[],
     }
 }
@@ -181,19 +268,23 @@ pub struct PersonBackend<S: Sys> {
     sys: S,
     config_dir: PathBuf,
     desktop: Desktop,
+    uid: u32,
     controls: Vec<Control>,
 }
 
 impl<S: Sys> PersonBackend<S> {
     /// `config_dir` is the person's configuration folder (`~/.config`). With `session_bus` false, no desktop setting is
-    /// offered: `gsettings` without the person's bus would change a throwaway copy instead of their settings.
-    pub fn new(sys: S, distro: &Distro, config_dir: PathBuf, session_bus: bool) -> Self {
+    /// offered: `gsettings` without the person's bus would change a throwaway copy instead of their settings. `uid` is
+    /// the person's own account number, which names their home folder.
+    pub fn new(sys: S, distro: &Distro, config_dir: PathBuf, session_bus: bool, uid: u32) -> Self {
         let controls = catalog::specs()
             .iter()
             .filter(|s| s.scope == Scope::Person)
             .filter(|s| {
                 if s.id == "linux.ubuntu_insights" {
                     distro.id == "ubuntu"
+                } else if s.id == HOME_CONTROL {
+                    true
                 } else {
                     session_bus && !desktop_keys(s.id, distro.desktop).is_empty()
                 }
@@ -210,6 +301,7 @@ impl<S: Sys> PersonBackend<S> {
             sys,
             config_dir,
             desktop: distro.desktop,
+            uid,
             controls,
         }
     }
@@ -245,6 +337,18 @@ impl<S: Sys> PersonBackend<S> {
             },
         };
         match g.shape {
+            Shape::OffByDefault => match self.flag(g.schema, g.key) {
+                Some(true) => Reading::of(1),
+                Some(false) => match self.user_set(g.schema, g.key) {
+                    Some(true) => Reading::of(0),
+                    Some(false) => Reading::of(2),
+                    None => Reading {
+                        value: Some(0),
+                        sure: false,
+                    },
+                },
+                None => Reading::missing(),
+            },
             Shape::Plain => self
                 .flag(g.schema, g.key)
                 .map_or_else(Reading::missing, |b| Reading::of(u32::from(b))),
@@ -299,7 +403,56 @@ impl<S: Sys> PersonBackend<S> {
         }
     }
 
+    /// The person's home folder and which of its "everyone else" permission bits are set. `None` unless the account
+    /// database names an absolute path that is a real folder owned by this person.
+    fn read_home(&self) -> Option<(String, u32)> {
+        let uid = self.uid.to_string();
+        let out = self.sys.run(GETENT, &["passwd", &uid]).ok()?;
+        if !out.success() {
+            return None;
+        }
+        let line = out.stdout.lines().next()?;
+        let fields: Vec<&str> = line.split(':').collect();
+        if fields.len() < 7 || fields[2] != uid {
+            return None;
+        }
+        let home = fields[5];
+        if !home.starts_with('/') || home == "/" || home.chars().any(char::is_control) {
+            return None;
+        }
+        let out = self.sys.run(STAT, &["-c", "%a %u %F", "--", home]).ok()?;
+        if !out.success() {
+            return None;
+        }
+        let mut parts = out.stdout.trim().splitn(3, ' ');
+        let mode = u32::from_str_radix(parts.next()?, 8).ok()?;
+        let owner = parts.next()?;
+        let kind = parts.next()?;
+        (owner == uid && kind == "directory").then(|| (home.to_owned(), mode & 0o7))
+    }
+
+    fn write_home(&self, others: u32) -> Result<()> {
+        ensure!(others <= 7, "{NOT_CONFIRMED}");
+        let (home, _) = self.read_home().context(UNAVAILABLE)?;
+        let mut mode = String::from("o=");
+        for (bit, letter) in [(4, 'r'), (2, 'w'), (1, 'x')] {
+            if others & bit != 0 {
+                mode.push(letter);
+            }
+        }
+        let out = self.sys.run(CHMOD, &["--", &mode, &home])?;
+        ensure!(out.success(), "{NOT_CONFIRMED}");
+        Ok(())
+    }
+
     fn read_all(&self, id: &str) -> Vec<(&'static str, Reading)> {
+        if id == HOME_CONTROL {
+            return vec![(
+                "others",
+                self.read_home()
+                    .map_or_else(Reading::missing, |(_, others)| Reading::of(others)),
+            )];
+        }
         if id == "linux.ubuntu_insights" {
             return INSIGHTS_SOURCES
                 .iter()
@@ -328,8 +481,12 @@ impl<S: Sys> PersonBackend<S> {
         let word = |on: bool| if on { "true" } else { "false" };
         match (g.shape, want) {
             (Shape::Plain, 0 | 1) => self.set(g.schema, g.key, word(want == 1)),
-            (Shape::Lock | Shape::OnByDefault, 0 | 1) => self.set(g.schema, g.key, word(want == 1)),
-            (Shape::Lock | Shape::OnByDefault | Shape::Age, 2) => self.reset(g.schema, g.key),
+            (Shape::Lock | Shape::OnByDefault | Shape::OffByDefault, 0 | 1) => {
+                self.set(g.schema, g.key, word(want == 1))
+            }
+            (Shape::Lock | Shape::OnByDefault | Shape::OffByDefault | Shape::Age, 2) => {
+                self.reset(g.schema, g.key)
+            }
             (Shape::Idle, 0) => self.set(g.schema, g.key, "300"),
             (Shape::Idle, 1) => self.set(g.schema, g.key, "0"),
             (Shape::Age, 0) => self.set(g.schema, g.key, "30"),
@@ -414,7 +571,9 @@ impl<S: Sys> Backend for PersonBackend<S> {
             }
             ensure!(reading.sure, "{UNAVAILABLE}");
             let want = want.as_u64().context(NOT_CONFIRMED)? as u32;
-            if id == "linux.ubuntu_insights" {
+            if id == HOME_CONTROL {
+                self.write_home(want)?;
+            } else if id == "linux.ubuntu_insights" {
                 self.write_consent(name, want == 1)?;
             } else {
                 let g = desktop_keys(id, self.desktop)
@@ -516,7 +675,7 @@ mod session {
         let desktop = std::env::var("XDG_CURRENT_DESKTOP").ok();
         let distro = distro::detect(&sys, desktop.as_deref());
         let config = config_dir_in(&home, env_path("XDG_CONFIG_HOME").as_deref());
-        let backend = PersonBackend::new(sys, &distro, config, bus.is_some());
+        let backend = PersonBackend::new(sys, &distro, config, bus.is_some(), uid);
         Ok((state_dir(&home)?, Box::new(backend)))
     }
 
@@ -549,7 +708,7 @@ mod tests {
     use crate::linux::cmd::Output;
     use crate::linux::distro::Family;
     use crate::os::Os;
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use std::collections::BTreeMap;
     use std::path::Path;
     use std::rc::Rc;
@@ -561,7 +720,22 @@ mod tests {
         files: RefCell<BTreeMap<PathBuf, Vec<u8>>>,
         dconf: bool,
         calls: RefCell<Vec<String>>,
+        home: RefCell<String>,
+        home_mode: Cell<u32>,
+        home_owner: Cell<u32>,
+        home_kind: RefCell<&'static str>,
     }
+
+    const UBUNTU_PERSON: &str =
+        include_str!("../../tests/fixtures/linux/ubuntu-26.04/gsettings-person.txt");
+    const FEDORA_PERSON: &str =
+        include_str!("../../tests/fixtures/linux/fedora-44/gsettings-person.txt");
+    const MINT_PERSON: &str =
+        include_str!("../../tests/fixtures/linux/mint-22.3/gsettings-person.txt");
+    const UBUNTU_HOME: &str = include_str!("../../tests/fixtures/linux/ubuntu-26.04/home-mode.txt");
+    const FEDORA_HOME: &str = include_str!("../../tests/fixtures/linux/fedora-44/home-mode.txt");
+    const MINT_HOME: &str = include_str!("../../tests/fixtures/linux/mint-22.3/home-mode.txt");
+    const UID: u32 = 1000;
 
     fn key(schema: &str, key: &str) -> (String, String) {
         (schema.into(), key.into())
@@ -586,13 +760,19 @@ mod tests {
             .into_iter()
             .map(|(s, k, v)| (key(s, k), v.to_owned()))
             .collect();
-            let desk = Self {
+            let mut desk = Self {
                 defaults,
                 set: RefCell::default(),
                 files: RefCell::default(),
                 dconf: true,
                 calls: RefCell::default(),
+                home: RefCell::new("/home/tester".into()),
+                home_mode: Cell::new(0o750),
+                home_owner: Cell::new(UID),
+                home_kind: RefCell::new("directory"),
             };
+            desk.record(UBUNTU_PERSON);
+            desk.set_home(UBUNTU_HOME);
             desk.files
                 .borrow_mut()
                 .insert("/etc/machine-id".into(), b"0123456789abcdef\n".to_vec());
@@ -603,6 +783,40 @@ mod tests {
                 );
             }
             desk
+        }
+
+        /// Adds the defaults of a recorded `gsettings list-recursively` listing.
+        fn record(&mut self, listing: &str) {
+            for line in listing.lines() {
+                let mut parts = line.splitn(3, ' ');
+                let (schema, k, v) = (
+                    parts.next().unwrap(),
+                    parts.next().unwrap(),
+                    parts.next().unwrap(),
+                );
+                self.defaults.insert(key(schema, k), v.to_owned());
+            }
+        }
+
+        fn fedora() -> Self {
+            let mut desk = Self::stock();
+            desk.record(FEDORA_PERSON);
+            desk.set_home(FEDORA_HOME);
+            desk
+        }
+
+        fn mint() -> Self {
+            let mut desk = Self::stock();
+            desk.record(MINT_PERSON);
+            desk.set_home(MINT_HOME);
+            desk
+        }
+
+        fn set_home(&self, recorded: &str) {
+            let mut fields = recorded.split_whitespace();
+            self.home_mode
+                .set(u32::from_str_radix(fields.next().unwrap(), 8).unwrap());
+            *self.home.borrow_mut() = fields.nth(1).unwrap().to_owned();
         }
 
         fn current(&self, schema: &str, k: &str) -> Option<String> {
@@ -658,6 +872,39 @@ mod tests {
                     self.set.borrow_mut().remove(&key(s, k));
                     out(0, "")
                 }
+                (GETENT, ["passwd", uid]) if *uid == UID.to_string() => out(
+                    0,
+                    &format!(
+                        "tester:x:{UID}:{UID}:Tester,,,:{}:/bin/bash\n",
+                        self.home.borrow()
+                    ),
+                ),
+                (STAT, ["-c", "%a %u %F", "--", path]) if *path == self.home.borrow().as_str() => {
+                    out(
+                        0,
+                        &format!(
+                            "{:o} {} {}\n",
+                            self.home_mode.get(),
+                            self.home_owner.get(),
+                            self.home_kind.borrow()
+                        ),
+                    )
+                }
+                (CHMOD, ["--", mode, path]) if *path == self.home.borrow().as_str() => {
+                    let bits = mode
+                        .strip_prefix("o=")
+                        .expect("only the others bits change");
+                    let others = bits.chars().fold(0, |n, c| {
+                        n | match c {
+                            'r' => 4,
+                            'w' => 2,
+                            'x' => 1,
+                            _ => panic!("bad mode {mode}"),
+                        }
+                    });
+                    self.home_mode.set(self.home_mode.get() & !0o7 | others);
+                    out(0, "")
+                }
                 (DCONF, ["read", path]) if self.dconf => {
                     let (schema, k) = path.rsplit_once('/').unwrap();
                     let schema = schema.trim_start_matches('/').replace('/', ".");
@@ -699,6 +946,7 @@ mod tests {
             &distro(id, desktop),
             "/home/p/.config".into(),
             bus,
+            UID,
         )
     }
 
@@ -728,7 +976,13 @@ mod tests {
                 "linux.remote_desktop",
                 "linux.recent_files",
                 "linux.lock_previews",
-                "linux.ubuntu_insights"
+                "linux.ubuntu_insights",
+                "linux.media_autorun",
+                "linux.location",
+                "linux.problem_reports",
+                "linux.app_usage",
+                "linux.old_files",
+                "linux.home_private"
             ]
         );
         assert_eq!(
@@ -751,6 +1005,21 @@ mod tests {
             items(&mut b, "linux.ubuntu_insights"),
             json!({"linux": 0, "desktop_provision": 0, "release_upgrader": 0})
         );
+        assert_eq!(items(&mut b, "linux.media_autorun"), json!({"never": 1}));
+        assert_eq!(items(&mut b, "linux.location"), json!({"enabled": 0}));
+        assert_eq!(
+            items(&mut b, "linux.problem_reports"),
+            json!({"report_problems": 0, "send_usage_stats": 0})
+        );
+        assert_eq!(
+            items(&mut b, "linux.app_usage"),
+            json!({"remember_usage": 2})
+        );
+        assert_eq!(
+            items(&mut b, "linux.old_files"),
+            json!({"trash": 2, "temp": 2})
+        );
+        assert_eq!(items(&mut b, "linux.home_private"), json!({"others": 0}));
         assert_eq!(b.machine_id().unwrap(), "0123456789abcdef");
     }
 
@@ -759,7 +1028,14 @@ mod tests {
         let desk = Rc::new(Desk::stock());
         assert_eq!(
             ids(&backend(&desk, "linuxmint", Desktop::Cinnamon, true)),
-            ["linux.screen_lock", "linux.recent_files"]
+            [
+                "linux.screen_lock",
+                "linux.recent_files",
+                "linux.lock_previews",
+                "linux.media_autorun",
+                "linux.old_files",
+                "linux.home_private"
+            ]
         );
         assert_eq!(
             ids(&backend(&desk, "fedora", Desktop::Gnome, true)),
@@ -767,13 +1043,22 @@ mod tests {
                 "linux.screen_lock",
                 "linux.remote_desktop",
                 "linux.recent_files",
-                "linux.lock_previews"
+                "linux.lock_previews",
+                "linux.media_autorun",
+                "linux.location",
+                "linux.problem_reports",
+                "linux.app_usage",
+                "linux.old_files",
+                "linux.home_private"
             ]
         );
-        assert!(ids(&backend(&desk, "debian", Desktop::Other, true)).is_empty());
+        assert_eq!(
+            ids(&backend(&desk, "debian", Desktop::Other, true)),
+            ["linux.home_private"]
+        );
         assert_eq!(
             ids(&backend(&desk, "ubuntu", Desktop::Gnome, false)),
-            ["linux.ubuntu_insights"]
+            ["linux.ubuntu_insights", "linux.home_private"]
         );
         for b in [
             backend(&desk, "ubuntu", Desktop::Gnome, true),
@@ -814,7 +1099,9 @@ mod tests {
                 "linux.screen_lock",
                 "linux.remote_desktop",
                 "linux.recent_files",
-                "linux.lock_previews"
+                "linux.lock_previews",
+                "linux.app_usage",
+                "linux.old_files"
             ]
         );
         assert_eq!(
@@ -852,7 +1139,7 @@ mod tests {
                 .iter()
                 .filter(|r| r.status.as_str() == "attention")
                 .count(),
-            4
+            6
         );
     }
 
@@ -862,7 +1149,12 @@ mod tests {
         let state = tempfile::tempdir().unwrap();
         let mut e = engine(&desk, state.path());
         e.apply_selected(
-            &["linux.recent_files".into(), "linux.lock_previews".into()],
+            &[
+                "linux.recent_files".into(),
+                "linux.lock_previews".into(),
+                "linux.app_usage".into(),
+                "linux.old_files".into(),
+            ],
             |_| {},
         )
         .unwrap();
@@ -870,6 +1162,9 @@ mod tests {
         e.revert(|_| {}).unwrap();
         assert!(desk.set.borrow().is_empty(), "{:?}", desk.set.borrow());
         let calls = desk.calls.borrow().join("\n");
+        assert!(calls.contains("reset org.gnome.desktop.privacy remember-app-usage"));
+        assert!(calls.contains("reset org.gnome.desktop.privacy remove-old-trash-files"));
+        assert!(calls.contains("reset org.gnome.desktop.privacy remove-old-temp-files"));
         assert!(calls.contains("reset org.gnome.desktop.privacy recent-files-max-age"));
         assert!(calls.contains("reset org.gnome.desktop.notifications show-in-lock-screen"));
         assert!(!calls.contains(" set "), "{calls}");
@@ -1037,5 +1332,364 @@ mod tests {
             None
         );
         assert_eq!(session_bus(1000, None, |_| false), None);
+    }
+
+    fn engine_on(desk: &Rc<Desk>, id: &str, desktop: Desktop, dir: &Path) -> Engine {
+        let b = backend(desk, id, desktop, true);
+        Engine::open_for(Os::Linux, dir.to_owned(), Box::new(b)).unwrap()
+    }
+
+    fn status(e: &mut Engine, id: &str) -> String {
+        let report = e.audit_with_progress(|_| {}).unwrap();
+        report
+            .results
+            .iter()
+            .find(|r| r.id == id)
+            .unwrap_or_else(|| panic!("{id} was not checked"))
+            .status
+            .as_str()
+            .to_owned()
+    }
+
+    fn calls(desk: &Rc<Desk>) -> String {
+        desk.calls.borrow().join("\n")
+    }
+
+    #[test]
+    fn plugged_in_drives_are_fixed_on_mint_by_setting_the_key_and_undone_by_resetting_it() {
+        let desk = Rc::new(Desk::mint());
+        let state = tempfile::tempdir().unwrap();
+        let mut e = engine_on(&desk, "linuxmint", Desktop::Cinnamon, state.path());
+        assert_eq!(status(&mut e, "linux.media_autorun"), "attention");
+        assert!(desk.set.borrow().is_empty());
+        e.apply_selected(&["linux.media_autorun".into()], |_| {})
+            .unwrap();
+        assert_eq!(
+            desk.current("org.cinnamon.desktop.media-handling", "autorun-never")
+                .unwrap(),
+            "true"
+        );
+        assert_eq!(status(&mut e, "linux.media_autorun"), "compliant");
+        desk.calls.borrow_mut().clear();
+        e.revert(|_| {}).unwrap();
+        assert!(desk.set.borrow().is_empty(), "{:?}", desk.set.borrow());
+        assert!(calls(&desk).contains("reset org.cinnamon.desktop.media-handling autorun-never"));
+        assert!(!calls(&desk).contains(" set "), "{}", calls(&desk));
+    }
+
+    #[test]
+    fn a_choice_to_allow_plugged_in_drives_to_start_is_written_back_as_that_choice() {
+        let desk = Rc::new(Desk::mint());
+        desk.put(
+            "org.cinnamon.desktop.media-handling",
+            "autorun-never",
+            "false",
+        );
+        let state = tempfile::tempdir().unwrap();
+        let mut e = engine_on(&desk, "linuxmint", Desktop::Cinnamon, state.path());
+        let mut b = backend(&desk, "linuxmint", Desktop::Cinnamon, true);
+        assert_eq!(items(&mut b, "linux.media_autorun"), json!({"never": 0}));
+        e.apply_selected(&["linux.media_autorun".into()], |_| {})
+            .unwrap();
+        e.revert(|_| {}).unwrap();
+        assert_eq!(
+            desk.set
+                .borrow()
+                .get(&key("org.cinnamon.desktop.media-handling", "autorun-never")),
+            Some(&"false".to_owned())
+        );
+    }
+
+    #[test]
+    fn plugged_in_drives_are_already_safe_on_gnome_and_the_missing_key_is_not_offered() {
+        for desk in [Desk::stock(), Desk::fedora()] {
+            let desk = Rc::new(desk);
+            let state = tempfile::tempdir().unwrap();
+            let mut e = engine(&desk, state.path());
+            assert_eq!(status(&mut e, "linux.media_autorun"), "compliant");
+        }
+        let mut stock = Desk::mint();
+        stock
+            .defaults
+            .retain(|(schema, _), _| schema != "org.cinnamon.desktop.media-handling");
+        let desk = Rc::new(stock);
+        let mut b = backend(&desk, "linuxmint", Desktop::Cinnamon, true);
+        let o = b.observe("linux.media_autorun").unwrap();
+        assert!(!o.eligible);
+        assert_eq!(o.reason, UNAVAILABLE);
+    }
+
+    #[test]
+    fn location_sharing_that_was_turned_on_is_switched_off_and_put_back_by_undo() {
+        for desk in [Desk::stock(), Desk::fedora()] {
+            let desk = Rc::new(desk);
+            let state = tempfile::tempdir().unwrap();
+            let mut e = engine(&desk, state.path());
+            assert_eq!(status(&mut e, "linux.location"), "compliant");
+            desk.put("org.gnome.system.location", "enabled", "true");
+            let before = desk.set.borrow().clone();
+            assert_eq!(status(&mut e, "linux.location"), "attention");
+            e.apply_selected(&["linux.location".into()], |_| {})
+                .unwrap();
+            assert_eq!(
+                desk.current("org.gnome.system.location", "enabled")
+                    .unwrap(),
+                "false"
+            );
+            assert_eq!(status(&mut e, "linux.location"), "compliant");
+            e.revert(|_| {}).unwrap();
+            assert_eq!(desk.set.borrow().clone(), before);
+        }
+    }
+
+    #[test]
+    fn problem_and_usage_reports_are_switched_off_one_by_one_and_undone_exactly() {
+        let desk = Rc::new(Desk::stock());
+        desk.put(
+            "org.gnome.desktop.privacy",
+            "send-software-usage-stats",
+            "true",
+        );
+        let state = tempfile::tempdir().unwrap();
+        let mut e = engine(&desk, state.path());
+        let before = desk.set.borrow().clone();
+        assert_eq!(status(&mut e, "linux.problem_reports"), "attention");
+        desk.calls.borrow_mut().clear();
+        e.apply_selected(&["linux.problem_reports".into()], |_| {})
+            .unwrap();
+        assert!(
+            !calls(&desk).contains("report-technical-problems false"),
+            "a key that was already off is left alone"
+        );
+        assert_eq!(
+            desk.current("org.gnome.desktop.privacy", "send-software-usage-stats")
+                .unwrap(),
+            "false"
+        );
+        assert_eq!(status(&mut e, "linux.problem_reports"), "compliant");
+        e.revert(|_| {}).unwrap();
+        assert_eq!(desk.set.borrow().clone(), before);
+        desk.put(
+            "org.gnome.desktop.privacy",
+            "report-technical-problems",
+            "true",
+        );
+        let mut b = backend(&desk, "ubuntu", Desktop::Gnome, true);
+        assert_eq!(
+            items(&mut b, "linux.problem_reports"),
+            json!({"report_problems": 1, "send_usage_stats": 1})
+        );
+    }
+
+    #[test]
+    fn app_history_is_reset_when_it_was_the_default_and_written_back_when_the_person_set_it() {
+        let desk = Rc::new(Desk::stock());
+        let state = tempfile::tempdir().unwrap();
+        let mut e = engine(&desk, state.path());
+        assert_eq!(status(&mut e, "linux.app_usage"), "attention");
+        e.apply_selected(&["linux.app_usage".into()], |_| {})
+            .unwrap();
+        assert_eq!(
+            desk.current("org.gnome.desktop.privacy", "remember-app-usage")
+                .unwrap(),
+            "false"
+        );
+        assert_eq!(status(&mut e, "linux.app_usage"), "compliant");
+        e.revert(|_| {}).unwrap();
+        assert!(desk.set.borrow().is_empty());
+
+        desk.put("org.gnome.desktop.privacy", "remember-app-usage", "true");
+        e.apply_selected(&["linux.app_usage".into()], |_| {})
+            .unwrap();
+        e.revert(|_| {}).unwrap();
+        assert_eq!(
+            desk.set
+                .borrow()
+                .get(&key("org.gnome.desktop.privacy", "remember-app-usage")),
+            Some(&"true".to_owned())
+        );
+    }
+
+    #[test]
+    fn old_files_are_cleaned_by_themselves_only_after_a_choice_and_undo_leaves_no_trace() {
+        for (desk, id, desktop, schema) in [
+            (
+                Desk::stock(),
+                "ubuntu",
+                Desktop::Gnome,
+                "org.gnome.desktop.privacy",
+            ),
+            (
+                Desk::fedora(),
+                "fedora",
+                Desktop::Gnome,
+                "org.gnome.desktop.privacy",
+            ),
+            (
+                Desk::mint(),
+                "linuxmint",
+                Desktop::Cinnamon,
+                "org.cinnamon.desktop.privacy",
+            ),
+        ] {
+            let desk = Rc::new(desk);
+            let state = tempfile::tempdir().unwrap();
+            let mut e = engine_on(&desk, id, desktop, state.path());
+            assert_eq!(status(&mut e, "linux.old_files"), "attention");
+            assert!(desk.set.borrow().is_empty());
+            e.apply_selected(&["linux.old_files".into()], |_| {})
+                .unwrap();
+            for k in ["remove-old-trash-files", "remove-old-temp-files"] {
+                assert_eq!(desk.current(schema, k).unwrap(), "true", "{id} {k}");
+            }
+            assert_eq!(
+                desk.current(schema, "old-files-age").unwrap(),
+                "uint32 30",
+                "the age limit is not touched"
+            );
+            assert_eq!(status(&mut e, "linux.old_files"), "compliant");
+            e.revert(|_| {}).unwrap();
+            assert!(
+                desk.set.borrow().is_empty(),
+                "{id}: {:?}",
+                desk.set.borrow()
+            );
+        }
+    }
+
+    #[test]
+    fn only_the_old_files_setting_that_is_off_is_changed_and_a_choice_to_keep_files_is_kept() {
+        let desk = Rc::new(Desk::stock());
+        desk.put(
+            "org.gnome.desktop.privacy",
+            "remove-old-trash-files",
+            "true",
+        );
+        desk.put(
+            "org.gnome.desktop.privacy",
+            "remove-old-temp-files",
+            "false",
+        );
+        let state = tempfile::tempdir().unwrap();
+        let mut e = engine(&desk, state.path());
+        let before = desk.set.borrow().clone();
+        desk.calls.borrow_mut().clear();
+        e.apply_selected(&["linux.old_files".into()], |_| {})
+            .unwrap();
+        assert!(!calls(&desk).contains("remove-old-trash-files true"));
+        assert_eq!(
+            desk.current("org.gnome.desktop.privacy", "remove-old-temp-files")
+                .unwrap(),
+            "true"
+        );
+        e.revert(|_| {}).unwrap();
+        assert_eq!(desk.set.borrow().clone(), before);
+    }
+
+    #[test]
+    fn lock_screen_messages_follow_the_mint_desktop_key() {
+        let desk = Rc::new(Desk::mint());
+        let state = tempfile::tempdir().unwrap();
+        let mut e = engine_on(&desk, "linuxmint", Desktop::Cinnamon, state.path());
+        assert_eq!(status(&mut e, "linux.lock_previews"), "compliant");
+        desk.put(
+            "org.cinnamon.desktop.screensaver",
+            "show-notifications",
+            "true",
+        );
+        let before = desk.set.borrow().clone();
+        assert_eq!(status(&mut e, "linux.lock_previews"), "attention");
+        e.apply_selected(&["linux.lock_previews".into()], |_| {})
+            .unwrap();
+        assert_eq!(
+            desk.current("org.cinnamon.desktop.screensaver", "show-notifications")
+                .unwrap(),
+            "false"
+        );
+        e.revert(|_| {}).unwrap();
+        assert_eq!(desk.set.borrow().clone(), before);
+    }
+
+    #[test]
+    fn a_home_folder_other_people_can_enter_is_closed_and_the_exact_mode_comes_back() {
+        for (mode, closed) in [
+            (0o755, 0o750),
+            (0o751, 0o750),
+            (0o705, 0o700),
+            (0o2755, 0o2750),
+            (0o777, 0o770),
+        ] {
+            let desk = Rc::new(Desk::stock());
+            desk.home_mode.set(mode);
+            let state = tempfile::tempdir().unwrap();
+            let mut e = engine(&desk, state.path());
+            assert_eq!(
+                status(&mut e, "linux.home_private"),
+                "attention",
+                "{mode:o}"
+            );
+            assert_eq!(desk.home_mode.get(), mode, "checking changed the folder");
+            e.apply_selected(&["linux.home_private".into()], |_| {})
+                .unwrap();
+            assert_eq!(desk.home_mode.get(), closed, "{mode:o}");
+            assert!(calls(&desk).contains("/usr/bin/chmod -- o= /home/tester"));
+            assert_eq!(status(&mut e, "linux.home_private"), "compliant");
+            e.revert(|_| {}).unwrap();
+            assert_eq!(
+                desk.home_mode.get(),
+                mode,
+                "undo left {:o}",
+                desk.home_mode.get()
+            );
+        }
+    }
+
+    #[test]
+    fn the_recorded_home_folders_are_private_already() {
+        for desk in [Desk::stock(), Desk::fedora(), Desk::mint()] {
+            let desk = Rc::new(desk);
+            let mut b = backend(&desk, "ubuntu", Desktop::Gnome, true);
+            assert_eq!(items(&mut b, "linux.home_private"), json!({"others": 0}));
+        }
+        assert_eq!(Desk::fedora().home_mode.get(), 0o700);
+    }
+
+    #[test]
+    fn a_home_folder_that_is_not_the_persons_own_real_folder_is_never_changed() {
+        type Spoil = fn(&Desk);
+        let cases: [Spoil; 4] = [
+            |d| d.home_owner.set(0),
+            |d| *d.home_kind.borrow_mut() = "symbolic link",
+            |d| *d.home.borrow_mut() = "home/tester".into(),
+            |d| *d.home.borrow_mut() = "/".into(),
+        ];
+        for spoil in cases {
+            let desk = Rc::new(Desk::stock());
+            desk.home_mode.set(0o755);
+            spoil(&desk);
+            let mut b = backend(&desk, "ubuntu", Desktop::Gnome, true);
+            let o = b.observe("linux.home_private").unwrap();
+            assert!(!o.eligible);
+            assert_eq!(o.reason, UNAVAILABLE);
+            let target = catalog::spec("linux.home_private")
+                .unwrap()
+                .catalog_target();
+            assert!(b.write("linux.home_private", &target).is_err());
+            assert_eq!(desk.home_mode.get(), 0o755);
+            assert!(!calls(&desk).contains("chmod"), "{}", calls(&desk));
+        }
+    }
+
+    #[test]
+    fn a_missing_account_entry_makes_the_home_folder_check_unavailable() {
+        let desk = Rc::new(Desk::stock());
+        let b = PersonBackend::new(
+            Rc::clone(&desk),
+            &distro("ubuntu", Desktop::Gnome),
+            "/home/p/.config".into(),
+            true,
+            4242,
+        );
+        assert!(b.read_home().is_none());
     }
 }

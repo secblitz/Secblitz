@@ -45,6 +45,12 @@ const fn unsafe_by_default(name: &'static str) -> Key {
     set(name, "", &[0], true, Some(0), 2)
 }
 
+/// A setting that is safe when on and that the desktop leaves off: 1 is safe, 0 is unsafe because the person set it,
+/// 2 is unsafe because nothing was ever set. Undo puts 2 back with a reset, not by writing the value.
+const fn off_by_default(name: &'static str) -> Key {
+    set(name, "", &[1], false, Some(1), 2)
+}
+
 const fn on(name: &'static str) -> Key {
     set(name, "", &[1], false, Some(1), 1)
 }
@@ -306,6 +312,59 @@ const SPECS: &[LinuxSpec] = &[
         reboot: false,
         keys: &[flag("held", true)],
     },
+    // never: 1 when plugged-in drives and discs are never started by themselves, 0 when the person allowed it, 2 when that
+    // is the desktop's default.
+    LinuxSpec {
+        id: "linux.media_autorun",
+        scope: Scope::Person,
+        ask: false,
+        reboot: false,
+        keys: &[off_by_default("never")],
+    },
+    // enabled: 1 when the desktop tells apps where the computer is.
+    LinuxSpec {
+        id: "linux.location",
+        scope: Scope::Person,
+        ask: false,
+        reboot: false,
+        keys: &[flag("enabled", true)],
+    },
+    // report_problems, send_usage_stats: 1 when the desktop sends crash reports or software usage statistics.
+    LinuxSpec {
+        id: "linux.problem_reports",
+        scope: Scope::Person,
+        ask: false,
+        reboot: false,
+        keys: &[
+            flag("report_problems", true),
+            flag("send_usage_stats", true),
+        ],
+    },
+    // remember_usage: 1 when the desktop remembers which apps are used most because the person set it, 2 when that is the default.
+    LinuxSpec {
+        id: "linux.app_usage",
+        scope: Scope::Person,
+        ask: true,
+        reboot: false,
+        keys: &[unsafe_by_default("remember_usage")],
+    },
+    // trash, temp: 1 when old Trash files or old temporary files are deleted by themselves, 0 when the person turned that
+    // off, 2 when that is the default (nothing is ever deleted).
+    LinuxSpec {
+        id: "linux.old_files",
+        scope: Scope::Person,
+        ask: true,
+        reboot: false,
+        keys: &[off_by_default("trash"), off_by_default("temp")],
+    },
+    // others: the "everyone else" permission bits of the person's home folder, 0 to 7; 0 is private.
+    LinuxSpec {
+        id: "linux.home_private",
+        scope: Scope::Person,
+        ask: false,
+        reboot: false,
+        keys: &[set("others", "", &[0], false, Some(0), 7)],
+    },
 ];
 
 /// The only words these keys can hold. Other text keys hold names or ranges, so they are only kept to plain ASCII.
@@ -411,7 +470,7 @@ mod tests {
         for windows in crate::engine::catalog::ids(Os::Windows) {
             assert!(spec(windows).is_none(), "{windows}");
         }
-        assert_eq!(specs().len(), 26);
+        assert_eq!(specs().len(), 32);
     }
 
     #[test]
@@ -422,6 +481,12 @@ mod tests {
             "linux.recent_files",
             "linux.lock_previews",
             "linux.ubuntu_insights",
+            "linux.media_autorun",
+            "linux.location",
+            "linux.problem_reports",
+            "linux.app_usage",
+            "linux.old_files",
+            "linux.home_private",
         ];
         let optional = [
             "linux.fedora_open_ports",
@@ -429,6 +494,8 @@ mod tests {
             "linux.connectivity_check",
             "linux.wifi_mac",
             "linux.recent_files",
+            "linux.app_usage",
+            "linux.old_files",
         ];
         for s in specs() {
             let want = if person.contains(&s.id) {
