@@ -118,3 +118,8 @@ pub fn session() -> anyhow::Result<RemoteSession<DbusTransport>> {
 pub fn start_fresh() -> anyhow::Result<()> {
     remote::start_fresh(&mut DbusTransport::system())
 }
+
+/// Asks the helper to remove Secblitz's package. Returns once the removal has started.
+pub fn remove_self() -> anyhow::Result<()> {
+    remote::remove_self(&mut DbusTransport::system())
+}

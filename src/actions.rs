@@ -37,6 +37,7 @@ pub enum Action {
     OpenPrivacyPolicy,
     OpenRecoveryKey,
     OpenDownloadPage,
+    OpenDesktopPrivacy,
 }
 
 pub const REPORT_PROBLEM_URL: &str =
@@ -56,6 +57,9 @@ pub struct ActionResult {
 #[cfg(windows)]
 #[path = "actions/windows.rs"]
 mod windows;
+
+#[path = "actions/linux.rs"]
+mod linux;
 
 /// SHUTDOWN_RESTART (0x4) | SHUTDOWN_INSTALL_UPDATES (0x40). No force flags, so programs with unsaved work can still stay open.
 #[cfg(any(windows, test))]
@@ -198,6 +202,13 @@ fn validate_control_request(name: &str, split_elevated: bool) -> Result<()> {
 /// Blocking, explicitly selected action. Errors never imply that in-flight
 /// Defender work stopped. Settings dispatch does not verify remediation.
 pub fn run(action: Action) -> Result<ActionResult> {
+    if action == Action::OpenDesktopPrivacy {
+        linux::open_privacy()?;
+        return Ok(ActionResult {
+            status: "opened".into(),
+            detail: "The desktop's Privacy settings were asked to open. No fix is claimed.".into(),
+        });
+    }
     if let Some(target) = target(action) {
         #[cfg(windows)]
         windows::open(target)?;

@@ -10,5 +10,6 @@ pub mod remove;
 pub mod settings;
 pub mod support;
 pub mod tools;
+pub mod unavailable;
 pub mod web;
 pub mod welcome;

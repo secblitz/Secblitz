@@ -686,14 +686,19 @@ fn other_page(
     guide: Option<&guide::Guide>,
     step: NextStep,
 ) -> Option<Page> {
+    let step_page = |step| {
+        if explain.1 && advice::is_linux_finding(explain.0) {
+            None
+        } else {
+            Page::for_step(step)
+        }
+    };
     match bucket {
         Bucket::Look => guide
             .map(|g| g.page)
             .or_else(|| Page::for_finding(explain.0))
-            .or_else(|| Page::for_step(step)),
-        Bucket::GoodToKnow if explain.1 => {
-            Page::for_finding(explain.0).or_else(|| Page::for_step(step))
-        }
+            .or_else(|| step_page(step)),
+        Bucket::GoodToKnow if explain.1 => Page::for_finding(explain.0).or_else(|| step_page(step)),
         Bucket::GoodToKnow => guide.map(|g| g.page),
         _ => None,
     }
@@ -1490,6 +1495,11 @@ pub fn fills_window(ctx: &Ctx) -> bool {
     ctx.engine_error.is_none() && ctx.full_check().is_some()
 }
 
+/// Which apps may use the camera, microphone and location is a Windows setting; other systems keep theirs elsewhere.
+pub fn app_access_applies() -> bool {
+    secblitz::os::Os::CURRENT == secblitz::os::Os::Windows
+}
+
 pub fn view<'a>(
     state: &'a State,
     ctx: &'a Ctx,
@@ -1650,7 +1660,7 @@ pub fn view<'a>(
         };
         let head = container(head).padding([0.0, theme::S4]);
         let mut section = column![head].spacing(theme::S3);
-        if topic == Topic::Privacy {
+        if topic == Topic::Privacy && app_access_applies() {
             section = section.push(super::app_access::view(access, ctx));
         }
         let mut groups = topic_groups(state, ctx, rows, &part, topic, false).into_iter();
@@ -2584,6 +2594,31 @@ mod tests {
             other_page(Bucket::Managed, ("Windows updates", true), None, a.step),
             None
         );
+    }
+
+    #[test]
+    fn a_linux_finding_never_opens_a_windows_settings_page_or_speaks_of_windows() {
+        for title in [
+            advice::DISK_ENCRYPTION,
+            advice::LINUX_SECURE_BOOT,
+            advice::UPDATES_WAITING,
+            advice::RESTART_NEEDED,
+            advice::PROGRAM_LIMITS,
+        ] {
+            let a = advice::for_finding(title, &CheckStatus::Attention, "");
+            for bucket in [Bucket::Look, Bucket::GoodToKnow] {
+                assert_eq!(
+                    other_page(bucket, (title, true), None, a.step),
+                    None,
+                    "{title}"
+                );
+            }
+            for line in [a.label, a.next, a.impact] {
+                for word in ["Windows", "BIOS", "Microsoft", "administrator"] {
+                    assert!(!line.contains(word), "{title}: {line}");
+                }
+            }
+        }
     }
 
     #[test]

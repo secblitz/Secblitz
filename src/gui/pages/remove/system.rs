@@ -1,6 +1,15 @@
 //! What the Remove sheet asks of Windows: the uninstaller, the plan and putting changes back.
 use super::*;
 
+/// On Linux the package manager owns the install, so only the packaged program counts as installed.
+#[cfg(target_os = "linux")]
+pub fn uninstaller() -> Option<PathBuf> {
+    const PACKAGED: &str = "/usr/bin/secblitz";
+    let exe = std::env::current_exe().ok()?;
+    (exe == std::path::Path::new(PACKAGED)).then_some(exe)
+}
+
+#[cfg(not(target_os = "linux"))]
 pub fn uninstaller() -> Option<PathBuf> {
     let exe = crate::app::settings::installed_exe()?;
     let path = exe.parent()?.join("unins000.exe");
@@ -87,15 +96,44 @@ pub(super) fn load_plan() -> Result<Plan, String> {
     }
 }
 
-#[cfg(not(windows))]
-pub(super) fn load_plan() -> Result<Plan, String> {
-    Ok(Plan::default())
+/// How many settings the last check showed Secblitz can put back. Without a check there is no number, and the sheet then
+/// offers to put back whatever is recorded.
+#[cfg_attr(windows, allow(dead_code))]
+pub(super) fn plan_from_report(report: Option<&secblitz::engine::Report>) -> Result<Plan, String> {
+    report
+        .map(|report| Plan {
+            settings: report.results.iter().filter(|o| o.undoable).count(),
+            ..Plan::default()
+        })
+        .ok_or_else(String::new)
+}
+
+pub(super) fn plan_task(
+    report: Option<&secblitz::engine::Report>,
+    generation: u32,
+) -> Task<Message> {
+    #[cfg(windows)]
+    {
+        let _ = report;
+        Task::perform(blocking(load_plan), move |r| {
+            wrap(Msg::Planned(generation, r))
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        Task::done(wrap(Msg::Planned(generation, plan_from_report(report))))
+    }
 }
 
 pub(super) fn launch_uninstaller() -> bool {
     let Some(path) = uninstaller() else {
         return false;
     };
+    #[cfg(target_os = "linux")]
+    {
+        let _ = path;
+        crate::linux_bus::client::remove_self().is_ok()
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -115,7 +153,7 @@ pub(super) fn launch_uninstaller() -> bool {
             .spawn()
             .is_ok()
     }
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         let _ = path;
         false
@@ -260,7 +298,97 @@ pub(super) fn run_put_back(
     emit(Event::Done(lines));
 }
 
-#[cfg(not(windows))]
+/// What is left after one half put its settings back, as lines for the person.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub(super) fn put_back_lines(report: &secblitz::engine::Report, lang: Lang) -> Vec<String> {
+    use crate::uninstall::{left_reason_from_status, linux_left_line};
+    use secblitz::model::CheckStatus;
+    report
+        .results
+        .iter()
+        .filter(|o| match o.status {
+            CheckStatus::Restored | CheckStatus::Unchanged => false,
+            CheckStatus::Skipped => o.detail != secblitz::engine::NOTHING_RECORDED,
+            _ => true,
+        })
+        .map(|o| linux_left_line(&o.title, left_reason_from_status(&o.status), lang))
+        .collect()
+}
+
+/// An interrupted fix is put back as a whole first, since the chosen settings cannot be undone one by one while it is open.
+#[cfg(any(target_os = "linux", test))]
+pub(super) fn put_back_all(
+    session: &mut dyn crate::app::worker::Session,
+) -> anyhow::Result<secblitz::engine::Report> {
+    let ids = session.available();
+    if ids.is_empty() {
+        return Ok(secblitz::engine::Report::default());
+    }
+    let report = session.undo_selected(&ids, &mut |_| {})?;
+    if report
+        .results
+        .iter()
+        .any(|o| o.detail == secblitz::engine::UNDO_FIRST)
+    {
+        session.undo(&mut |_| {})?;
+        return session.undo_selected(&ids, &mut |_| {});
+    }
+    Ok(report)
+}
+
+/// Puts back everything one half of the settings recorded. A half that cannot be reached leaves its own sentence.
+#[cfg(target_os = "linux")]
+fn put_back_half(
+    open: impl FnOnce() -> anyhow::Result<Box<dyn crate::app::worker::Session>>,
+    lang: Lang,
+) -> Vec<String> {
+    let result = open().and_then(|mut session| put_back_all(session.as_mut()));
+    match result {
+        Ok(report) => put_back_lines(&report, lang),
+        Err(error)
+            if error
+                .downcast_ref::<secblitz::engine::recover::JournalDamaged>()
+                .is_some() =>
+        {
+            vec![crate::uninstall::left_line(
+                &crate::uninstall::Left::HistoryDamaged,
+                lang,
+            )]
+        }
+        Err(error) => vec![lang.t(&format!("{error:#}"))],
+    }
+}
+
+/// The person's own settings first, which need no password, then the whole computer's through the helper.
+#[cfg(target_os = "linux")]
+pub(super) fn run_put_back(
+    _client: Option<std::sync::Arc<crate::broker::Client>>,
+    _safe: Vec<Setting>,
+    lang: Lang,
+    emit: &dyn Fn(Event),
+) {
+    let mut lines = Vec::new();
+
+    emit(Event::Started(Item::Personal));
+    let own = put_back_half(
+        || Ok(Box::new(secblitz::linux::person::open_engine()?) as Box<_>),
+        lang,
+    );
+    emit(Event::Finished(Item::Personal, own.is_empty()));
+    lines.extend(own);
+
+    emit(Event::Started(Item::Settings));
+    let machine = put_back_half(
+        || Ok(Box::new(crate::linux_bus::client::session()?) as Box<_>),
+        lang,
+    );
+    emit(Event::Finished(Item::Settings, machine.is_empty()));
+    lines.extend(machine);
+
+    emit(Event::Done(lines));
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 pub(super) fn run_put_back(
     _client: Option<std::sync::Arc<crate::broker::Client>>,
     _safe: Vec<Setting>,

@@ -210,6 +210,20 @@ fn failure(message: &str) -> Vec<u8> {
     serde_json::to_vec(&Event::Done(Reply::Failed(message.to_owned()))).unwrap_or_default()
 }
 
+#[cfg(not(test))]
+fn remove_self() -> anyhow::Result<()> {
+    secblitz::linux::remove::start_installed()
+}
+
+#[cfg(test)]
+static REMOVALS: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(test)]
+fn remove_self() -> anyhow::Result<()> {
+    REMOVALS.fetch_add(1, Ordering::SeqCst);
+    Ok(())
+}
+
 /// Runs one request to its final event. A start fresh needs no open session, since a damaged history is why none could open.
 fn run_job(shared: &Shared, id: u64, request: Request, open: &Opener, recover: &Recover) {
     let mut finished = false;
@@ -226,12 +240,18 @@ fn run_job(shared: &Shared, id: u64, request: Request, open: &Opener, recover: &
             };
             emit(Event::Done(match result {
                 Ok(()) => Reply::Ok,
-                Err(error) => Reply::Failed(format!("{error:#}")),
+                Err(error) => remote::failure(&error),
+            }));
+        }
+        Request::RemoveSelf => {
+            emit(Event::Done(match remove_self() {
+                Ok(()) => Reply::Ok,
+                Err(error) => remote::failure(&error),
             }));
         }
         request => match open() {
             Ok(mut session) => remote::serve(session.as_mut(), request, &mut emit),
-            Err(error) => emit(Event::Done(Reply::Failed(format!("{error:#}")))),
+            Err(error) => emit(Event::Done(remote::failure(&error))),
         },
     }));
     if !finished {
@@ -442,8 +462,32 @@ mod tests {
     }
 
     #[test]
+    fn a_removal_needs_no_open_session_and_starts_once() {
+        let shared = Shared::new();
+        let id = shared.start(":1.1").unwrap();
+        let open: Opener = Arc::new(|| Ok(Box::new(Panics) as Box<dyn Session>));
+        let recover: Recover = Arc::new(|| Ok(()));
+        let before = REMOVALS.load(Ordering::SeqCst);
+        run_job(&shared, id, Request::RemoveSelf, &open, &recover);
+        let (events, done) = shared.take(id, ":1.1").unwrap();
+        assert!(done);
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            serde_json::from_slice::<Event>(&events[0]).unwrap(),
+            Event::Done(Reply::Ok)
+        ));
+        assert_eq!(REMOVALS.load(Ordering::SeqCst), before + 1);
+    }
+
+    #[test]
     fn every_sentence_the_helper_shows_is_translated() {
-        for text in [BUSY, STOPPED, TOO_LARGE, polkit::NOT_ALLOWED] {
+        for text in [
+            BUSY,
+            STOPPED,
+            TOO_LARGE,
+            polkit::NOT_ALLOWED,
+            secblitz::linux::remove::CANNOT_REMOVE,
+        ] {
             assert_ne!(crate::i18n::Lang::De.t(text), text, "{text}");
         }
     }

@@ -96,7 +96,7 @@ fn choose_sheet<'a>(
     let mut col = column![widgets::h2(p, ctx.t(SECTION_TITLE))].spacing(theme::S3);
     if offered.is_empty() {
         col = col.push(widgets::muted(p, ctx.t(NOTHING_TO_PUT_BACK)));
-        col = col.push(widgets::muted(p, ctx.t(DELETE_EXE)));
+        col = col.push(widgets::muted(p, ctx.t(delete_note())));
         return col
             .push(row![
                 space::horizontal(),
@@ -128,7 +128,7 @@ fn choose_sheet<'a>(
                 choice == Some(Choice::Keep),
                 Icon::Shield,
                 ctx.t(KEEP_TITLE),
-                ctx.t(KEEP_HELP),
+                ctx.t(keep_help()),
                 on,
             ),
             Choice::PutBack => option_row(
@@ -142,7 +142,7 @@ fn choose_sheet<'a>(
         });
     }
     col = col.push(options);
-    if offered.contains(&Choice::PutBack) {
+    if offered.contains(&Choice::PutBack) && !on_linux() {
         for limit in limits(ctx.helper, plan.as_ref()) {
             let n = match limit {
                 Limit::StoreApps(n) => n,
@@ -163,7 +163,7 @@ fn choose_sheet<'a>(
             ctx.t(crate::uninstall::HISTORY_DAMAGED),
         ));
     }
-    col = col.push(widgets::small(p, ctx.t(STAY_NOTE)));
+    col = col.push(widgets::small(p, ctx.t(stay_note())));
     if let Some(note) = web_note(plan.as_ref()) {
         col = col.push(widgets::small(p, ctx.t(note)));
     }
@@ -250,7 +250,7 @@ pub(super) fn result_run(lines: &[String]) -> Run {
 fn working_sheet<'a>(state: &State, ctx: &Ctx, p: Palette, steps: &[StepState; 5]) -> El<'a> {
     let spin = state.spin.elapsed_at(state.now);
     let mut list = column![].spacing(theme::S3);
-    for item in Item::ALL {
+    for item in Item::shown() {
         let (lead, note): (El<'a>, String) = match steps[item.index()] {
             StepState::Waiting => (
                 space::horizontal().width(theme::CHECK).into(),
@@ -273,7 +273,7 @@ fn working_sheet<'a>(state: &State, ctx: &Ctx, p: Palette, steps: &[StepState; 5
             note,
         ));
     }
-    let ratio = state.finished_steps() as f32 / Item::ALL.len() as f32;
+    let ratio = state.finished_steps() as f32 / Item::shown().len() as f32;
     column![
         rewind_art(ctx, p, Run::Working, Some(ratio), state.since, state.now),
         widgets::h2_centred(p, ctx.t(WORKING_TITLE)),
@@ -294,7 +294,7 @@ fn result_sheet<'a>(state: &State, ctx: &Ctx, p: Palette, lines: &[String], at: 
     if lines.is_empty() {
         col = col
             .push(widgets::h2_centred(p, ctx.t(RESULT_DONE_TITLE)))
-            .push(widgets::muted_centred(p, ctx.t(DELETE_EXE)));
+            .push(widgets::muted_centred(p, ctx.t(delete_note())));
     } else {
         let mut list = column![].spacing(theme::S2);
         for (i, line) in lines.iter().enumerate() {
@@ -314,7 +314,7 @@ fn result_sheet<'a>(state: &State, ctx: &Ctx, p: Palette, lines: &[String], at: 
                 ctx.t(if state.installed {
                     RESULT_LEFT_HELP
                 } else {
-                    DELETE_EXE
+                    delete_note()
                 }),
             ))
             .push(widgets::scroll_well(p, list, 168.0));

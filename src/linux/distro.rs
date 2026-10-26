@@ -52,7 +52,7 @@ fn family_of(id: &str, like: &str) -> Family {
         .unwrap_or(Family::Other)
 }
 
-fn desktop_of(xdg_current_desktop: Option<&str>) -> Desktop {
+pub fn desktop(xdg_current_desktop: Option<&str>) -> Desktop {
     let names: Vec<String> = xdg_current_desktop
         .unwrap_or("")
         .split(':')
@@ -77,7 +77,7 @@ pub fn distro(os_release: &str, xdg_current_desktop: Option<&str>) -> Distro {
         family: family_of(&id, &like),
         version: field(os_release, "VERSION_ID").unwrap_or("").to_string(),
         id,
-        desktop: desktop_of(xdg_current_desktop),
+        desktop: desktop(xdg_current_desktop),
     }
 }
 

@@ -28,10 +28,11 @@ pub enum Page {
     Storage,
     InstalledApps,
     Taskbar,
+    PrivacySettings,
 }
 
 impl Page {
-    pub const ALL: [Page; 24] = [
+    pub const ALL: [Page; 25] = [
         Page::CoreIsolation,
         Page::Firewall,
         Page::DeviceSecurity,
@@ -56,6 +57,7 @@ impl Page {
         Page::Storage,
         Page::InstalledApps,
         Page::Taskbar,
+        Page::PrivacySettings,
     ];
 
     pub fn name(self) -> &'static str {
@@ -84,6 +86,7 @@ impl Page {
             Page::Storage => "Storage",
             Page::InstalledApps => "Installed apps",
             Page::Taskbar => "Taskbar settings",
+            Page::PrivacySettings => "Privacy settings",
         }
     }
 
@@ -113,6 +116,7 @@ impl Page {
             Page::Storage => "Open Storage",
             Page::InstalledApps => "Open Installed apps",
             Page::Taskbar => "Open Taskbar settings",
+            Page::PrivacySettings => "Open Privacy settings",
         }
     }
 
@@ -142,6 +146,7 @@ impl Page {
             Page::Storage => Action::OpenStorage,
             Page::InstalledApps => Action::OpenInstalledApps,
             Page::Taskbar => Action::OpenTaskbar,
+            Page::PrivacySettings => Action::OpenDesktopPrivacy,
         }
     }
 
@@ -171,6 +176,7 @@ impl Page {
             Page::Storage => Request::OpenStorage,
             Page::InstalledApps => Request::OpenInstalledApps,
             Page::Taskbar => Request::OpenTaskbar,
+            Page::PrivacySettings => Request::OpenDesktopPrivacy,
         }
     }
 
@@ -415,6 +421,21 @@ static HIDDEN_TASKS: Guide = g(
     ],
 );
 
+static RECENT_FILES: Guide = g(
+    Page::PrivacySettings,
+    &[
+        "Find the switch for remembering recent files, or file history.",
+        "Turn it off, or choose how long files are remembered.",
+    ],
+);
+static LOCK_PREVIEWS: Guide = g(
+    Page::PrivacySettings,
+    &[
+        "Find the settings for notifications on the lock screen.",
+        "Turn off showing the text of messages while the screen is locked.",
+    ],
+);
+
 pub fn guide(key: &str) -> Option<&'static Guide> {
     Some(match key {
         "vbs.memory_integrity" | "Memory integrity" => &MEMORY_INTEGRITY,
@@ -452,12 +473,23 @@ pub fn guide_not_offered(key: &str, detail: &str) -> Option<&'static Guide> {
         vbs::MEMORY_INTEGRITY if vbs::is_driver_reason(detail) => Some(&MEMORY_INTEGRITY),
         vbs::STACK_PROTECTION if detail == vbs::NEEDS_MEMORY_INTEGRITY => Some(&KERNEL_STACK),
         "debloat.widgets_policy" if detail == WIDGETS_YOURSELF => Some(&WIDGETS),
+        "linux.recent_files" if detail == secblitz::linux::person::UNAVAILABLE => {
+            Some(&RECENT_FILES)
+        }
+        "linux.lock_previews" if detail == secblitz::linux::person::UNAVAILABLE => {
+            Some(&LOCK_PREVIEWS)
+        }
         _ => None,
     }
 }
 
 /// how to reach it by hand.
 pub fn failure_text(lang: crate::i18n::Lang, page: Page) -> String {
+    if page == Page::PrivacySettings {
+        return lang
+            .t("We couldn't open {page}. Open your computer's Settings app and look for {page}.")
+            .replace("{page}", &lang.t(page.name()));
+    }
     lang.t("We couldn't open {page}. Press the Windows key, type {page} and press Enter.")
         .replace("{page}", &lang.t(page.name()))
 }
@@ -547,12 +579,53 @@ mod tests {
             keys.push(page.button());
         }
         keys.push("We couldn't open {page}. Press the Windows key, type {page} and press Enter.");
+        keys.push(
+            "We couldn't open {page}. Open your computer's Settings app and look for {page}.",
+        );
+        keys.extend(RECENT_FILES.steps);
+        keys.extend(LOCK_PREVIEWS.steps);
         // Product names stay as Microsoft spells them in every language.
         keys.retain(|k| !matches!(*k, "Windows Security" | "Windows Update" | "BitLocker"));
         for lang in [Lang::Es, Lang::Fr, Lang::De, Lang::Pt, Lang::It] {
             for key in &keys {
                 assert_ne!(lang.t(key), *key, "{}: {key}", lang.code());
             }
+        }
+    }
+
+    #[test]
+    fn the_privacy_steps_are_short_and_only_given_when_the_desktop_cannot_be_changed() {
+        let unavailable = secblitz::linux::person::UNAVAILABLE;
+        for (id, steps) in [
+            ("linux.recent_files", &RECENT_FILES),
+            ("linux.lock_previews", &LOCK_PREVIEWS),
+        ] {
+            let g = guide_not_offered(id, unavailable).unwrap();
+            assert_eq!(g, steps);
+            assert_eq!(g.page, Page::PrivacySettings);
+            assert!((2..=4).contains(&g.steps.len()));
+            for step in g.steps {
+                assert!(step.len() <= 130 && step.ends_with('.'), "{step}");
+                assert!(!step.contains('\u{2014}'), "{step}");
+            }
+            assert!(guide_not_offered(id, "").is_none());
+            assert!(guide_not_offered(id, "Eligible unmanaged local preference").is_none());
+        }
+        assert!(guide_not_offered("linux.firewall", unavailable).is_none());
+    }
+
+    #[test]
+    fn the_privacy_page_is_opened_with_words_that_fit_a_linux_desktop() {
+        let text = failure_text(Lang::En, Page::PrivacySettings);
+        assert_eq!(
+            text,
+            "We couldn't open Privacy settings. Open your computer's Settings app and look for Privacy settings."
+        );
+        assert!(!text.contains("Windows"));
+        for lang in [Lang::Es, Lang::Fr, Lang::De, Lang::Pt, Lang::It] {
+            let translated = failure_text(lang, Page::PrivacySettings);
+            assert_ne!(translated, text, "{}", lang.code());
+            assert!(!translated.contains('{'), "{translated}");
         }
     }
 

@@ -80,7 +80,6 @@ pub(super) fn repair(id: &str) -> Option<&'static str> {
             "It blocks connections that other computers start without being invited."
         }
         "linux.auto_updates" => "Security updates will install by themselves in the background.",
-        "linux.ssh_server" => "The remote sign-in service will be switched off.",
         "linux.ssh_password" => {
             "Remote sign-in will stop accepting passwords, including for the main administrator account."
         }
@@ -102,6 +101,7 @@ pub(super) fn repair(id: &str) -> Option<&'static str> {
 
 pub(super) fn consequence(id: &str) -> Option<&'static str> {
     Some(match id {
+        "linux.ssh_server" => "Nobody can sign in to this computer from another one. Do not choose this if you manage it from afar. You can undo this.",
         "linux.fedora_open_ports" => "A tool that must be reached from other computers may stop working until you allow it. You can undo this.",
         "linux.connectivity_check" => "Your computer stops contacting an outside address. Wi-Fi sign-in pages may no longer pop up by themselves.",
         "linux.wifi_mac" => "Each Wi-Fi network sees a made-up address. A network that knew your old one may ask you to sign in again.",
@@ -156,12 +156,23 @@ pub(super) fn finding_impact(title: &str) -> Option<&'static str> {
     })
 }
 
+/// The sentences the checks give when a setting cannot be offered. They are already plain, so the person reads them as they are.
 pub(super) fn not_offered(reason: &str) -> Option<&'static str> {
-    Some(match reason {
-        "Not offered: another program manages the firewall" => "Another program manages your firewall, so we leave it alone.",
-        "Not offered: the tool this setting needs is not installed on this computer" => "The tool this setting needs is not installed on this computer, so there is nothing to change.",
-        _ => return None,
-    })
+    use crate::linux::controls as c;
+    [
+        c::NO_FIREWALL,
+        c::FIREWALL_MASKED,
+        c::FIREWALL_UNREADABLE,
+        c::NO_AUTO_UPDATES,
+        c::NO_REMOTE_SIGN_IN,
+        c::REMOTE_SIGN_IN_OFF,
+        c::REMOTE_SIGN_IN_UNREADABLE,
+        c::NO_NETWORK_MANAGER,
+        c::UNRECOGNISED,
+        crate::linux::person::UNAVAILABLE,
+    ]
+    .into_iter()
+    .find(|sentence| *sentence == reason)
 }
 
 /// Words that mean nothing to someone who has just left Windows.
@@ -271,15 +282,32 @@ mod tests {
     }
 
     #[test]
-    fn the_new_not_offered_reasons_are_calm_facts() {
+    fn the_sentence_a_check_gives_for_a_setting_it_cannot_offer_is_what_the_person_reads() {
+        use crate::linux::controls as c;
         for reason in [
-            "Not offered: another program manages the firewall",
-            "Not offered: the tool this setting needs is not installed on this computer",
+            c::NO_FIREWALL,
+            c::FIREWALL_MASKED,
+            c::FIREWALL_UNREADABLE,
+            c::NO_AUTO_UPDATES,
+            c::NO_REMOTE_SIGN_IN,
+            c::REMOTE_SIGN_IN_OFF,
+            c::REMOTE_SIGN_IN_UNREADABLE,
+            c::NO_NETWORK_MANAGER,
+            c::UNRECOGNISED,
+            crate::linux::person::UNAVAILABLE,
         ] {
             let a = for_control("linux.firewall", &CheckStatus::Skipped, reason);
             assert_eq!(a.status, "Not offered", "{reason}");
+            assert_eq!(a.next, reason);
             assert_eq!(a.group, Group::Information);
             assert_ne!(a.step, NextStep::Repair);
+            assert_plain_words(a.next);
         }
+        let other = for_control(
+            "linux.firewall",
+            &CheckStatus::Skipped,
+            "Not offered: another program manages the firewall",
+        );
+        assert_ne!(other.status, "Not offered");
     }
 }

@@ -1,6 +1,7 @@
 //! The Secblitz window (iced, CPU renderer).
 #[cfg(test)]
 mod bench;
+mod hook;
 pub mod icons;
 pub mod pages;
 mod persist;
@@ -17,7 +18,8 @@ use iced::widget::{button, column, container, row, scrollable, stack, text};
 use iced::{keyboard, Alignment, Background, Border, Element, Length, Subscription, Task};
 use icons::Icon;
 use pages::{
-    app_access, debloat, fixes, fixflow, history, home, recovery, settings, tools, web, welcome,
+    app_access, debloat, fixes, fixflow, history, home, recovery, settings, tools, unavailable,
+    web, welcome,
 };
 use secblitz::engine::Report;
 use secblitz::model::CheckStatus;
@@ -341,6 +343,7 @@ pub struct App {
     pub settings: settings::State,
     pub app_access: app_access::State,
     privacy_shown: bool,
+    hook: hook::Hook,
     whats_new: bool,
     toast_gen: u32,
     toast_leaving: bool,
@@ -499,6 +502,7 @@ impl App {
             settings: Default::default(),
             app_access: Default::default(),
             privacy_shown: false,
+            hook: hook::Hook::from_env(),
             whats_new,
             toast_gen: 0,
             toast_leaving: false,
@@ -563,7 +567,7 @@ impl App {
         }
         let privacy = self.page == Page::Fixes
             && fixes::topic_on_show(&self.fixes) == Some(crate::app::topics::Topic::Privacy);
-        if privacy && !self.privacy_shown {
+        if privacy && !self.privacy_shown && fixes::app_access_applies() {
             task = Task::batch([
                 task,
                 app_access::on_enter(&mut self.app_access, &mut self.ctx),
@@ -575,6 +579,11 @@ impl App {
         if self.ctx.busy && !was_busy {
             self.ctx.forget_check();
         }
+        self.hook.after_update(
+            self.page,
+            self.ctx.checking.is_some(),
+            self.ctx.report.as_ref(),
+        );
         task
     }
 
@@ -1065,6 +1074,9 @@ impl App {
     }
 
     fn enter_page(&mut self, page: Page) -> Task<Message> {
+        if unavailable::applies(secblitz::os::Os::CURRENT, page) {
+            return Task::none();
+        }
         match page {
             Page::History => self.revisit(WARM_HISTORY),
             Page::Debloat => self.revisit(WARM_DEBLOAT),
@@ -1086,6 +1098,9 @@ impl App {
     }
 
     fn warm(&mut self, which: usize) -> Task<Message> {
+        if which == WARM_DEBLOAT && unavailable::applies(secblitz::os::Os::CURRENT, Page::Debloat) {
+            return Task::none();
+        }
         if self.flight[which] {
             return Task::none();
         }
@@ -1198,7 +1213,9 @@ impl App {
         if let Some(state) = &self.welcome {
             return welcome::view(state, &self.ctx);
         }
+        let gone = unavailable::applies(secblitz::os::Os::CURRENT, self.page);
         let content: Element<'_, Message> = match self.page {
+            _ if gone => unavailable::view(&self.ctx, self.page),
             Page::Home => home::view(&self.home, &self.ctx),
             Page::Fixes => fixes::view(&self.fixes, &self.ctx, &self.app_access),
             Page::Debloat => debloat::view(&self.debloat, &self.ctx),
@@ -1226,7 +1243,7 @@ impl App {
             p.bg,
         );
         let footer = match self.page {
-            Page::Debloat => debloat::footer(&self.debloat, &self.ctx),
+            Page::Debloat if !gone => debloat::footer(&self.debloat, &self.ctx),
             _ => None,
         };
         let footer_bar: Element<'_, Message> = match footer {
@@ -1276,6 +1293,7 @@ impl App {
         let body: Element<'_, Message> = row![self.sidebar(), main].into();
         let none = || -> Element<'_, Message> { iced::widget::space().into() };
         let modal = match self.page {
+            _ if gone => None,
             Page::Debloat => debloat::modal(&self.debloat, &self.ctx),
             Page::Tools => tools::modal(&self.tools, &self.ctx),
             Page::Settings => settings::modal(&self.settings, &self.ctx),

@@ -3,6 +3,7 @@ use crate::app::remote::Request;
 
 pub const CHECK: &str = "org.secblitz.check";
 pub const CHANGE: &str = "org.secblitz.change";
+pub const REMOVE: &str = "org.secblitz.remove";
 
 pub const NOT_ALLOWED: &str = "Secblitz needs your password to change this.";
 
@@ -10,6 +11,7 @@ pub const NOT_ALLOWED: &str = "Secblitz needs your password to change this.";
 pub enum Action {
     Check,
     Change,
+    Remove,
 }
 
 impl Action {
@@ -17,6 +19,7 @@ impl Action {
         match self {
             Action::Check => CHECK,
             Action::Change => CHANGE,
+            Action::Remove => REMOVE,
         }
     }
 }
@@ -34,6 +37,7 @@ pub fn action_for(request: &Request) -> Action {
         | Request::UndoSelected { .. }
         | Request::ChooseItems { .. }
         | Request::StartFresh => Action::Change,
+        Request::RemoveSelf => Action::Remove,
     }
 }
 
@@ -212,6 +216,8 @@ mod tests {
         ] {
             assert_eq!(action_for(&request), Action::Change, "{request:?}");
         }
+        assert_eq!(action_for(&Request::RemoveSelf), Action::Remove);
+        assert_eq!(Action::Remove.id(), "org.secblitz.remove");
         assert_eq!(Action::Check.id(), "org.secblitz.check");
         assert_eq!(Action::Change.id(), "org.secblitz.change");
     }
