@@ -85,6 +85,34 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: cargo clippy --locked --all-targets --target $env:TARGET -- -D warnings
 
+  rust-linux:
+    name: Rust tests and lints (Linux x64)
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned Rust toolchain
+        run: |
+          set -euo pipefail
+          # The version lives in rust-toolchain.toml only.
+          channel=$(sed -n 's/^channel *= *"\([^"]*\)".*/\1/p' rust-toolchain.toml)
+          rustup toolchain install "$channel" --profile minimal --component clippy --component rustfmt
+          rustc --version --verbose
+      - name: Cache cargo downloads and build output
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Format
+        run: cargo fmt --check
+      - name: Tests
+        run: cargo test --locked --all-targets
+      - name: Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+
   scripts:
     name: Locales, release tools, version bump and website tests
     runs-on: ubuntu-latest
