@@ -12,6 +12,7 @@ pub const ADMIN_WITHOUT_PASSWORD: &str = "Linux admin rights without a password"
 pub const UNCHECKED_SOURCES: &str = "Linux software sources without checks";
 pub const SECURITY_SUPPORT: &str = "Linux security support";
 pub const HARDWARE_UPDATES: &str = "Linux hardware updates";
+pub const EXTRA_ADMIN_ACCOUNTS: &str = "Linux extra all-powerful accounts";
 
 pub(super) fn label(id: &str) -> Option<&'static str> {
     Some(match id {
@@ -49,6 +50,15 @@ pub(super) fn label(id: &str) -> Option<&'static str> {
         "linux.home_private" => "Privacy of your home folder",
         "linux.browser_data_collection" => "Browser usage data",
         "linux.browser_https_only" => "Secure connections only",
+        "linux.memory_shuffle" => "Memory layout",
+        "linux.bpf_hardening" => "Small programs inside the system",
+        "linux.terminal_drivers" => "Old terminal drivers",
+        "linux.crash_memory" => "Memory of crashed programs",
+        "linux.crash_files" => "Saved crash files",
+        "linux.rare_protocols" => "Rarely used network protocols",
+        "linux.app_sandbox_limits" => "Private boxes for apps",
+        "linux.processor_updates" => "Processor updates",
+        "linux.root_account" => "Main administrator account",
         _ => return None,
     })
 }
@@ -129,6 +139,27 @@ pub(super) fn impact(id: &str) -> Option<&'static str> {
         "linux.browser_https_only" => {
             "Someone on the same network reading or changing a page that is not protected"
         }
+        "linux.memory_shuffle" => {
+            "A harmful program finding what it wants to attack in memory far more easily"
+        }
+        "linux.bpf_hardening" => {
+            "A harmful program using the system's inner workings to gain more control than it should have"
+        }
+        "linux.terminal_drivers" => {
+            "A harmful program loading an old, flawed driver to take over your computer"
+        }
+        "linux.crash_memory" => "Secrets from a crashed program being left in a file on your disk",
+        "linux.crash_files" => "Passwords and private text from a crashed program staying on your disk",
+        "linux.rare_protocols" => {
+            "A flaw in a network feature you never use being used to attack your computer"
+        }
+        "linux.app_sandbox_limits" => {
+            "A harmful app using a private box to get around the limits placed on it"
+        }
+        "linux.processor_updates" => "Known flaws in your processor staying open",
+        "linux.root_account" => {
+            "Someone guessing the password of the account that can change everything"
+        }
         _ => return None,
     })
 }
@@ -181,6 +212,30 @@ pub(super) fn repair(id: &str) -> Option<&'static str> {
         "linux.browser_data_collection" => {
             "Your browsers will stop sending usage data to the companies that make them."
         }
+        "linux.memory_shuffle" => {
+            "The system will place each program's memory in a different spot every time. No restart is needed."
+        }
+        "linux.bpf_hardening" => {
+            "Small programs inside the system will be guarded better, and ordinary users stay unable to add their own. No restart is needed."
+        }
+        "linux.terminal_drivers" => {
+            "Old terminal drivers will only load when an administrator asks. No restart is needed."
+        }
+        "linux.crash_memory" => {
+            "Programs that run with extra rights will no longer leave a copy of their memory when they crash. No restart is needed."
+        }
+        "linux.crash_files" => {
+            "The memory of a crashed program will no longer be saved on your disk. Files saved earlier stay where they are."
+        }
+        "linux.rare_protocols" => {
+            "Rarely used network protocols will no longer load by themselves. Nothing that is running is stopped."
+        }
+        "linux.app_sandbox_limits" => {
+            "Apps will need permission to make a private box for themselves. No restart is needed."
+        }
+        "linux.processor_updates" => {
+            "The processor update will be installed from your software sources. It starts working the next time your computer starts, and we never restart it for you. Other software is not changed."
+        }
         _ => return None,
     })
 }
@@ -195,6 +250,7 @@ pub(super) fn consequence(id: &str) -> Option<&'static str> {
         "linux.app_usage" => "Your computer stops keeping track of which apps you use most. Search may list apps in a different order. You can undo this.",
         "linux.old_files" => "Files in the Trash for over 30 days, and old temporary files, are deleted for good. Undo cannot bring them back.",
         "linux.browser_https_only" => "Firefox warns you before opening a page that is not protected. You can still open it. You can undo this.",
+        "linux.root_account" => "The main administrator account can no longer sign in with a password. Other administrators still can. You can undo this.",
         _ => return None,
     })
 }
@@ -251,6 +307,11 @@ pub(super) fn finding(title: &str) -> Option<(&'static str, &'static str, NextSt
             "Open your software app and install the updates for your computer's parts.",
             NextStep::None,
         ),
+        EXTRA_ADMIN_ACCOUNTS => (
+            "Extra accounts with full control",
+            "Ask whoever set up this computer why the extra account is there. If it is not needed, it should be removed.",
+            NextStep::ReviewWithAdministrator,
+        ),
         _ => return None,
     })
 }
@@ -273,6 +334,9 @@ pub(super) fn finding_impact(title: &str) -> Option<&'static str> {
         UNCHECKED_SOURCES => "Tampered software being installed on your computer",
         SECURITY_SUPPORT => "New security holes never being fixed on your computer",
         HARDWARE_UPDATES => "Known weak spots staying open in your computer's parts",
+        EXTRA_ADMIN_ACCOUNTS => {
+            "A hidden account changing anything on your computer without limits"
+        }
         _ => return None,
     })
 }
@@ -297,6 +361,8 @@ pub(super) fn not_offered(reason: &str) -> Option<&'static str> {
         c::UNRECOGNISED,
         c::browsers::NO_BROWSER,
         c::browsers::NO_FIREFOX,
+        c::hardening::CRASH_REPORTS_NEED_IT,
+        c::hardening::NO_OTHER_ADMIN,
         crate::linux::person::UNAVAILABLE,
     ]
     .into_iter()
@@ -405,6 +471,7 @@ mod tests {
             UNCHECKED_SOURCES,
             SECURITY_SUPPORT,
             HARDWARE_UPDATES,
+            EXTRA_ADMIN_ACCOUNTS,
         ] {
             let a = for_finding(title, &CheckStatus::Attention, "");
             assert_ne!(a.label, "Protection check", "{title}");

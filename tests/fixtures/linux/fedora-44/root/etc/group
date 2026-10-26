@@ -1,0 +1,5 @@
+root:x:0:
+bin:x:1:
+daemon:x:2:
+wheel:x:10:tester
+tester:x:1000:

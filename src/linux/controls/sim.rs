@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+mod hardening;
 mod services;
 
 #[derive(Default)]
@@ -481,6 +482,9 @@ impl Sim {
     }
 
     fn dispatch(&self, program: &str, args: &[&str]) -> Result<Output> {
+        if let Some(done) = hardening::dispatch(self, program, args) {
+            return done;
+        }
         if let Some(done) = services::dispatch(self, program, args) {
             return done;
         }
@@ -636,6 +640,12 @@ impl Sys for Sim {
     }
 
     fn read(&self, path: &Path) -> Result<Option<Vec<u8>>> {
+        if path
+            .to_str()
+            .is_some_and(|p| self.kv.borrow().contains_key(&format!("link:{p}")))
+        {
+            bail!("{} is a link", path.display());
+        }
         Ok(self.files.borrow().get(path).cloned())
     }
 

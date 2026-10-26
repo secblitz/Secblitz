@@ -5,6 +5,7 @@ pub mod accounts;
 pub mod browsers;
 pub mod findings;
 pub mod firewall;
+pub mod hardening;
 pub mod ini;
 pub mod kernel;
 pub mod network;

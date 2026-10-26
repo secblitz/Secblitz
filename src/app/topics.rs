@@ -67,7 +67,8 @@ impl Topic {
                 | "linux.file_sharing"
                 | "linux.remote_desktop"
                 | "linux.network_redirects"
-                | "linux.llmnr",
+                | "linux.llmnr"
+                | "linux.rare_protocols",
             ) => Topic::Network,
             (
                 "linux",
@@ -75,7 +76,8 @@ impl Topic {
                 | "linux.guest"
                 | "linux.screen_lock"
                 | "linux.media_autorun"
-                | "linux.home_private",
+                | "linux.home_private"
+                | "linux.root_account",
             ) => Topic::SignIn,
             ("linux", "linux.browser_data_collection" | "linux.browser_https_only") => {
                 Topic::Browsers
@@ -92,10 +94,20 @@ impl Topic {
                 | "linux.location"
                 | "linux.problem_reports"
                 | "linux.app_usage"
-                | "linux.old_files",
+                | "linux.old_files"
+                | "linux.crash_files",
             ) => Topic::Privacy,
             ("linux", "linux.printer_sharing" | "linux.printer_discovery") => Topic::Network,
             ("linux", "linux.ubuntu_news") => Topic::Privacy,
+            (
+                "linux",
+                "linux.memory_shuffle"
+                | "linux.bpf_hardening"
+                | "linux.terminal_drivers"
+                | "linux.crash_memory"
+                | "linux.app_sandbox_limits"
+                | "linux.processor_updates",
+            ) => Topic::Windows,
             _ => Topic::Windows,
         }
     }
@@ -108,7 +120,8 @@ impl Topic {
             "Security providers" | "Defender" | "SmartScreen" => Topic::Threats,
             "Windows Firewall" => Topic::Network,
             secblitz::advice::ACCOUNTS_WITHOUT_PASSWORD
-            | secblitz::advice::ADMIN_WITHOUT_PASSWORD => Topic::SignIn,
+            | secblitz::advice::ADMIN_WITHOUT_PASSWORD
+            | secblitz::advice::EXTRA_ADMIN_ACCOUNTS => Topic::SignIn,
             _ if title.starts_with("asr.") || title.starts_with("cfa.") => Topic::Threats,
             _ if title.starts_with("dns.") => Topic::Network,
             _ => Topic::of(title),
@@ -346,6 +359,15 @@ mod tests {
             ("linux.home_private", SignIn),
             ("linux.browser_data_collection", Browsers),
             ("linux.browser_https_only", Browsers),
+            ("linux.memory_shuffle", Windows),
+            ("linux.bpf_hardening", Windows),
+            ("linux.terminal_drivers", Windows),
+            ("linux.crash_memory", Windows),
+            ("linux.crash_files", Privacy),
+            ("linux.rare_protocols", Network),
+            ("linux.app_sandbox_limits", Windows),
+            ("linux.processor_updates", Windows),
+            ("linux.root_account", SignIn),
         ];
         for (id, topic) in expected {
             assert_eq!(Topic::of(id), *topic, "{id}");
@@ -373,6 +395,7 @@ mod tests {
         for title in [
             secblitz::advice::ACCOUNTS_WITHOUT_PASSWORD,
             secblitz::advice::ADMIN_WITHOUT_PASSWORD,
+            secblitz::advice::EXTRA_ADMIN_ACCOUNTS,
         ] {
             assert_eq!(Topic::of_finding(title), SignIn, "{title}");
         }

@@ -17,3 +17,4 @@
 /etc/opt/chrome
 /etc/chromium
 /usr/lib/NetworkManager/conf.d
+/etc/modprobe.d
