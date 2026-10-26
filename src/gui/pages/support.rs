@@ -13,7 +13,7 @@ type El<'a> = Element<'a, Message>;
 pub const QUESTIONS: [(&str, &str); 8] = [
     (
         "What does Secblitz do?",
-        "Secblitz checks the security and privacy settings of your computer and your web browsers. It shows what could be safer and fixes it when you say yes. It can also remove apps you don't want and block dangerous websites.",
+        crate::app::os_text::HELP_WHAT_IT_DOES,
     ),
     (
         "Will Secblitz change anything without asking?",
@@ -25,7 +25,7 @@ pub const QUESTIONS: [(&str, &str); 8] = [
     ),
     (
         "How do I bring back an app I removed?",
-        "Open Clean up apps, then the Removed apps tab, and choose Restore next to the app. If Secblitz didn't keep a copy, it gets the app from the Microsoft Store, which needs an internet connection.",
+        crate::app::os_text::HELP_BRING_BACK,
     ),
     (
         "A website won't open. What can I do?",
@@ -46,7 +46,7 @@ pub const QUESTIONS: [(&str, &str); 8] = [
 ];
 
 const GOES_IN: [&str; 6] = [
-    "Your Secblitz and Windows versions and a few settings",
+    crate::app::os_text::HELP_VERSIONS,
     "Which checks passed and which need attention",
     "How many changes Secblitz made, and when",
     "Which apps Secblitz removed",
@@ -251,7 +251,7 @@ pub fn questions<'a>(state: &State, ctx: &'a Ctx) -> El<'a> {
                 None,
                 state.is_open(i),
                 wrap(Msg::Toggle(i)),
-                container(widgets::muted(p, ctx.t(answer)))
+                container(widgets::muted(p, ctx.t(crate::app::os_text::here(answer))))
                     .padding([theme::S2, theme::S4 + theme::ICON_ROW + theme::S4]),
             )
         })
@@ -314,7 +314,7 @@ pub fn modal<'a>(state: &State, ctx: &'a Ctx, clock: &anim::Clock) -> Option<El<
         Sheet::Ask => {
             let goes_in = GOES_IN
                 .iter()
-                .map(|s| marked(p, Icon::Check, p.good, ctx.t(s)))
+                .map(|s| marked(p, Icon::Check, p.good, ctx.t(crate::app::os_text::here(s))))
                 .collect();
             let never = NEVER_IN
                 .iter()

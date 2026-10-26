@@ -134,7 +134,7 @@ pub const NOTICE_DISK_FULL: &str =
     "Your disk is full, so fixes will wait. Free up some space, then check again.";
 
 pub const FAILURE_GENERAL: &str = "Something went wrong, so Secblitz stopped. Close Secblitz and open it again. If it keeps happening, restart your computer or check for a Secblitz update.";
-pub const COULDNT_READ: &str = "We couldn't read this from Windows. Check again in a moment. If it keeps happening, restart your computer.";
+pub const COULDNT_READ: &str = crate::app::os_text::COULDNT_READ;
 pub const NOT_DONE: &str = "This change did not go through. Restart your computer, then try again.";
 
 pub fn plain_failure(raw: &str) -> &'static str {
@@ -156,7 +156,7 @@ pub fn plain_failure(raw: &str) -> &'static str {
     } else if r.contains("administrator") || r.contains("elevat") || r.contains("split-token") {
         "Secblitz needs an account that can make changes to this computer. Sign in with one, then open Secblitz again."
     } else if r.contains("could not be read") || r.contains("could not be collected") {
-        COULDNT_READ
+        crate::app::os_text::here(COULDNT_READ)
     } else if r.contains("engine stopped") {
         "Secblitz stopped unexpectedly. Close it and open it again."
     } else if r.contains("select at least one") {
@@ -192,7 +192,9 @@ pub fn repairs_blocked(report: &Report) -> Option<&'static str> {
 
 pub fn plain_detail(status: &CheckStatus, a: &advice::Advice) -> (&'static str, &'static str) {
     match status {
-        CheckStatus::Unknown | CheckStatus::Error => ("Couldn't check", COULDNT_READ),
+        CheckStatus::Unknown | CheckStatus::Error => {
+            ("Couldn't check", crate::app::os_text::here(COULDNT_READ))
+        }
         CheckStatus::Skipped if a.status == "Needs your choice" => ("Left as it is", REASON_KEPT),
         CheckStatus::Applied
         | CheckStatus::Unchanged

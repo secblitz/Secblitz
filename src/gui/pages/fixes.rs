@@ -2113,7 +2113,9 @@ fn topic_groups<'a>(
         groups.push(widgets::group(
             p,
             ctx.t("Worth a look"),
-            Some(ctx.t("You do these in Windows itself. We show the steps.")),
+            Some(ctx.t(crate::app::os_text::here(
+                crate::app::os_text::WORTH_A_LOOK_NOTE,
+            ))),
             None,
             look.iter().map(|o| other_row(ctx, o)).collect(),
         ));

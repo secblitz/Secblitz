@@ -172,7 +172,7 @@ pub fn view<'a>(state: &State, ctx: &Ctx) -> Element<'a, Message> {
     let button = |kind, label: &str, msg| widgets::action(p, kind, ctx.t(label), None, Some(msg));
     let mut words = column![
         widgets::h1(p, ctx.t(title)),
-        widgets::muted_centred(p, ctx.t(text)),
+        widgets::muted_centred(p, ctx.t(crate::app::os_text::here(text))),
     ]
     .spacing(theme::S2)
     .align_x(Alignment::Center);
