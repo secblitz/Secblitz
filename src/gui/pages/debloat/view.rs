@@ -641,7 +641,7 @@ fn review_sheet<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
         match (cfg!(windows), n == 1) {
             (true, true) => ctx.t("Secblitz keeps a copy, so you can bring it back any time from the Removed apps tab, even without internet."),
             (true, false) => ctx.t("Secblitz keeps a copy, so you can bring them back any time from the Removed apps tab, even without internet."),
-            (false, true) => ctx.t("You can install it again later from your software app. That needs the internet."),
+            (false, true) => ctx.t("You can install it again later from Removed apps. That needs the internet."),
             (false, false) => ctx.t("You can install them again later from Removed apps. That needs the internet."),
         },
     ));

@@ -209,7 +209,9 @@ mod tests {
             "Trash",
             "Remote control apps",
             "Your computer will ask for your password first.",
-            "You can install it again later from your software app. That needs the internet.",
+            "You can install it again later from Removed apps. That needs the internet.",
+            "You can install them again later from Removed apps. That needs the internet.",
+            "Install again",
         ] {
             assert!(
                 maintenance_rows().any(|r| r[0] == key) || text_rows().any(|r| r[0] == key),
