@@ -10,6 +10,7 @@ mod guided;
 mod interface;
 mod italian;
 mod linux;
+mod linux_cleanup;
 mod maintenance;
 mod results;
 
@@ -141,6 +142,7 @@ const MAINTENANCE_PARTS: &[&[[&str; 6]]] = &[
     results::ROWS,
     guided::ROWS,
     linux::ROWS,
+    linux_cleanup::ROWS,
 ];
 
 const TEXT_PARTS: &[&[[&str; 5]]] = &[
@@ -179,6 +181,26 @@ mod tests {
                 assert_eq!(lang.t(row[0]), row[lang as usize]);
                 assert_eq!(lang.detail(row[0]), row[lang as usize]);
             }
+        }
+    }
+
+    #[test]
+    fn the_linux_clean_up_texts_are_translated() {
+        for key in [
+            "Downloaded install files",
+            "Old crash reports",
+            "Unused app parts",
+            "Trash",
+            "Remote control apps",
+            "Your computer will ask for your password first.",
+            "You can install it again later from your software app. That needs the internet.",
+        ] {
+            assert!(
+                maintenance_rows().any(|r| r[0] == key) || text_rows().any(|r| r[0] == key),
+                "missing translations for {key}"
+            );
+            assert_ne!(Lang::Es.t(key), key, "{key}");
+            assert_ne!(Lang::De.t(key), key, "{key}");
         }
     }
 

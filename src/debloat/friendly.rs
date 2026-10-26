@@ -1,6 +1,9 @@
 //! Plain-words explanations for the raw reasons the app clean-up records.
 
 pub fn removal_failure(raw: &str) -> &'static str {
+    if let Some(plain) = super::linux::plain(raw) {
+        return plain;
+    }
     let r = raw.to_lowercase();
     let has = |words: &[&str]| words.iter().any(|w| r.contains(w));
     if has(&["still installed"]) {
@@ -50,6 +53,9 @@ pub fn no_copy(raw: &str) -> &'static str {
 }
 
 pub fn run_failure(raw: &str) -> &'static str {
+    if let Some(plain) = super::linux::plain(raw) {
+        return plain;
+    }
     let r = raw.to_lowercase();
     if r.contains("took too long") {
         "Windows took too long to answer. Restart your computer and try again."
@@ -61,6 +67,9 @@ pub fn run_failure(raw: &str) -> &'static str {
 }
 
 pub fn removal_run_failure(raw: &str) -> &'static str {
+    if let Some(plain) = super::linux::plain(raw) {
+        return plain;
+    }
     let r = raw.to_lowercase();
     if r.contains("took too long") {
         "Windows took too long to answer. Restart your computer and try again."
@@ -105,6 +114,16 @@ mod tests {
         ] {
             assert!(!out.contains("Only available"));
             assert!(out.contains("Restart your computer"));
+        }
+    }
+
+    #[test]
+    fn linux_sentences_are_shown_as_they_are() {
+        use super::super::linux;
+        for sentence in linux::SENTENCES {
+            assert_eq!(removal_failure(sentence), sentence);
+            assert_eq!(run_failure(sentence), sentence);
+            assert_eq!(removal_run_failure(sentence), sentence);
         }
     }
 
