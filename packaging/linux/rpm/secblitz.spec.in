@@ -8,6 +8,7 @@ BuildArch:      @ARCH@
 Requires:       polkit
 Requires:       dbus-common
 Requires:       systemd
+Recommends:     dconf
 %global debug_package %{nil}
 %global _build_id_links none
 %global __strip /bin/true

@@ -35,7 +35,7 @@ APP_ID = "org.secblitz.Secblitz"
 RPM_IMAGE = "fedora:44"
 BUILD_IMAGE = "debian:12"
 DEB_DEPENDS = "libc6 (>= 2.36), dbus, polkitd | policykit-1, systemd"
-DEB_RECOMMENDS = "hicolor-icon-theme, libxkbcommon0, libwayland-client0, libvulkan1, fontconfig"
+DEB_RECOMMENDS = "dconf-cli, hicolor-icon-theme, libxkbcommon0, libwayland-client0, libvulkan1, fontconfig"
 DESCRIPTION = "Check your computer's security and privacy and fix what you approve"
 LONG_DESCRIPTION = [
     "Secblitz looks at your computer's security and privacy settings and tells you",

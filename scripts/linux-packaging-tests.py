@@ -100,6 +100,10 @@ class StaticFiles(unittest.TestCase):
         self.assertEqual(timer["Timer"]["OnCalendar"], "daily")
         self.assertEqual(timer["Install"]["WantedBy"], "timers.target")
 
+    def test_rpm_recommends_dconf_for_the_person_settings(self):
+        spec = (PKG / "rpm" / "secblitz.spec.in").read_text(encoding="utf-8")
+        self.assertRegex(spec, r"(?m)^Recommends:\s+dconf$")
+
     def test_dbus_activation(self):
         service = ini_like(PKG / "dbus" / "org.secblitz.Helper1.service")
         self.assertEqual(service["Name"], "org.secblitz.Helper1")
@@ -284,6 +288,7 @@ class DebStructure(unittest.TestCase):
         self.assertIn("Architecture: amd64", control)
         self.assertIn("libc6 (>= 2.36)", control)
         self.assertIn("polkitd | policykit-1", control)
+        self.assertRegex(control, r"Recommends: [^\n]*\bdconf-cli\b")
 
     def test_keyring_is_the_public_key_only(self):
         with tempfile.TemporaryDirectory() as out:
