@@ -1,5 +1,6 @@
 //! The Free up space tab: measures four kinds of leftover files and removes the ones the person ticks.
 use super::ads::Cell;
+use super::system;
 use crate::broker::{Reply, Request, SpaceOp};
 use crate::gui::icons::Icon;
 use crate::gui::theme::{self, Tone};
@@ -13,7 +14,7 @@ use std::time::Instant;
 
 type El<'a> = Element<'a, Message>;
 
-const COUNT: usize = Item::ALL.len();
+const COUNT: usize = Item::EVERY.len();
 const STORAGE: Setting = Setting::StorageSense;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,6 +47,7 @@ enum Sheet {
 
 #[derive(Debug, Default)]
 struct Run {
+    machine_waiting: bool,
     pending: u8,
     total: Tally,
     item_failed: bool,
@@ -64,6 +66,8 @@ pub struct State {
     generation: u32,
     sheet: Sheet,
     run: Run,
+    /// What the helper has finished cleaning for items that are not the one being shown yet.
+    stash: Vec<(Item, Result<Tally, String>)>,
     storage: Cell,
     spin: anim::Clock,
     now: Instant,
@@ -80,6 +84,7 @@ impl Default for State {
             generation: 0,
             sheet: Sheet::None,
             run: Run::default(),
+            stash: Vec::new(),
             storage: Cell::Idle,
             spin: anim::Clock::new(),
             now: Instant::now(),
@@ -95,6 +100,8 @@ pub enum Msg {
     Cancel,
     Confirm,
     Cleaned(Item, Result<Tally, String>),
+    /// The helper's answer for an item, which may arrive before that item's turn.
+    MachineCleaned(Item, Result<Tally, String>),
     CloseResult,
     StorageReported(Result<Reply, String>),
     StorageToggle(bool),
@@ -106,7 +113,7 @@ fn wrap(msg: Msg) -> Message {
 }
 
 fn slot(item: Item) -> usize {
-    Item::ALL.iter().position(|i| *i == item).unwrap_or(0)
+    Item::EVERY.iter().position(|i| *i == item).unwrap_or(0)
 }
 
 fn user_area(item: Item) -> Option<UserArea> {
@@ -114,12 +121,33 @@ fn user_area(item: Item) -> Option<UserArea> {
         Item::Temp => Some(UserArea::Temp),
         Item::CrashDumps => Some(UserArea::CrashDumps),
         Item::Thumbnails => Some(UserArea::Thumbnails),
-        Item::UpdateLeftovers => None,
+        Item::ThumbnailCache => Some(UserArea::ThumbnailCache),
+        Item::FlatpakRuntimes => Some(UserArea::FlatpakUser),
+        Item::Trash => Some(UserArea::Trash),
+        Item::UpdateLeftovers | Item::PackageCaches | Item::CrashReports => None,
     }
 }
 
 fn has_machine_part(item: Item) -> bool {
-    item != Item::Thumbnails
+    !matches!(item, Item::Thumbnails | Item::ThumbnailCache | Item::Trash)
+}
+
+/// Whether the person's own folders can be handled right now: through the Windows helper, or directly on Linux.
+fn person_ready(ctx: &Ctx) -> bool {
+    if cfg!(windows) {
+        ctx.helper == Helper::Ready
+    } else {
+        system::person_ready()
+    }
+}
+
+/// Why the person's own folders cannot be handled, which only the Windows helper can say.
+fn blocker(ctx: &Ctx) -> Option<&'static str> {
+    if cfg!(windows) {
+        ctx.helper.blocker()
+    } else {
+        None
+    }
 }
 
 fn parts(item: Item, helper_ready: bool) -> u8 {
@@ -157,7 +185,7 @@ impl State {
     }
 
     fn selected_bytes(&self) -> u64 {
-        Item::ALL
+        Item::EVERY
             .iter()
             .filter(|i| self.ticked[slot(**i)])
             .map(|i| match self.sizes[slot(*i)] {
@@ -168,7 +196,7 @@ impl State {
     }
 
     fn selected(&self) -> Vec<Item> {
-        Item::ALL
+        Item::EVERY
             .into_iter()
             .filter(|i| self.ticked[slot(*i)])
             .collect()
@@ -204,12 +232,30 @@ fn user_result(result: Result<(Reply, Tally), String>) -> Result<Tally, String> 
     }
 }
 
+/// Starts the machine-wide part of `item`. On Windows that runs here; elsewhere it joins the one request made to the helper.
+fn machine_measure(
+    item: Item,
+    generation: u32,
+    helper: &mut Vec<Item>,
+    tasks: &mut Vec<Task<Message>>,
+) {
+    if cfg!(windows) {
+        tasks.push(Task::perform(
+            blocking(move || Ok(secblitz::space::measure_machine(item))),
+            move |r| wrap(Msg::Measured(generation, item, r)),
+        ));
+    } else {
+        helper.push(item);
+    }
+}
+
 fn measure_all(state: &mut State, ctx: &Ctx) -> Task<Message> {
     state.generation = state.generation.wrapping_add(1);
     let generation = state.generation;
-    let ready = ctx.helper == Helper::Ready;
+    let ready = person_ready(ctx);
     let mut tasks = Vec::new();
-    for item in Item::ALL {
+    let mut helper = Vec::new();
+    for &item in Item::here() {
         let i = slot(item);
         state.pending[i] = parts(item, ready);
         state.found[i] = Tally::default();
@@ -223,18 +269,40 @@ fn measure_all(state: &mut State, ctx: &Ctx) -> Task<Message> {
             state.ticked[i] = false;
         }
         if has_machine_part(item) {
-            tasks.push(Task::perform(
-                blocking(move || Ok(secblitz::space::measure_machine(item))),
-                move |r| wrap(Msg::Measured(generation, item, r)),
-            ));
+            machine_measure(item, generation, &mut helper, &mut tasks);
         }
         if let (true, Some(area)) = (ready, user_area(item)) {
-            tasks.push(ctx.space_task(area, SpaceOp::Measure, move |r| {
-                wrap(Msg::Measured(generation, item, user_result(r)))
+            tasks.push(person_task(ctx, area, false, move |r| {
+                wrap(Msg::Measured(generation, item, r))
             }));
         }
     }
+    if !helper.is_empty() {
+        tasks.push(Task::run(
+            system::machine(helper, false),
+            move |(item, r)| wrap(Msg::Measured(generation, item, r)),
+        ));
+    }
     Task::batch(tasks)
+}
+
+/// Measures or cleans the person's own part of an item: through the Windows helper, or directly on Linux.
+fn person_task(
+    ctx: &Ctx,
+    area: UserArea,
+    clean: bool,
+    map: impl Fn(Result<Tally, String>) -> Message + Send + 'static,
+) -> Task<Message> {
+    if cfg!(windows) {
+        let op = if clean {
+            SpaceOp::Clean
+        } else {
+            SpaceOp::Measure
+        };
+        ctx.space_task(area, op, move |r| map(user_result(r)))
+    } else {
+        Task::perform(blocking(move || system::person(area, clean)), map)
+    }
 }
 
 fn storage_query(ctx: &Ctx) -> Task<Message> {
@@ -249,7 +317,10 @@ pub fn load(state: &mut State, ctx: &Ctx) -> Task<Message> {
         return Task::none();
     }
     let mut tasks = vec![measure_all(state, ctx)];
-    if ctx.helper == Helper::Ready && !matches!(state.storage, Cell::Working | Cell::Loading) {
+    if cfg!(windows)
+        && ctx.helper == Helper::Ready
+        && !matches!(state.storage, Cell::Working | Cell::Loading)
+    {
         state.storage = Cell::Loading;
         tasks.push(storage_query(ctx));
     }
@@ -295,9 +366,10 @@ fn start_next(state: &mut State, ctx: &mut Ctx) -> Task<Message> {
         };
         let item = *item;
         *step = Step::Working;
-        let ready = ctx.helper == Helper::Ready;
+        let ready = person_ready(ctx);
         state.run.pending = parts(item, ready);
         state.run.item_failed = false;
+        state.run.machine_waiting = false;
         if state.run.pending == 0 {
             state.run.item_failed = true;
             end_item(state, item);
@@ -305,16 +377,23 @@ fn start_next(state: &mut State, ctx: &mut Ctx) -> Task<Message> {
         }
         let mut tasks = Vec::new();
         if has_machine_part(item) {
-            tasks.push(Task::perform(
-                blocking(move || {
-                    secblitz::space::clean_machine(item).map_err(|e| format!("{e:#}"))
-                }),
-                move |r| wrap(Msg::Cleaned(item, r)),
-            ));
+            if cfg!(windows) {
+                tasks.push(Task::perform(
+                    blocking(move || {
+                        secblitz::space::clean_machine(item).map_err(|e| format!("{e:#}"))
+                    }),
+                    move |r| wrap(Msg::Cleaned(item, r)),
+                ));
+            } else if let Some(at) = state.stash.iter().position(|(i, _)| *i == item) {
+                let (_, result) = state.stash.remove(at);
+                tasks.push(Task::done(wrap(Msg::Cleaned(item, result))));
+            } else {
+                state.run.machine_waiting = true;
+            }
         }
         if let (true, Some(area)) = (ready, user_area(item)) {
-            tasks.push(ctx.space_task(area, SpaceOp::Clean, move |r| {
-                wrap(Msg::Cleaned(item, user_result(r)))
+            tasks.push(person_task(ctx, area, true, move |r| {
+                wrap(Msg::Cleaned(item, r))
             }));
         }
         return Task::batch(tasks);
@@ -361,6 +440,30 @@ fn record_history(ctx: &Ctx, bytes: u64) {
             },
         );
     }
+}
+
+fn apply_cleaned(
+    state: &mut State,
+    ctx: &mut Ctx,
+    item: Item,
+    result: Result<Tally, String>,
+) -> Task<Message> {
+    let current = match &state.sheet {
+        Sheet::Working(items) => items
+            .iter()
+            .any(|(i, step)| *i == item && *step == Step::Working),
+        _ => false,
+    };
+    if !current || state.run.pending == 0 {
+        return Task::none();
+    }
+    state.run.pending -= 1;
+    count_result(&mut state.run, item, result);
+    if state.run.pending > 0 {
+        return Task::none();
+    }
+    end_item(state, item);
+    start_next(state, ctx)
 }
 
 pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
@@ -414,27 +517,38 @@ pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
             };
             state.now = Instant::now();
             state.spin = anim::Clock::at(state.now);
+            state.stash.clear();
+            let helper: Vec<Item> = items
+                .iter()
+                .copied()
+                .filter(|i| !cfg!(windows) && has_machine_part(*i))
+                .collect();
             state.sheet = Sheet::Working(items.into_iter().map(|i| (i, Step::Waiting)).collect());
-            start_next(state, ctx)
-        }
-        Msg::Cleaned(item, result) => {
-            let current = match &state.sheet {
-                Sheet::Working(items) => items
-                    .iter()
-                    .any(|(i, step)| *i == item && *step == Step::Working),
-                _ => false,
-            };
-            if !current || state.run.pending == 0 {
-                return Task::none();
+            let first = start_next(state, ctx);
+            if helper.is_empty() {
+                first
+            } else {
+                Task::batch([
+                    first,
+                    Task::run(system::machine(helper, true), |(item, r)| {
+                        wrap(Msg::MachineCleaned(item, r))
+                    }),
+                ])
             }
-            state.run.pending -= 1;
-            count_result(&mut state.run, item, result);
-            if state.run.pending > 0 {
-                return Task::none();
-            }
-            end_item(state, item);
-            start_next(state, ctx)
         }
+        Msg::MachineCleaned(item, result) => {
+            let waiting = state.run.machine_waiting
+                && matches!(&state.sheet, Sheet::Working(items)
+                    if items.iter().any(|(i, step)| *i == item && *step == Step::Working));
+            if waiting {
+                state.run.machine_waiting = false;
+                apply_cleaned(state, ctx, item, result)
+            } else {
+                state.stash.push((item, result));
+                Task::none()
+            }
+        }
+        Msg::Cleaned(item, result) => apply_cleaned(state, ctx, item, result),
         Msg::CloseResult => {
             if matches!(state.sheet, Sheet::Done { .. }) {
                 state.sheet = Sheet::None;
@@ -490,7 +604,11 @@ fn icon_of(item: Item) -> Icon {
         Item::Temp => Icon::Trash,
         Item::UpdateLeftovers => Icon::Download,
         Item::CrashDumps => Icon::Bug,
-        Item::Thumbnails => Icon::Eye,
+        Item::Thumbnails | Item::ThumbnailCache => Icon::Eye,
+        Item::PackageCaches => Icon::Package,
+        Item::CrashReports => Icon::Bug,
+        Item::FlatpakRuntimes => Icon::Download,
+        Item::Trash => Icon::Trash,
     }
 }
 
@@ -499,7 +617,11 @@ pub(crate) fn title(ctx: &Ctx, item: Item) -> String {
         Item::Temp => "Old temporary files",
         Item::UpdateLeftovers => "Leftovers from Windows updates",
         Item::CrashDumps => "Crash memory files",
-        Item::Thumbnails => "Saved picture previews",
+        Item::Thumbnails | Item::ThumbnailCache => "Saved picture previews",
+        Item::PackageCaches => "Downloaded install files",
+        Item::CrashReports => "Old crash reports",
+        Item::FlatpakRuntimes => "Unused app parts",
+        Item::Trash => "Trash",
     })
 }
 
@@ -513,6 +635,19 @@ fn describe(ctx: &Ctx, item: Item) -> String {
             "Copies of memory saved when something crashed. They can hold passwords."
         }
         Item::Thumbnails => "Small previews Windows keeps, even of pictures you deleted.",
+        Item::PackageCaches => {
+            "Copies of programs and updates your computer keeps after installing them."
+        }
+        Item::CrashReports => {
+            "Reports your computer saved when a program crashed, more than a week ago."
+        }
+        Item::ThumbnailCache => {
+            "Small previews your computer keeps of your pictures, even ones you deleted."
+        }
+        Item::FlatpakRuntimes => {
+            "Shared parts that apps once needed. No app on this computer uses them now."
+        }
+        Item::Trash => "Files you moved to the Trash and have not emptied yet.",
     })
 }
 
@@ -523,7 +658,7 @@ fn size_text(state: &State, ctx: &Ctx, item: Item) -> String {
     match state.sizes[slot(item)] {
         Size::Measuring => ctx.t("Measuring…"),
         Size::Unknown => {
-            let waiting = state.needs_helper(item) && ctx.helper != Helper::Ready;
+            let waiting = state.needs_helper(item) && !person_ready(ctx);
             if state.generation == 0 || state.measuring() || waiting {
                 String::new()
             } else {
@@ -571,6 +706,9 @@ fn button_label(state: &State, ctx: &Ctx) -> String {
 }
 
 fn storage_row<'a>(state: &State, ctx: &Ctx) -> Option<El<'a>> {
+    if !cfg!(windows) {
+        return None;
+    }
     let p = ctx.palette;
     let (icon, name) = super::ads::label(ctx, STORAGE);
     let toggle = |on: bool| wrap(Msg::StorageToggle(on));
@@ -625,7 +763,7 @@ fn storage_row<'a>(state: &State, ctx: &Ctx) -> Option<El<'a>> {
 pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> El<'a> {
     let p = ctx.palette;
     let mut rows: Vec<El<'a>> = Vec::new();
-    if let Some(blocker) = ctx.helper.blocker() {
+    if let Some(blocker) = blocker(ctx) {
         rows.push(widgets::row_item(
             p,
             Some(Icon::Info),
@@ -635,7 +773,7 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> El<'a> {
             None,
         ));
     }
-    rows.extend(Item::ALL.into_iter().map(|item| item_row(state, ctx, item)));
+    rows.extend(Item::here().iter().map(|item| item_row(state, ctx, *item)));
     let can = !state.selected().is_empty() && !ctx.busy && matches!(state.sheet, Sheet::None);
     let button = row![
         space::horizontal(),
@@ -651,7 +789,11 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> El<'a> {
         widgets::group(
             p,
             ctx.t("Free up space"),
-            Some(ctx.t("Windows and apps leave files behind. Secblitz shows what they take and removes the ones you tick.")),
+            Some(ctx.t(if cfg!(windows) {
+                "Windows and apps leave files behind. Secblitz shows what they take and removes the ones you tick."
+            } else {
+                "Programs leave files behind. Secblitz shows what they take and removes the ones you tick."
+            })),
             None,
             rows,
         ),
@@ -701,35 +843,51 @@ fn review_sheet<'a>(state: &State, ctx: &Ctx) -> El<'a> {
             .align_y(Alignment::Center),
         );
     }
-    column![
+    let selected = state.selected();
+    let mut col = column![
         widgets::h2(p, ctx.t("Clean up these files?")),
         widgets::scroll_well(p, list, 220.0),
         widgets::muted(
             p,
             ctx.t("These files are deleted for good and can't be brought back. Nothing you saved yourself is touched."),
         ),
-        space::vertical().height(theme::S1),
-        row![
-            space::horizontal(),
-            widgets::action(
-                p,
-                ButtonKind::Secondary,
-                ctx.t("Cancel"),
-                None,
-                Some(wrap(Msg::Cancel))
-            ),
-            widgets::action(
-                p,
-                ButtonKind::Danger,
-                ctx.t("Clean up"),
-                Some(Icon::Trash),
-                (!ctx.busy).then(|| wrap(Msg::Confirm)),
-            ),
-        ]
-        .spacing(theme::S2),
     ]
-    .spacing(theme::S3)
-    .into()
+    .spacing(theme::S3);
+    if selected.contains(&Item::Trash) {
+        col = col.push(widgets::inline_notice(
+            p,
+            Tone::Warn,
+            ctx.t("Everything in the Trash will be deleted for good, including the Trash of drives you have connected."),
+        ));
+    }
+    if !cfg!(windows) && selected.iter().any(|i| has_machine_part(*i)) {
+        col = col.push(widgets::small(
+            p,
+            ctx.t("Your computer will ask for your password first."),
+        ));
+    }
+    col.push(space::vertical().height(theme::S1))
+        .push(
+            row![
+                space::horizontal(),
+                widgets::action(
+                    p,
+                    ButtonKind::Secondary,
+                    ctx.t("Cancel"),
+                    None,
+                    Some(wrap(Msg::Cancel))
+                ),
+                widgets::action(
+                    p,
+                    ButtonKind::Danger,
+                    ctx.t("Clean up"),
+                    Some(Icon::Trash),
+                    (!ctx.busy).then(|| wrap(Msg::Confirm)),
+                ),
+            ]
+            .spacing(theme::S2),
+        )
+        .into()
 }
 
 fn working_sheet<'a>(state: &State, items: &[(Item, Step)], ctx: &Ctx) -> El<'a> {

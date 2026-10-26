@@ -23,6 +23,31 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             risk: "These previews can stay after you delete the pictures.",
             change: "Windows makes new previews as you browse. This can't be undone.",
         },
+        "space.package_caches" => Explainer {
+            what: "When you install or update programs, your computer keeps the files it downloaded.",
+            risk: "They only take up space. Your computer can download them again whenever it needs them.",
+            change: "The saved downloads are deleted. Nothing installed is touched. This can't be undone, and nothing is lost.",
+        },
+        "space.crash_reports" => Explainer {
+            what: "When a program crashes, your computer can save a report of what the program was doing.",
+            risk: "A report can include parts of your documents or passwords, and it can keep a crash warning coming back.",
+            change: "Reports older than a week are deleted for good. Newer ones stay in case you need to share them.",
+        },
+        "space.thumbnail_cache" => Explainer {
+            what: "Your computer saves small previews of your pictures so folders open faster.",
+            risk: "These previews can stay after you delete the pictures.",
+            change: "Your computer makes new previews as you browse. This can't be undone.",
+        },
+        "space.flatpak_runtimes" => Explainer {
+            what: "Some apps need shared parts to run. After those apps are removed, the parts can stay on the disk.",
+            risk: "They only take up space, sometimes a lot.",
+            change: "Parts that no app uses are removed. If a new app needs one later, it is downloaded again.",
+        },
+        "space.trash" => Explainer {
+            what: "Files you delete usually wait in the Trash until you empty it.",
+            risk: "They keep using space, and anyone who can use your account can still open them.",
+            change: "Everything in the Trash is deleted for good. This can't be undone.",
+        },
         _ => return None,
     })
 }
@@ -40,5 +65,15 @@ mod tests {
             }
         }
         assert!(get("space.nope").is_none());
+    }
+
+    #[test]
+    fn every_linux_item_is_explained_in_short_sentences() {
+        for item in crate::space::Item::LINUX {
+            let e = get(item.id()).unwrap_or_else(|| panic!("{}", item.id()));
+            for (label, line) in [("what", e.what), ("risk", e.risk), ("change", e.change)] {
+                super::super::tests::assert_short_sentence(item.id(), label, line);
+            }
+        }
     }
 }

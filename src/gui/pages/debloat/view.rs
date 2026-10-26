@@ -20,24 +20,24 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
     let header = widgets::page_header(
         p,
         ctx.t("Clean up apps"),
-        Some(ctx.t("Remove apps you don't need. You can bring them back any time.")),
+        Some(ctx.t(if cfg!(windows) {
+            "Remove apps you don't need. You can bring them back any time."
+        } else {
+            "Remove remote-control apps you don't use. You can install them again later."
+        })),
     );
     let removed_label = if state.removed.is_empty() {
         ctx.t("Removed apps")
     } else {
         format!("{} ({})", ctx.t("Removed apps"), state.removed.len())
     };
-    let tabs = widgets::segmented(
-        p,
-        &[
-            (Tab::Apps, ctx.t("Apps to remove")),
-            (Tab::Removed, removed_label),
-            (Tab::Ads, ctx.t("Ads and tips")),
-            (Tab::Space, ctx.t("Free up space")),
-        ],
-        state.tab,
-        |t| wrap(Msg::SetTab(t)),
-    );
+    let mut tab_list = vec![(Tab::Apps, ctx.t("Apps to remove"))];
+    if cfg!(windows) {
+        tab_list.push((Tab::Removed, removed_label));
+        tab_list.push((Tab::Ads, ctx.t("Ads and tips")));
+    }
+    tab_list.push((Tab::Space, ctx.t("Free up space")));
+    let tabs = widgets::segmented(p, &tab_list, state.tab, |t| wrap(Msg::SetTab(t)));
     let body: Element<'a, Message> = match state.tab {
         Tab::Apps => apps_tab(state, ctx),
         Tab::Removed => removed_tab(state, ctx),
@@ -226,6 +226,11 @@ fn group_text(group: Group) -> (&'static str, &'static str, Icon) {
             Icon::Wrench,
         ),
         Group::Gaming => ("Gaming", "Xbox and Game Bar.", Icon::Gamepad),
+        Group::RemoteAccess => (
+            "Remote control apps",
+            "Apps that let someone control this computer from far away. Remove the ones you did not set up yourself.",
+            Icon::Desktop,
+        ),
     }
 }
 
@@ -583,18 +588,19 @@ fn review_sheet<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
     col = col.push(widgets::inline_notice(
         p,
         Tone::Neutral,
-        if n == 1 {
-            ctx.t("Secblitz keeps a copy, so you can bring it back any time from the Removed apps tab, even without internet.")
-        } else {
-            ctx.t("Secblitz keeps a copy, so you can bring them back any time from the Removed apps tab, even without internet.")
+        match (cfg!(windows), n == 1) {
+            (true, true) => ctx.t("Secblitz keeps a copy, so you can bring it back any time from the Removed apps tab, even without internet."),
+            (true, false) => ctx.t("Secblitz keeps a copy, so you can bring them back any time from the Removed apps tab, even without internet."),
+            (false, true) => ctx.t("You can install it again later from your software app. That needs the internet."),
+            (false, false) => ctx.t("You can install them again later from your software app. That needs the internet."),
         },
     ));
     col = col.push(widgets::small(
         p,
-        if n == 1 {
-            ctx.t("If this app is open, Secblitz closes it first.")
-        } else {
-            ctx.t("If any of these apps are open, Secblitz closes them first.")
+        match (cfg!(windows), n == 1) {
+            (true, true) => ctx.t("If this app is open, Secblitz closes it first."),
+            (true, false) => ctx.t("If any of these apps are open, Secblitz closes them first."),
+            (false, _) => ctx.t("If any of these apps are open, close them first. Secblitz never closes your apps for you."),
         },
     ));
     if indices.iter().any(|i| app_of(*i).group == Group::Gaming) {
@@ -605,6 +611,10 @@ fn review_sheet<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
         ));
     }
     col = col.push(match super::store_blocker(ctx.helper) {
+        _ if !cfg!(windows) => column![widgets::small(
+            p,
+            ctx.t("Your computer will ask for your password first.")
+        )],
         Some(_) => column![widgets::small(p, ctx.t(suggested_blocker(ctx.helper)))],
         None => column![
             widgets::checkbox(
@@ -795,6 +805,9 @@ fn removal_menu<'a>(
     changed: Instant,
     result: String,
 ) -> Element<'a, Message> {
+    if !cfg!(windows) {
+        return space::vertical().height(0).into();
+    }
     start_menu::start_menu(menu_model(
         state,
         pal(ctx),

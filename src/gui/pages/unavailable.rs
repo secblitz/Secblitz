@@ -10,11 +10,12 @@ const TITLE: &str = "Not available on {system} yet";
 const HELP: &str = "This part of Secblitz is not ready for {system} yet. Your checks and fixes are on the Protection page.";
 const GO: &str = "Go to Protection";
 
-/// The pages with nothing to show on this system. Free up space and Clean up apps leave this list when they arrive.
+/// The pages with nothing to show on this system.
 pub fn applies(os: Os, page: Page) -> bool {
     match os {
         Os::Windows => false,
-        Os::Linux | Os::Macos => matches!(page, Page::Web | Page::Tools | Page::Debloat),
+        Os::Linux => matches!(page, Page::Web | Page::Tools),
+        Os::Macos => matches!(page, Page::Web | Page::Tools | Page::Debloat),
     }
 }
 
@@ -51,14 +52,14 @@ mod tests {
     use crate::i18n::Lang;
 
     #[test]
-    fn linux_has_no_web_protection_tools_or_clean_up_yet_and_windows_keeps_all() {
+    fn linux_has_no_web_protection_or_tools_yet_and_windows_keeps_all() {
         for page in Page::ALL {
             assert!(!applies(Os::Windows, page), "{page:?}");
         }
-        for page in [Page::Web, Page::Tools, Page::Debloat] {
+        for page in [Page::Web, Page::Tools] {
             assert!(applies(Os::Linux, page), "{page:?}");
         }
-        for page in [Page::Home, Page::Fixes, Page::History, Page::Settings] {
+        for page in [Page::Home, Page::Fixes, Page::Debloat, Page::History, Page::Settings] {
             assert!(!applies(Os::Linux, page), "{page:?}");
         }
     }

@@ -221,7 +221,13 @@ fn inventory_task(state: &mut State) -> Task<Message> {
     state.scan_gen = state.scan_gen.wrapping_add(1);
     let generation = state.scan_gen;
     Task::perform(
-        blocking(|| debloat::inventory().map_err(|e| format!("{e:#}"))),
+        blocking(|| {
+            if cfg!(windows) {
+                debloat::inventory().map_err(|e| format!("{e:#}"))
+            } else {
+                system::inventory().map_err(|e| format!("{e:#}"))
+            }
+        }),
         move |r| wrap(Msg::Scanned(generation, r)),
     )
 }
@@ -1210,8 +1216,12 @@ fn confirm(state: &mut State, ctx: &mut Ctx) -> Task<Message> {
     state.sheet = Sheet::Working(indices.iter().map(|i| (*i, Step::Waiting)).collect());
     let block = state.block_again;
     let stream = blocking_stream(move |emit: &dyn Fn(Run)| {
-        let result =
-            debloat::remove(&indices, &|p| emit(Run::Step(p))).map_err(|e| format!("{e:#}"));
+        let removed = if cfg!(windows) {
+            debloat::remove(&indices, &|p| emit(Run::Step(p)))
+        } else {
+            system::remove(&indices, &|p| emit(Run::Step(p)))
+        };
+        let result = removed.map_err(|e| format!("{e:#}"));
         if block && result.is_ok() {
             emit(Run::Policy(debloat::set_consumer_features_policy().is_ok()));
         }
@@ -1340,6 +1350,7 @@ fn count_text(ctx: &Ctx, n: usize, one: &str, many: &str) -> String {
 
 pub(crate) mod ads;
 mod space;
+mod system;
 mod view;
 pub use view::{footer, modal, view};
 

@@ -1,11 +1,13 @@
 //! The root helper: `org.secblitz.Helper1` on the system bus. Every `Begin` is checked with polkit for the
 //! caller that sent it, then the request runs as one job whose events the same caller collects with `Next`.
+use super::ops;
 use super::polkit::{self, Action};
 use crate::app::remote::{self, Event, Reply, Request};
 use crate::app::worker::Session;
 use secblitz::engine::recover::NotDamaged;
 use secblitz::linux::backend::LinuxBackend;
 use secblitz::linux::cmd::RealSys;
+use secblitz::space::linux::RealFs;
 use secblitz::updater;
 use std::collections::VecDeque;
 use std::future::Future;
@@ -268,6 +270,12 @@ fn run_job(shared: &Shared, id: u64, request: Request, open: &Opener, recover: &
         Request::InstallUpdate => emit(Event::Done(update_reply(
             updater::linux::install(&RealSys).and_then(|_| updater::linux::status(&RealSys)),
         ))),
+        request if ops::handles(&request) => {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs());
+            ops::run(&RealSys, &RealFs, now, request, &mut emit);
+        }
         request => match open() {
             Ok(mut session) => remote::serve(session.as_mut(), request, &mut emit),
             Err(error) => emit(Event::Done(remote::failure(&error))),

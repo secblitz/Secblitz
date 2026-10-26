@@ -31,6 +31,19 @@ pub trait Sys {
     fn write_atomic(&self, path: &Path, bytes: &[u8], mode: u32) -> Result<()>;
     /// Removes the file; a missing file is not an error.
     fn remove(&self, path: &Path) -> Result<()>;
+    /// Like [`run`](Sys::run) for a job that can take minutes, such as removing software.
+    fn run_long(&self, program: &'static str, args: &[&str]) -> Result<Output> {
+        self.run(program, args)
+    }
+    /// Runs `program` with `answer` typed into it, for a program that asks before it changes anything and has no way to say no on the command line.
+    fn run_answering(
+        &self,
+        _program: &'static str,
+        _args: &[&str],
+        _answer: &str,
+    ) -> Result<Output> {
+        anyhow::bail!("This program cannot be given an answer")
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -53,6 +66,7 @@ mod real {
     const OUTPUT_CAP: u64 = 1 << 20;
     const READ_CAP: u64 = 4 << 20;
     const TIME_LIMIT: Duration = Duration::from_secs(60);
+    const LONG_TIME_LIMIT: Duration = Duration::from_secs(20 * 60);
     const OUTPUT_GRACE: Duration = Duration::from_secs(2);
 
     pub struct RealSys;
@@ -94,6 +108,8 @@ mod real {
         program: &'static str,
         args: &[&str],
         session_bus: Option<&str>,
+        limit: Duration,
+        answer: Option<&str>,
     ) -> Result<Output> {
         ensure!(
             program.starts_with('/'),
@@ -109,11 +125,19 @@ mod real {
             command.env("DBUS_SESSION_BUS_ADDRESS", bus);
         }
         let mut child = command
-            .stdin(Stdio::null())
+            .stdin(if answer.is_some() {
+                Stdio::piped()
+            } else {
+                Stdio::null()
+            })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
             .with_context(|| format!("Could not start {program}"))?;
+        if let (Some(answer), Some(mut stdin)) = (answer, child.stdin.take()) {
+            // A program that exits before reading its question closes the pipe, which is not a failure here.
+            let _ = stdin.write_all(answer.as_bytes());
+        }
         let out = capture(child.stdout.take().context("No output pipe")?);
         let err = capture(child.stderr.take().context("No error pipe")?);
         let started = Instant::now();
@@ -121,7 +145,7 @@ mod real {
             if let Some(status) = child.try_wait()? {
                 break status;
             }
-            if started.elapsed() > TIME_LIMIT {
+            if started.elapsed() > limit {
                 let _ = child.kill();
                 let _ = child.wait();
                 bail!("{program} took too long and was stopped");
@@ -138,7 +162,20 @@ mod real {
 
     impl Sys for RealSys {
         fn run(&self, program: &'static str, args: &[&str]) -> Result<Output> {
-            run_program(program, args, None)
+            run_program(program, args, None, TIME_LIMIT, None)
+        }
+
+        fn run_long(&self, program: &'static str, args: &[&str]) -> Result<Output> {
+            run_program(program, args, None, LONG_TIME_LIMIT, None)
+        }
+
+        fn run_answering(
+            &self,
+            program: &'static str,
+            args: &[&str],
+            answer: &str,
+        ) -> Result<Output> {
+            run_program(program, args, None, TIME_LIMIT, Some(answer))
         }
 
         fn read(&self, path: &Path) -> Result<Option<Vec<u8>>> {
@@ -268,7 +305,11 @@ mod real {
 
     impl Sys for SessionSys {
         fn run(&self, program: &'static str, args: &[&str]) -> Result<Output> {
-            run_program(program, args, Some(&self.bus))
+            run_program(program, args, Some(&self.bus), TIME_LIMIT, None)
+        }
+
+        fn run_long(&self, program: &'static str, args: &[&str]) -> Result<Output> {
+            run_program(program, args, Some(&self.bus), LONG_TIME_LIMIT, None)
         }
 
         fn read(&self, path: &Path) -> Result<Option<Vec<u8>>> {
@@ -453,6 +494,7 @@ pub(crate) mod fake {
         pub files: RefCell<BTreeMap<PathBuf, Vec<u8>>>,
         pub replies: RefCell<BTreeMap<String, Output>>,
         pub calls: RefCell<Vec<String>>,
+        pub answers: RefCell<Vec<String>>,
     }
 
     fn key(program: &str, args: &[&str]) -> String {
@@ -487,6 +529,16 @@ pub(crate) mod fake {
                 Some(out) => Ok(out.clone()),
                 None => bail!("Unexpected program: {k}"),
             }
+        }
+
+        fn run_answering(
+            &self,
+            program: &'static str,
+            args: &[&str],
+            answer: &str,
+        ) -> Result<Output> {
+            self.answers.borrow_mut().push(answer.to_owned());
+            self.run(program, args)
         }
 
         fn read(&self, path: &Path) -> Result<Option<Vec<u8>>> {

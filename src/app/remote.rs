@@ -5,6 +5,7 @@ use super::worker::Session;
 use secblitz::engine::recover::{DamageKind, JournalDamaged};
 use secblitz::engine::{ItemChoice, Progress, ProgressStep, Report};
 use secblitz::model::CheckStatus;
+use secblitz::space::{Item, Tally};
 use secblitz::updater::UpdateStatus;
 use serde::{Deserialize, Serialize};
 
@@ -13,6 +14,8 @@ pub const MAX_MESSAGE: usize = 1 << 20;
 const MAX_IDS: usize = 512;
 const MAX_ID_LEN: usize = 128;
 const MAX_ITEM_LEN: usize = 512;
+const MAX_SPACE_ITEMS: usize = 8;
+const MAX_PACKAGES: usize = 32;
 
 use crate::launcher::NOT_INSTALLED;
 const BAD_ANSWER: &str = NOT_INSTALLED;
@@ -47,6 +50,59 @@ pub enum Request {
     },
     UpdateStatus,
     InstallUpdate,
+    SpaceMeasure {
+        items: Vec<SpaceWire>,
+    },
+    SpaceClean {
+        items: Vec<SpaceWire>,
+    },
+    Apps,
+    RemoveApps {
+        packages: Vec<String>,
+    },
+}
+
+/// The Free up space items that need the helper's rights.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpaceWire {
+    PackageCaches,
+    CrashReports,
+    FlatpakRuntimes,
+}
+
+impl SpaceWire {
+    pub fn of(item: Item) -> Option<Self> {
+        match item {
+            Item::PackageCaches => Some(Self::PackageCaches),
+            Item::CrashReports => Some(Self::CrashReports),
+            Item::FlatpakRuntimes => Some(Self::FlatpakRuntimes),
+            _ => None,
+        }
+    }
+
+    pub fn item(self) -> Item {
+        match self {
+            Self::PackageCaches => Item::PackageCaches,
+            Self::CrashReports => Item::CrashReports,
+            Self::FlatpakRuntimes => Item::FlatpakRuntimes,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AppWire {
+    pub index: u16,
+    pub package: String,
+    pub version: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AppStep {
+    Started,
+    Removed,
+    Failed(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -91,6 +147,7 @@ pub enum Reply {
         kind: DamageKind,
         files: usize,
     },
+    Apps(Vec<AppWire>),
 }
 
 /// The reply for an error. A damaged undo history keeps its type across the cut.
@@ -107,7 +164,19 @@ pub fn failure(error: &anyhow::Error) -> Reply {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Event {
-    Progress { id: String, step: StepWire },
+    Progress {
+        id: String,
+        step: StepWire,
+    },
+    /// What one Free up space item came to: the size it holds or freed, or why it could not be read.
+    Space {
+        item: SpaceWire,
+        outcome: Result<Tally, String>,
+    },
+    App {
+        package: String,
+        step: AppStep,
+    },
     Done(Reply),
 }
 
@@ -149,6 +218,33 @@ fn check_request(request: &Request) -> anyhow::Result<()> {
                     "the request names an item that is not valid"
                 );
             }
+            Ok(())
+        }
+        Request::SpaceMeasure { items } | Request::SpaceClean { items } => {
+            anyhow::ensure!(
+                items.len() <= MAX_SPACE_ITEMS,
+                "the request names too many items"
+            );
+            anyhow::ensure!(
+                items
+                    .iter()
+                    .enumerate()
+                    .all(|(i, item)| !items[..i].contains(item)),
+                "the request names an item twice"
+            );
+            Ok(())
+        }
+        Request::RemoveApps { packages } => {
+            anyhow::ensure!(
+                packages.len() <= MAX_PACKAGES,
+                "the request names too many apps"
+            );
+            anyhow::ensure!(
+                packages
+                    .iter()
+                    .all(|p| secblitz::debloat::linux::owner(p).is_some()),
+                "the request names an app that is not in the catalog"
+            );
             Ok(())
         }
         _ => Ok(()),
@@ -220,6 +316,10 @@ pub fn serve(session: &mut dyn Session, request: Request, emit: &mut dyn FnMut(E
         Request::MonitorTimer { .. } | Request::UpdateStatus | Request::InstallUpdate => {
             Reply::Failed(NOT_HERE.to_owned())
         }
+        Request::SpaceMeasure { .. }
+        | Request::SpaceClean { .. }
+        | Request::Apps
+        | Request::RemoveApps { .. } => Reply::Failed(BAD_ANSWER.to_owned()),
     };
     emit(Event::Done(reply));
 }
@@ -245,6 +345,29 @@ pub trait Transport {
         request: &[u8],
         on_event: &mut dyn FnMut(&[u8]) -> anyhow::Result<()>,
     ) -> anyhow::Result<()>;
+}
+
+/// Sends one request and hands every event to `on_event` as it arrives. The final reply is returned; a `Failed` reply becomes an error with its plain message.
+pub fn stream<T: Transport>(
+    transport: &mut T,
+    request: &Request,
+    on_event: &mut dyn FnMut(Event),
+) -> anyhow::Result<Reply> {
+    let bytes = encode_request(request)?;
+    let mut reply = None;
+    transport.call(&bytes, &mut |event| {
+        anyhow::ensure!(reply.is_none(), BAD_ANSWER);
+        match decode_event(event)? {
+            Event::Done(done) => reply = Some(done),
+            other => on_event(other),
+        }
+        Ok(())
+    })?;
+    match reply.ok_or_else(|| anyhow::anyhow!(NOT_INSTALLED))? {
+        Reply::Failed(message) => anyhow::bail!(message),
+        Reply::Damaged { kind, files } => Err(anyhow::Error::new(JournalDamaged { kind, files })),
+        reply => Ok(reply),
+    }
 }
 
 /// A `Session` whose work happens in a helper on the other end of a `Transport`.
@@ -278,23 +401,11 @@ impl<T: Transport> RemoteSession<T> {
         request: &Request,
         progress: &mut dyn FnMut(Progress<'_>),
     ) -> anyhow::Result<Reply> {
-        let bytes = encode_request(request)?;
-        let mut reply = None;
-        self.transport.call(&bytes, &mut |event| {
-            anyhow::ensure!(reply.is_none(), BAD_ANSWER);
-            match decode_event(event)? {
-                Event::Progress { id, step } => progress(Progress::new(&id, step.into())),
-                Event::Done(done) => reply = Some(done),
+        stream(&mut self.transport, request, &mut |event| {
+            if let Event::Progress { id, step } = event {
+                progress(Progress::new(&id, step.into()));
             }
-            Ok(())
-        })?;
-        match reply.ok_or_else(|| anyhow::anyhow!(NOT_INSTALLED))? {
-            Reply::Failed(message) => anyhow::bail!(message),
-            Reply::Damaged { kind, files } => {
-                Err(anyhow::Error::new(JournalDamaged { kind, files }))
-            }
-            reply => Ok(reply),
-        }
+        })
     }
 
     fn report(

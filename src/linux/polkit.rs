@@ -24,7 +24,7 @@ impl Action {
     }
 }
 
-/// Reading needs only a signed-in person at the keyboard; anything that can change the computer asks for a password.
+/// Reading needs only a signed-in person at the keyboard; anything that can change the computer asks for a password, and deleting files or programs asks for it every time.
 pub fn action_for(request: &Request) -> Action {
     match request {
         Request::Available
@@ -32,7 +32,9 @@ pub fn action_for(request: &Request) -> Action {
         | Request::Audit
         | Request::History
         | Request::CanStart { .. }
-        | Request::UpdateStatus => Action::Check,
+        | Request::UpdateStatus
+        | Request::SpaceMeasure { .. }
+        | Request::Apps => Action::Check,
         Request::Apply { .. }
         | Request::Undo
         | Request::UndoSelected { .. }
@@ -40,7 +42,9 @@ pub fn action_for(request: &Request) -> Action {
         | Request::StartFresh
         | Request::MonitorTimer { .. }
         | Request::InstallUpdate => Action::Change,
-        Request::RemoveSelf => Action::Remove,
+        Request::RemoveSelf | Request::SpaceClean { .. } | Request::RemoveApps { .. } => {
+            Action::Remove
+        }
     }
 }
 
@@ -227,5 +231,29 @@ mod tests {
         assert_eq!(Action::Remove.id(), "org.secblitz.remove");
         assert_eq!(Action::Check.id(), "org.secblitz.check");
         assert_eq!(Action::Change.id(), "org.secblitz.change");
+    }
+
+    #[test]
+    fn measuring_and_listing_are_light_but_deleting_files_or_programs_asks_every_time() {
+        use crate::app::remote::SpaceWire;
+        for request in [
+            Request::SpaceMeasure {
+                items: vec![SpaceWire::PackageCaches],
+            },
+            Request::Apps,
+        ] {
+            assert_eq!(action_for(&request), Action::Check, "{request:?}");
+        }
+        for request in [
+            Request::SpaceClean {
+                items: vec![SpaceWire::CrashReports],
+            },
+            Request::RemoveApps {
+                packages: vec!["anydesk".into()],
+            },
+        ] {
+            assert_eq!(action_for(&request), Action::Remove, "{request:?}");
+        }
+        assert_eq!(Action::Remove.id(), "org.secblitz.remove");
     }
 }
