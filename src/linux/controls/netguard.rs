@@ -272,16 +272,30 @@ fn plan(cx: &Cx, g: &Group) -> Result<Option<Plan>> {
         if strict_somewhere {
             for (j, name) in &bad {
                 if *j == i {
-                    lines.push(format!("{head}.conf.{name}.{} = {}", g.key, g.fixed));
+                    lines.push(line_for(head, name, g.key, g.fixed));
                 }
             }
         } else {
             for name in ["all", "default", "*"] {
-                lines.push(format!("{head}.conf.{name}.{} = {}", g.key, g.fixed));
+                lines.push(line_for(head, name, g.key, g.fixed));
             }
         }
     }
     Ok(Some(Plan { changes, lines }))
+}
+
+/// A connection name with a dot or another odd character cannot be told apart from the dotted setting name, so such a
+/// name is written in the slash form the file reader accepts.
+fn line_for(head: &str, name: &str, key: &str, value: i64) -> String {
+    let plain = name == "*"
+        || name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    if plain {
+        format!("{head}.conf.{name}.{key} = {value}")
+    } else {
+        format!("{}/conf/{name}/{key} = {value}", head.replace('.', "/"))
+    }
 }
 
 fn set_value(cx: &Cx, path: &str, value: i64) -> Result<()> {
@@ -443,20 +457,40 @@ pub fn write_broadcast_pings(cx: &Cx, want: &Items) -> Result<()> {
 }
 
 const HOSTNAME_DROPIN: &str = "/etc/NetworkManager/conf.d/90-secblitz-computer-name.conf";
-const HOSTNAME_KEYS: [&str; 2] = ["ipv4.dhcp-send-hostname", "ipv6.dhcp-send-hostname"];
+/// Newer versions of the network program read the first key of each pair and older ones the second, so both are written.
+const HOSTNAME_KEYS: [[&str; 2]; 2] = [
+    ["ipv4.dhcp-send-hostname-v2", "ipv4.dhcp-send-hostname"],
+    ["ipv6.dhcp-send-hostname-v2", "ipv6.dhcp-send-hostname"],
+];
+
+fn hostname_file() -> String {
+    let mut text = format!("{NOTE}[connection]\n");
+    for key in HOSTNAME_KEYS.iter().flatten() {
+        text.push_str(&format!("{key}=false\n"));
+    }
+    text
+}
 
 /// Whether the network program's files let it send the computer name, `None` when a file holds a word it does not know.
+/// For each address family the name is sent unless every key that is set says no, because which of the two keys counts
+/// depends on the version of the network program.
 fn sends_name(texts: &[String]) -> Option<bool> {
     let mut sends = false;
-    for key in HOSTNAME_KEYS {
-        sends |= match nm_get(texts, "connection", key)
-            .map(|v| v.to_ascii_lowercase())
-            .as_deref()
-        {
-            None | Some("true" | "yes" | "on" | "1") => true,
-            Some("false" | "no" | "off" | "0") => false,
-            Some(_) => return None,
-        };
+    for keys in HOSTNAME_KEYS {
+        let mut family = false;
+        let mut any = false;
+        for key in keys {
+            let Some(word) = nm_get(texts, "connection", key) else {
+                continue;
+            };
+            any = true;
+            family |= match word.to_ascii_lowercase().as_str() {
+                "true" | "yes" | "on" | "1" => true,
+                "false" | "no" | "off" | "0" => false,
+                _ => return None,
+            };
+        }
+        sends |= family || !any;
     }
     Some(sends)
 }
@@ -485,14 +519,7 @@ pub fn write_computer_name(cx: &Cx, want: &Items) -> Result<()> {
         if on == 1 {
             return Err(plain(CHANGE_FAILED));
         }
-        cx.write_text(
-            HOSTNAME_DROPIN,
-            &format!(
-                "{NOTE}[connection]\n{}=false\n{}=false\n",
-                HOSTNAME_KEYS[0], HOSTNAME_KEYS[1]
-            ),
-            0o644,
-        )?;
+        cx.write_text(HOSTNAME_DROPIN, &hostname_file(), 0o644)?;
         let now = nm_files(cx)?.and_then(|texts| sends_name(&texts));
         if now != Some(false) {
             cx.remove(HOSTNAME_DROPIN)?;

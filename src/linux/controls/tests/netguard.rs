@@ -261,6 +261,42 @@ fn a_connection_someone_made_strict_is_never_loosened() {
 }
 
 #[test]
+fn a_connection_name_with_a_dot_is_written_in_the_form_the_file_reader_understands() {
+    let sim = ubuntu();
+    set_proc(&sim, "net/ipv4/conf/all/rp_filter", "0");
+    set_proc(&sim, "net/ipv4/conf/default/rp_filter", "0");
+    set_proc(&sim, "net/ipv4/conf/eth0.100/rp_filter", "0");
+    set_proc(&sim, "net/ipv4/conf/enp1s0/rp_filter", "1");
+    let before = snapshot(&sim);
+    cycle_fixed(&sim, "linux.fake_sources");
+    assert_eq!(proc(&sim, "net/ipv4/conf/eth0.100/rp_filter"), "2");
+    let file = sim.text(RP_FILE).unwrap();
+    assert!(
+        file.contains("net/ipv4/conf/eth0.100/rp_filter = 2\n"),
+        "{file}"
+    );
+    assert!(!file.contains("eth0.100.rp_filter"), "{file}");
+    let mut b = backend(&sim);
+    b.write("linux.fake_sources", &json!({"items": {"rp_filter": 0}}))
+        .unwrap();
+    assert_same(&sim, &before);
+}
+
+#[test]
+fn either_computer_name_key_that_still_sends_counts() {
+    let sim = ubuntu();
+    sim.file(
+        "/etc/NetworkManager/conf.d/50-site.conf",
+        "[connection]\nipv4.dhcp-send-hostname=false\nipv4.dhcp-send-hostname-v2=true\nipv6.dhcp-send-hostname=false\n",
+    );
+    let mut b = backend(&sim);
+    assert_eq!(
+        status(&mut b, "linux.computer_name_sent"),
+        CheckStatus::Attention
+    );
+}
+
+#[test]
 fn sender_checks_on_a_connection_that_was_never_unprotected_change_nothing() {
     let sim = fedora();
     let before = snapshot(&sim);
@@ -566,7 +602,7 @@ fn the_computer_name_stops_being_sent_without_dropping_a_connection() {
     assert_eq!(
         sim.text(NM_NAME_FILE).unwrap(),
         format!(
-            "{NOTE}[connection]\nipv4.dhcp-send-hostname=false\nipv6.dhcp-send-hostname=false\n"
+            "{NOTE}[connection]\nipv4.dhcp-send-hostname-v2=false\nipv4.dhcp-send-hostname=false\nipv6.dhcp-send-hostname-v2=false\nipv6.dhcp-send-hostname=false\n"
         )
     );
 }
