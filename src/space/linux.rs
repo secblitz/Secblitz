@@ -14,6 +14,8 @@ use anyhow::{bail, ensure, Result};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+mod old;
+
 pub const CRASH_DIR: &str = "/var/crash";
 pub const CRASH_DAYS: u64 = 7;
 pub const APT_ARCHIVES: &str = "/var/cache/apt/archives";
@@ -21,11 +23,14 @@ pub const DNF_CACHES: [&str; 2] = ["/var/cache/libdnf5", "/var/cache/dnf"];
 
 const FLATPAK: &str = "/usr/bin/flatpak";
 const GIO: &str = "/usr/bin/gio";
-const APT_GET: &str = "/usr/bin/apt-get";
+pub const APT_GET: &str = "/usr/bin/apt-get";
+pub const DPKG_QUERY: &str = "/usr/bin/dpkg-query";
+pub const SNAP: &str = "/usr/bin/snap";
 const DNF: &str = "/usr/bin/dnf";
 
 pub const NOT_ON_THIS_SYSTEM: &str = "This clean up is not available on your system yet.";
 pub const CANNOT_CLEAN: &str = "Secblitz could not finish this clean up. Nothing else was changed. Close any program that is installing software, then try again.";
+pub const KERNELS_KEPT: &str = "Secblitz left the old system versions alone, because removing them would also take away other software. Nothing was changed.";
 pub const TRASH_NOT_EMPTIED: &str =
     "Secblitz could not empty the Trash. Nothing else was changed. Try emptying it from your files app.";
 
@@ -150,6 +155,8 @@ pub fn measure_machine(
         Item::PackageCaches => cache_tally(sys, fs, now, deadline, false),
         Item::CrashReports => Ok(flat(fs, Path::new(CRASH_DIR), &CRASH_RULE, now, false)),
         Item::FlatpakRuntimes => unused_runtimes(sys, Scope::System).map(|u| u.tally()),
+        Item::OldSnaps => old::snaps(sys, fs).map(|s| old::tally(&s)),
+        Item::OldKernels => old::kernels(sys).map(|k| old::kernel_tally(&k)),
         _ => bail!(NOT_ON_THIS_SYSTEM),
     }
 }
@@ -175,6 +182,8 @@ pub fn clean_machine(
         }
         Item::CrashReports => Ok(flat(fs, Path::new(CRASH_DIR), &CRASH_RULE, now, true)),
         Item::FlatpakRuntimes => remove_unused_runtimes(sys, Scope::System),
+        Item::OldSnaps => old::clean_snaps(sys, fs),
+        Item::OldKernels => old::clean_kernels(sys),
         _ => bail!(NOT_ON_THIS_SYSTEM),
     }
 }

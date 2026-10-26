@@ -35,16 +35,18 @@ pub enum Group {
     Utilities,
     Gaming,
     RemoteAccess,
+    Sharing,
 }
 
 impl Group {
-    pub const ALL: [Group; 6] = [
+    pub const ALL: [Group; 7] = [
         Group::Recommended,
         Group::Sponsored,
         Group::Promotions,
         Group::Utilities,
         Group::Gaming,
         Group::RemoteAccess,
+        Group::Sharing,
     ];
 }
 

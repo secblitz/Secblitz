@@ -23,6 +23,7 @@ fn plain(error: &anyhow::Error) -> String {
         space::CANNOT_CLEAN,
         space::NOT_ON_THIS_SYSTEM,
         space::TRASH_NOT_EMPTIED,
+        space::KERNELS_KEPT,
     ];
     if known.contains(&text.as_str()) || apps::plain(&text).is_some() {
         return text;
@@ -289,6 +290,48 @@ mod tests {
             machine.calls.lock().unwrap().as_slice(),
             ["/usr/bin/apt-get clean"]
         );
+    }
+
+    #[test]
+    fn a_refused_old_version_removal_reaches_the_screen_as_its_own_sentence() {
+        let mut machine = ubuntu();
+        let dpkg = [
+            "-W",
+            "-f=${Package}\t${Installed-Size}\t${db:Status-Abbrev}\n",
+        ];
+        machine.reply("/usr/bin/uname", &["-r"], 0, "7.0.0-38-generic\n");
+        machine.reply(
+            "/usr/bin/dpkg-query",
+            &dpkg,
+            0,
+            "linux-image-7.0.0-34-generic\t16920\tii \nlinux-image-7.0.0-38-generic\t16936\tii \n",
+        );
+        machine.reply(
+            "/usr/bin/apt-get",
+            &["-s", "autoremove"],
+            0,
+            "Remv linux-image-7.0.0-34-generic [7.0.0-34.34]\n",
+        );
+        machine.reply(
+            "/usr/bin/apt-get",
+            &["-s", "remove", "linux-image-7.0.0-34-generic"],
+            0,
+            "Remv linux-image-7.0.0-34-generic [7.0.0-34.34]\nRemv linux-generic [1]\n",
+        );
+        let (lines, reply) = collect(
+            &machine,
+            Request::SpaceClean {
+                items: vec![SpaceWire::OldKernels],
+            },
+        );
+        assert!(matches!(reply, Reply::Ok));
+        assert!(lines[0].contains(space::KERNELS_KEPT), "{}", lines[0]);
+        assert!(!machine
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|c| c.contains(" remove -y")));
     }
 
     #[test]

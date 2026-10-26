@@ -1,0 +1,17 @@
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Solving dependencies...
+The following packages will be REMOVED:
+  linux-headers-7.0.0-30 linux-headers-7.0.0-30-generic
+  linux-image-unsigned-7.0.0-30-generic
+  linux-main-modules-zfs-7.0.0-30-generic linux-modules-7.0.0-30-generic
+  linux-tools-7.0.0-30 linux-tools-7.0.0-30-generic
+0 upgraded, 0 newly installed, 7 to remove and 95 not upgraded.
+Remv linux-headers-7.0.0-30-generic [7.0.0-30.30]
+Remv linux-headers-7.0.0-30 [7.0.0-30.30]
+Remv linux-main-modules-zfs-7.0.0-30-generic [7.0.0-30.30] [linux-modules-7.0.0-30-generic:amd64 ]
+Remv linux-image-unsigned-7.0.0-30-generic [7.0.0-30.30] [linux-modules-7.0.0-30-generic:amd64 ]
+Remv linux-modules-7.0.0-30-generic [7.0.0-30.30]
+Remv linux-tools-7.0.0-30-generic [7.0.0-30.30]
+Remv linux-tools-7.0.0-30 [7.0.0-30.30]

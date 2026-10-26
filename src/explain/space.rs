@@ -43,6 +43,16 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             risk: "They only take up space, sometimes a lot.",
             change: "Parts that no app uses are removed. If a new app needs one later, it is downloaded again.",
         },
+        "space.old_snaps" => Explainer {
+            what: "When an app from the app store updates, your computer keeps the earlier copy too, in case you want to go back.",
+            risk: "They only take up space, sometimes a lot.",
+            change: "The earlier copies are removed. The copy each app uses now is not touched. You can't go back to them, and this can't be undone.",
+        },
+        "space.old_kernels" => Explainer {
+            what: "When your system updates, it keeps earlier versions of its core so you can go back if something goes wrong.",
+            risk: "Each one takes up space, and they pile up with every update.",
+            change: "Versions your computer no longer needs are removed. The one running now and the newest one stay. This can't be undone.",
+        },
         "space.trash" => Explainer {
             what: "Files you delete usually wait in the Trash until you empty it.",
             risk: "They keep using space, and anyone who can use your account can still open them.",

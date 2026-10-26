@@ -71,6 +71,8 @@ pub enum SpaceWire {
     PackageCaches,
     CrashReports,
     FlatpakRuntimes,
+    OldSnaps,
+    OldKernels,
 }
 
 impl SpaceWire {
@@ -79,6 +81,8 @@ impl SpaceWire {
             Item::PackageCaches => Some(Self::PackageCaches),
             Item::CrashReports => Some(Self::CrashReports),
             Item::FlatpakRuntimes => Some(Self::FlatpakRuntimes),
+            Item::OldSnaps => Some(Self::OldSnaps),
+            Item::OldKernels => Some(Self::OldKernels),
             _ => None,
         }
     }
@@ -88,6 +92,8 @@ impl SpaceWire {
             Self::PackageCaches => Item::PackageCaches,
             Self::CrashReports => Item::CrashReports,
             Self::FlatpakRuntimes => Item::FlatpakRuntimes,
+            Self::OldSnaps => Item::OldSnaps,
+            Self::OldKernels => Item::OldKernels,
         }
     }
 }

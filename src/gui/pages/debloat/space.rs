@@ -124,7 +124,11 @@ fn user_area(item: Item) -> Option<UserArea> {
         Item::ThumbnailCache => Some(UserArea::ThumbnailCache),
         Item::FlatpakRuntimes => Some(UserArea::FlatpakUser),
         Item::Trash => Some(UserArea::Trash),
-        Item::UpdateLeftovers | Item::PackageCaches | Item::CrashReports => None,
+        Item::UpdateLeftovers
+        | Item::PackageCaches
+        | Item::CrashReports
+        | Item::OldSnaps
+        | Item::OldKernels => None,
     }
 }
 
@@ -255,7 +259,7 @@ fn measure_all(state: &mut State, ctx: &Ctx) -> Task<Message> {
     let ready = person_ready(ctx);
     let mut tasks = Vec::new();
     let mut helper = Vec::new();
-    for &item in Item::here() {
+    for item in Item::offered() {
         let i = slot(item);
         state.pending[i] = parts(item, ready);
         state.found[i] = Tally::default();
@@ -609,6 +613,7 @@ fn icon_of(item: Item) -> Icon {
         Item::CrashReports => Icon::Bug,
         Item::FlatpakRuntimes => Icon::Download,
         Item::Trash => Icon::Trash,
+        Item::OldSnaps | Item::OldKernels => Icon::Package,
     }
 }
 
@@ -622,6 +627,8 @@ pub(crate) fn title(ctx: &Ctx, item: Item) -> String {
         Item::CrashReports => "Old crash reports",
         Item::FlatpakRuntimes => "Unused app parts",
         Item::Trash => "Trash",
+        Item::OldSnaps => "Older copies of apps",
+        Item::OldKernels => "Old system versions",
     })
 }
 
@@ -648,6 +655,12 @@ fn describe(ctx: &Ctx, item: Item) -> String {
             "Shared parts that apps once needed. No app on this computer uses them now."
         }
         Item::Trash => "Files you moved to the Trash and have not emptied yet.",
+        Item::OldSnaps => {
+            "Earlier copies of apps that stayed behind after an update. The copy in use is not touched."
+        }
+        Item::OldKernels => {
+            "Earlier versions of your system that updates left behind. The one in use and the newest one stay."
+        }
     })
 }
 
@@ -773,7 +786,11 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> El<'a> {
             None,
         ));
     }
-    rows.extend(Item::here().iter().map(|item| item_row(state, ctx, *item)));
+    rows.extend(
+        Item::offered()
+            .into_iter()
+            .map(|item| item_row(state, ctx, item)),
+    );
     let can = !state.selected().is_empty() && !ctx.busy && matches!(state.sheet, Sheet::None);
     let button = row![
         space::horizontal(),
