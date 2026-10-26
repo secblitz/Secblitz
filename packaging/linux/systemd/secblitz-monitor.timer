@@ -1,0 +1,11 @@
+[Unit]
+Description=Secblitz daily background check
+Documentation=https://secblitz.lol
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

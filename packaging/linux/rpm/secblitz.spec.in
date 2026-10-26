@@ -1,0 +1,57 @@
+Name:           secblitz
+Version:        @VERSION@
+Release:        1
+Summary:        Check your computer's security and privacy and fix what you approve
+License:        MIT
+URL:            https://secblitz.lol
+BuildArch:      @ARCH@
+Requires:       polkit
+Requires:       dbus-common
+Requires:       systemd
+%global debug_package %{nil}
+%global _build_id_links none
+%global __strip /bin/true
+%global __brp_strip %{nil}
+AutoReqProv:    no
+
+%description
+Secblitz looks at your computer's security and privacy settings and tells you
+in plain words what it finds. Checking never changes anything. Nothing changes
+without your clear yes, and every change can be undone.
+
+%prep
+
+%build
+
+%install
+cp -a @STAGE@/. %{buildroot}/
+
+%files
+@FILES@
+
+%post
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload >/dev/null 2>&1 || :
+    systemctl reload dbus.service >/dev/null 2>&1 || systemctl reload dbus-broker.service >/dev/null 2>&1 || :
+    if [ "$1" -gt 1 ]; then
+        systemctl try-restart secblitz-helper.service >/dev/null 2>&1 || :
+    fi
+fi
+
+%preun
+if [ "$1" -eq 0 ] && [ -d /run/systemd/system ]; then
+    systemctl stop secblitz-monitor.timer secblitz-monitor.service secblitz-helper.service >/dev/null 2>&1 || :
+    systemctl disable secblitz-monitor.timer >/dev/null 2>&1 || :
+fi
+
+%postun
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload >/dev/null 2>&1 || :
+    if [ "$1" -eq 0 ]; then
+        systemctl reload dbus.service >/dev/null 2>&1 || systemctl reload dbus-broker.service >/dev/null 2>&1 || :
+    fi
+fi
+
+%changelog
+* @RPMDATE@ Secblitz <https://secblitz.lol> - @VERSION@-1
+- Release @VERSION@

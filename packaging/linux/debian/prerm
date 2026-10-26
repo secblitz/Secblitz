@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    remove|deconfigure)
+        if [ -d /run/systemd/system ]; then
+            systemctl stop secblitz-monitor.timer secblitz-monitor.service secblitz-helper.service 2>/dev/null || true
+            systemctl disable secblitz-monitor.timer 2>/dev/null || true
+        fi
+        ;;
+esac
+
+exit 0

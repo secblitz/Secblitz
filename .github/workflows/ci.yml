@@ -113,6 +113,28 @@ jobs:
       - name: Clippy
         run: cargo clippy --locked --all-targets -- -D warnings
 
+  linux-packages:
+    name: Linux packages, units and policy (distro containers)
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Pillow for the icons (hash-pinned)
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/tools"
+          "$RUNNER_TEMP/tools/bin/pip" install --disable-pip-version-check --require-hashes --only-binary=:all: -r scripts/requirements-art.txt
+          echo "$RUNNER_TEMP/tools/bin" >> "$GITHUB_PATH"
+      - name: Build placeholder packages, install, upgrade, remove and purge them in each distro
+        # Uses a throwaway signing key and a placeholder program; the real key never reaches CI.
+        run: python3 scripts/linux-packaging-tests.py --containers
+
   scripts:
     name: Locales, release tools, version bump and website tests
     runs-on: ubuntu-latest

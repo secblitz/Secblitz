@@ -430,6 +430,51 @@ Publishing is refused for any tag that is not the latest release, so a re-run on
 an old tag can never roll the website back. The verified site is kept for 30
 days, the longest an approval can wait.
 
+## Linux packages and repositories
+
+Linux ships as a `.deb` and an `.rpm`, served from a signed APT and DNF
+repository at `https://secblitz.lol/linux/apt` and `https://secblitz.lol/linux/rpm`.
+All of this is done by the owner on their own machine; CI only tests packages
+built with a throwaway key.
+
+One-time: create the repository signing key (separate from the update feed key),
+keep it on your machine only, and export the public half:
+
+```sh
+gpg --quick-generate-key "Secblitz Packages <support@secblitz.lol>" ed25519 sign 5y
+gpg --armor --export <KEY_ID> > secblitz-packages.asc   # public key, safe to publish
+```
+
+Each release, after the version is bumped and the Linux binary exists:
+
+```sh
+# Builds in debian:12 (glibc 2.36). Fails if the binary needs a newer GLIBC_ symbol.
+python3 scripts/build-linux-packages.py X.Y.Z target/linux/secblitz target/linux/pkgs \
+    --build-binary --key secblitz-packages.asc
+# Signs InRelease, Release.gpg and repomd.xml.asc with your key. Refuses to run in CI.
+python3 scripts/build-linux-repo.py target/linux/site target/linux/pkgs/*.deb target/linux/pkgs/*.rpm \
+    --local-user <KEY_ID>
+```
+
+Publish `target/linux/site/apt` and `target/linux/site/rpm` under `/linux/` on
+the website, and publish `secblitz-packages.asc` next to them. Keep the older
+packages in the repository so people can still roll back.
+
+Package facts worth knowing:
+
+- Removing the package stops the services, removes the repository entry and its
+  keyring, and keeps `/var/lib/secblitz` so a reinstall can still undo changes.
+- The daily background check (`secblitz-monitor.timer`) is installed but not
+  switched on. The app turns it on only when the person chooses it.
+- RPM packages are not signed one by one. The repository metadata is signed
+  (`repo_gpgcheck=1`) and it carries each package's checksum.
+
+Test the packages locally with `python3 scripts/linux-packaging-tests.py --containers`
+(needs Docker and Pillow). That run installs, upgrades, removes and purges the
+packages in Ubuntu 24.04 and 26.04, Debian 12 and 13, and Fedora 43 and 44,
+checks the units with `systemd-analyze verify`, and checks the signed
+repositories with `apt` and `dnf`.
+
 ## The portable exe
 
 The portable exe is larger than the 25 MiB Cloudflare Pages file limit, so the
