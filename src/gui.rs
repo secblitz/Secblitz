@@ -407,12 +407,24 @@ impl App {
                     )?;
                     Ok(Box::new(engine) as Box<dyn worker::Session>)
                 }
-                #[cfg(not(windows))]
+                #[cfg(target_os = "linux")]
+                {
+                    Ok(Box::new(app::composite::Composite {
+                        system: Box::new(crate::linux_bus::client::session()?),
+                        person: Box::new(secblitz::linux::person::open_engine()?),
+                    }) as Box<dyn worker::Session>)
+                }
+                #[cfg(not(any(windows, target_os = "linux")))]
                 {
                     anyhow::bail!(crate::launcher::NOT_INSTALLED)
                 }
             },
             || {
+                #[cfg(target_os = "linux")]
+                {
+                    start_fresh_on_linux()
+                }
+                #[cfg(not(target_os = "linux"))]
                 secblitz::engine::recover::start_fresh(
                     &secblitz::platform::state_dir()?,
                     secblitz::permissions::with_permissions(secblitz::platform::backend()?),
@@ -1548,6 +1560,21 @@ impl App {
 
 /// Pages asked for by a second start, read on their own thread so the window
 /// only wakes when there is one.
+/// The person's own history is tried first: it needs no password. The system's history is only reset when the
+/// person's was not the damaged one.
+#[cfg(target_os = "linux")]
+fn start_fresh_on_linux() -> anyhow::Result<()> {
+    match secblitz::linux::person::start_fresh() {
+        Err(e)
+            if e.downcast_ref::<secblitz::engine::recover::NotDamaged>()
+                .is_some() =>
+        {
+            crate::linux_bus::client::start_fresh()
+        }
+        other => other,
+    }
+}
+
 fn open_requests() -> Subscription<Message> {
     Subscription::run(|| {
         let (tx, rx) = iced::futures::channel::mpsc::unbounded();

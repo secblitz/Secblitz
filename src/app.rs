@@ -1,5 +1,7 @@
 //! UI-independent application layer shared by the GUI.
 pub mod app_access;
+#[cfg(any(target_os = "linux", test))]
+pub mod composite;
 pub mod flow;
 pub mod history;
 pub mod last_check;
