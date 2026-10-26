@@ -625,7 +625,7 @@ fn assessed<'a>(state: &State, ctx: &'a Ctx, report: &'a Report) -> Element<'a, 
     if processor_tip_due(ctx) {
         page = page.push(later(2, processor_card(ctx)));
     }
-    if state.web_suggest {
+    if shows_web_suggestion(state, secblitz::os::Os::CURRENT) {
         page = page.push(later(2, web_card(ctx)));
     }
     let (count, labels) = protected_labels(report);
@@ -633,6 +633,11 @@ fn assessed<'a>(state: &State, ctx: &'a Ctx, report: &'a Report) -> Element<'a, 
         page = page.push(later(3, protected_group(state, ctx, count, &labels)));
     }
     page.into()
+}
+
+/// Web protection exists on Windows only.
+fn shows_web_suggestion(state: &State, os: secblitz::os::Os) -> bool {
+    state.web_suggest && os == secblitz::os::Os::Windows
 }
 
 fn processor_card<'a>(ctx: &'a Ctx) -> Element<'a, Message> {
@@ -842,6 +847,17 @@ mod tests {
             "a switched-on extra is not counted"
         );
         assert_eq!(protected_labels(&report).0, Score::of(&report).protected);
+    }
+
+    #[test]
+    fn the_web_protection_card_is_never_offered_off_windows() {
+        use secblitz::os::Os;
+        let mut state = State::default();
+        assert!(!shows_web_suggestion(&state, Os::Windows));
+        update_flag(&mut state);
+        assert!(shows_web_suggestion(&state, Os::Windows));
+        assert!(!shows_web_suggestion(&state, Os::Linux));
+        assert!(!shows_web_suggestion(&state, Os::Macos));
     }
 
     fn update_flag(state: &mut State) {

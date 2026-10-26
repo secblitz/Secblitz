@@ -65,6 +65,16 @@ fn shown_update(installed: bool, update: Option<UpdateView>) -> Remote<UpdateVie
     }
 }
 
+/// Windows copies run from the install folder; the other systems install through their package manager.
+fn updates_apply(os: secblitz::os::Os, installed: bool) -> bool {
+    os != secblitz::os::Os::Windows || installed
+}
+
+/// The tray icon and the notifications about switched back settings and blocked websites exist on Windows only.
+fn has_background_extras(os: secblitz::os::Os) -> bool {
+    os == secblitz::os::Os::Windows
+}
+
 fn shown_tray(installed: bool, tray: bool) -> bool {
     installed && tray
 }
@@ -306,7 +316,10 @@ pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
                 Ok(on) => Remote::Ready(on),
                 Err(_) => Remote::Failed,
             };
-            state.update = shown_update(state.installed, update);
+            state.update = shown_update(
+                updates_apply(secblitz::os::Os::CURRENT, state.installed),
+                update,
+            );
             Task::none()
         }
         Msg::SetTheme(choice) => {
@@ -653,58 +666,62 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
     if let Some(c @ Confirm::Background(_)) = state.confirm {
         rows.push(confirm_row(p, ctx, state, c));
     }
-    let tray_toggle =
-        (state.installed && !state.working).then_some(|v| Message::Settings(Msg::AskTray(v)));
-    rows.push(widgets::row_item(
-        p,
-        Some(Icon::Bell),
-        t("System tray icon"),
-        Some(if state.installed {
-            t("A small shield tells you at a glance if your computer looks safe.")
-        } else {
-            t("Available once Secblitz is installed.")
-        }),
-        widgets::switch(p, shown_tray(state.installed, state.tray), tray_toggle),
-        None,
-    ));
-    if let Some(c @ Confirm::Tray(_)) = state.confirm {
-        rows.push(confirm_row(p, ctx, state, c));
+    if has_background_extras(secblitz::os::Os::CURRENT) {
+        let tray_toggle =
+            (state.installed && !state.working).then_some(|v| Message::Settings(Msg::AskTray(v)));
+        rows.push(widgets::row_item(
+            p,
+            Some(Icon::Bell),
+            t("System tray icon"),
+            Some(if state.installed {
+                t("A small shield tells you at a glance if your computer looks safe.")
+            } else {
+                t("Available once Secblitz is installed.")
+            }),
+            widgets::switch(p, shown_tray(state.installed, state.tray), tray_toggle),
+            None,
+        ));
+        if let Some(c @ Confirm::Tray(_)) = state.confirm {
+            rows.push(confirm_row(p, ctx, state, c));
+        }
     }
     let protection = widgets::group(p, t("Background protection"), None, None, rows);
 
     let needs_background = matches!(state.background, Remote::Ready(false));
-    let notifications = widgets::group(
-        p,
-        t("Notifications"),
-        None,
-        None,
-        vec![
-            widgets::row_item(
-                p,
-                Some(Icon::Bell),
-                t("Tell me when a setting is switched back"),
-                needs_background.then(|| t("Needs background checks, above.")),
-                widgets::switch(
+    let notifications = has_background_extras(secblitz::os::Os::CURRENT).then(|| {
+        widgets::group(
+            p,
+            t("Notifications"),
+            None,
+            None,
+            vec![
+                widgets::row_item(
                     p,
-                    ctx.prefs.notify_reverted,
-                    Some(|v| Message::Settings(Msg::SetNotifyReverted(v))),
+                    Some(Icon::Bell),
+                    t("Tell me when a setting is switched back"),
+                    needs_background.then(|| t("Needs background checks, above.")),
+                    widgets::switch(
+                        p,
+                        ctx.prefs.notify_reverted,
+                        Some(|v| Message::Settings(Msg::SetNotifyReverted(v))),
+                    ),
+                    None,
                 ),
-                None,
-            ),
-            widgets::row_item(
-                p,
-                Some(Icon::ShieldAlert),
-                t("Tell me when a website is blocked"),
-                None,
-                widgets::switch(
+                widgets::row_item(
                     p,
-                    ctx.prefs.notify_dangerous,
-                    Some(|v| Message::Settings(Msg::SetNotifyDangerous(v))),
+                    Some(Icon::ShieldAlert),
+                    t("Tell me when a website is blocked"),
+                    None,
+                    widgets::switch(
+                        p,
+                        ctx.prefs.notify_dangerous,
+                        Some(|v| Message::Settings(Msg::SetNotifyDangerous(v))),
+                    ),
+                    None,
                 ),
-                None,
-            ),
-        ],
-    );
+            ],
+        )
+    });
 
     let (status, line): (Element<'a, Message>, String) = match &state.update {
         Remote::Loading | Remote::Ready(UpdateView::Checking) => {
@@ -935,16 +952,13 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
         |tab| Message::Settings(Msg::SetTab(tab)),
     );
     let body: Element<'a, Message> = match state.tab {
-        Tab::General => column![
-            appearance,
-            protection,
-            notifications,
-            updates,
-            removal,
-            about
-        ]
-        .spacing(theme::S8)
-        .into(),
+        Tab::General => {
+            let mut sections = column![appearance, protection].spacing(theme::S8);
+            if let Some(notifications) = notifications {
+                sections = sections.push(notifications);
+            }
+            sections.push(updates).push(removal).push(about).into()
+        }
         Tab::Help => column![support::questions(&state.help, ctx), feedback]
             .spacing(theme::S8)
             .into(),
@@ -1078,6 +1092,17 @@ mod tests {
             Remote::Ready(UpdateView::Unknown)
         ));
         assert!(matches!(shown_update(true, None), Remote::Failed));
+    }
+
+    #[test]
+    fn linux_always_shows_the_update_status_and_hides_the_windows_only_rows() {
+        use secblitz::os::Os;
+        assert!(updates_apply(Os::Linux, false));
+        assert!(updates_apply(Os::Windows, true));
+        assert!(!updates_apply(Os::Windows, false));
+        assert!(has_background_extras(Os::Windows));
+        assert!(!has_background_extras(Os::Linux));
+        assert!(!has_background_extras(Os::Macos));
     }
 
     #[test]

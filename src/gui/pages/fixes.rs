@@ -224,6 +224,24 @@ impl Rows {
         topics::first_needing_action(|t| self.line(t))
     }
 
+    /// The topics worth a tile: those with a check on `os`, plus any that already hold a result.
+    fn visible_topics(&self, os: secblitz::os::Os) -> Vec<Topic> {
+        let own = Topic::shown_on(os);
+        Topic::ALL
+            .into_iter()
+            .filter(|t| own.contains(t) || self.holds(*t))
+            .collect()
+    }
+
+    fn holds(&self, topic: Topic) -> bool {
+        self.attention
+            .iter()
+            .chain(&self.privacy)
+            .any(|r| r.topic == topic)
+            || self.others.iter().any(|o| o.topic == topic)
+            || self.protected_count(topic) > 0
+    }
+
     fn protected_count(&self, topic: Topic) -> usize {
         self.protected.iter().filter(|r| r.topic == topic).count()
     }
@@ -1684,9 +1702,12 @@ fn current_topic(state: &State, ctx: &Ctx, rows: &Rows) -> Topic {
     if let Some(topic) = state.topic.get() {
         return topic;
     }
+    let shown = rows.visible_topics(secblitz::os::Os::CURRENT);
     let topic = rows
         .first_topic_to_act_on()
         .or(ctx.prefs.protection_topic)
+        .filter(|t| shown.contains(t))
+        .or_else(|| shown.first().copied())
         .unwrap_or(Topic::Threats);
     state.topic.set(Some(topic));
     topic
@@ -1733,7 +1754,7 @@ fn line_tone(line: Line) -> Tone {
 }
 
 fn tiles(ctx: &Ctx, rows: &Rows, on_show: Topic) -> Vec<Tile> {
-    Topic::ALL
+    rows.visible_topics(secblitz::os::Os::CURRENT)
         .into_iter()
         .map(|topic| {
             let line = rows.line(topic);
@@ -2342,6 +2363,39 @@ fn protected_group<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tiles_follow_the_system_and_never_hide_a_result() {
+        use secblitz::os::Os;
+        let rows = Rows::default();
+        assert_eq!(rows.visible_topics(Os::Windows), Topic::ALL.to_vec());
+        assert_eq!(
+            rows.visible_topics(Os::Linux),
+            [
+                Topic::SignIn,
+                Topic::Network,
+                Topic::Windows,
+                Topic::Privacy
+            ]
+        );
+    }
+
+    #[test]
+    fn a_hidden_topic_with_a_result_keeps_its_tile() {
+        let mut rows = Rows::default();
+        rows.protected.push(Prot {
+            id: "defender.realtime".into(),
+            topic: Topic::Threats,
+            name: String::new(),
+            line: String::new(),
+            undoable: false,
+            info: None,
+            hay: search_text(&[], &[], "defender.realtime"),
+        });
+        let shown = rows.visible_topics(secblitz::os::Os::Linux);
+        assert!(shown.contains(&Topic::Threats));
+        assert!(!shown.contains(&Topic::Browsers));
+    }
 
     #[test]
     fn who_published_an_allowed_app_is_said_in_the_chosen_language() {
