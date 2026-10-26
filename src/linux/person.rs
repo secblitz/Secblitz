@@ -2100,6 +2100,20 @@ mod tests {
     }
 
     #[test]
+    fn a_plain_gnome_desktop_is_not_offered_the_ubuntu_only_sleep_lock() {
+        let desk = Rc::new(Desk::stock());
+        let listed = ids(&backend(&desk, "debian", Desktop::Gnome, true));
+        assert!(!listed.contains(&"linux.lock_on_suspend".to_owned()));
+        for id in [
+            "linux.screen_off_delay",
+            "linux.lock_delay",
+            "linux.usage_stats",
+        ] {
+            assert!(listed.contains(&id.to_owned()), "{id}");
+        }
+    }
+
+    #[test]
     fn a_missing_desktop_schema_makes_the_session_checks_unavailable() {
         let mut stock = Desk::mint();
         stock
