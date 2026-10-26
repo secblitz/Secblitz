@@ -72,6 +72,21 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             "Anyone running a Wi-Fi network can recognize your computer by it, even on a different day or in a different place.",
             "Each network sees a made-up address that stays the same for that network. You can undo this.",
         ),
+        "linux.ptrace" => e(
+            "Normally any program can look inside the other programs you run and read what they hold in memory. A safer rule is not on here.",
+            "A harmful program you run by accident could read passwords and other secrets out of your browser or other programs.",
+            "Programs can only look inside programs they started themselves. Tools for fixing programs still work when you start the program from them. You can undo this.",
+        ),
+        "linux.network_redirects" => e(
+            "Other computers on your network can tell yours to send its traffic a different way, and this computer can tell others the same.",
+            "Someone on the same Wi-Fi can use this to quietly send your traffic through their own computer and read it.",
+            "Route changes from other computers are ignored and this computer stops sending them. Everything you do online works as before, and you can undo this.",
+        ),
+        "linux.llmnr" => e(
+            "Your computer answers questions from other computers on the local network about names, such as the name of a shared folder.",
+            "Someone on the same network can answer first and trick your computer into sending them a sign-in password.",
+            "Your computer stops answering these questions. Names are still found through your normal internet settings, and you can undo this.",
+        ),
         "linux.screen_lock" => e(
             "Your screen should lock when you walk away. This checks that locking is on and that it does not wait forever.",
             "Anyone who walks past can read your screen and use your accounts while you are gone.",

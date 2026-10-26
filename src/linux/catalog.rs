@@ -150,6 +150,30 @@ const SPECS: &[LinuxSpec] = &[
             set("protected_regular", "", &[1, 2], false, Some(2), 2),
         ],
     },
+    // ptrace_scope: who may look inside other running programs, 0 anyone, 1 only a program's parent, 2 and 3 stricter; null without the module.
+    LinuxSpec {
+        id: "linux.ptrace",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[set("ptrace_scope", "", &[1, 2, 3], true, Some(1), 3)],
+    },
+    // accept_redirects, send_redirects: 1 when any network connection follows or hands out route changes; null when unreadable.
+    LinuxSpec {
+        id: "linux.network_redirects",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[flag("accept_redirects", true), flag("send_redirects", true)],
+    },
+    // llmnr: whether systemd-resolved answers name lookups from the local network: "yes", "resolve" or "no"; null when it is not the resolver.
+    LinuxSpec {
+        id: "linux.llmnr",
+        scope: Scope::System,
+        ask: false,
+        reboot: false,
+        keys: &[text("llmnr", &["no"], true, Some("no"))],
+    },
     // apport: 1 when Ubuntu's crash reporting is enabled.
     LinuxSpec {
         id: "linux.crash_reports",
@@ -245,6 +269,7 @@ fn closed_words(id: &str, key: &str) -> Option<&'static [&'static str]> {
         ("linux.firewall", "enabled") => &["yes", "no"],
         ("linux.firewall", "incoming") => &["deny", "reject", "allow"],
         ("linux.autologin", "gdm_automatic") | ("linux.guest", "allow_guest") => &["true", "false"],
+        ("linux.llmnr", "llmnr") => &["yes", "resolve", "no"],
         ("linux.ssh_password", "root_login") => {
             &["yes", "no", "prohibit-password", "forced-commands-only"]
         }
@@ -341,7 +366,7 @@ mod tests {
         for windows in crate::engine::catalog::ids(Os::Windows) {
             assert!(spec(windows).is_none(), "{windows}");
         }
-        assert_eq!(specs().len(), 18);
+        assert_eq!(specs().len(), 21);
     }
 
     #[test]

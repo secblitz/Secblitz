@@ -19,7 +19,7 @@ pub struct LinuxBackend<S: Sys> {
     memo: PathBuf,
 }
 
-const TEXT: [(&str, &str, &str); 13] = [
+const TEXT: [(&str, &str, &str); 16] = [
     (
         "linux.firewall",
         "Firewall",
@@ -84,6 +84,21 @@ const TEXT: [(&str, &str, &str); 13] = [
         "linux.wifi_mac",
         "Wi-Fi address",
         "Whether new Wi-Fi connections show the real hardware address of this computer to the network.",
+    ),
+    (
+        "linux.ptrace",
+        "Looking inside other programs",
+        "Whether a program can look inside other programs that are running and read their secrets.",
+    ),
+    (
+        "linux.network_redirects",
+        "Network route changes",
+        "Whether this computer obeys or hands out route changes that another computer on the network sends.",
+    ),
+    (
+        "linux.llmnr",
+        "Name lookups on the network",
+        "Whether this computer answers name lookups from other computers on the local network.",
     ),
 ];
 
@@ -199,6 +214,9 @@ impl<S: Sys> Backend for LinuxBackend<S> {
             "linux.countme" => controls::privacy::observe_countme(&cx),
             "linux.connectivity_check" => controls::privacy::observe_connectivity(&cx),
             "linux.wifi_mac" => controls::privacy::observe_wifi_mac(&cx),
+            "linux.ptrace" => controls::kernel::observe_ptrace(&cx),
+            "linux.network_redirects" => controls::network::observe_redirects(&cx),
+            "linux.llmnr" => controls::network::observe_llmnr(&cx),
             _ => bail!("Unknown control id: {id}"),
         };
         result.map_err(|e| detail(id, &e, READ_FAILED))
@@ -223,6 +241,9 @@ impl<S: Sys> Backend for LinuxBackend<S> {
             "linux.countme" => controls::privacy::write_countme(&cx, &want),
             "linux.connectivity_check" => controls::privacy::write_connectivity(&cx, &want),
             "linux.wifi_mac" => controls::privacy::write_wifi_mac(&cx, &want),
+            "linux.ptrace" => controls::kernel::write_ptrace(&cx, &want),
+            "linux.network_redirects" => controls::network::write_redirects(&cx, &want),
+            "linux.llmnr" => controls::network::write_llmnr(&cx, &want),
             _ => bail!("Unknown control id: {id}"),
         };
         result.map_err(|e| detail(id, &e, CHANGE_FAILED))

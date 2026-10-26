@@ -165,6 +165,7 @@ impl Sim {
                 Some((_, true)) => out(0, "active\n"),
                 _ => out(3, "inactive\n"),
             },
+            "try-restart" => out(i32::from(!units.contains_key(&name)) * 5, ""),
             "enable" | "disable" | "start" | "stop" | "reload" => {
                 let Some(unit) = units.get_mut(&name) else {
                     return out(5, "");
@@ -398,8 +399,13 @@ impl Sim {
             },
             "/usr/sbin/sysctl" => {
                 let (key, value) = args[1].split_once('=').unwrap();
+                let key = if key.contains('/') {
+                    key.to_string()
+                } else {
+                    key.replace('.', "/")
+                };
                 self.file(
-                    &format!("/proc/sys/{}", key.replace('.', "/")),
+                    &format!("/proc/sys/{key}"),
                     &format!("{value}\n"),
                 );
                 out(0, "")

@@ -23,6 +23,9 @@ pub(super) fn label(id: &str) -> Option<&'static str> {
         "linux.countme" => "Fedora usage counting",
         "linux.connectivity_check" => "Internet connection check",
         "linux.wifi_mac" => "Wi-Fi address privacy",
+        "linux.ptrace" => "Looking inside other programs",
+        "linux.network_redirects" => "Network route changes",
+        "linux.llmnr" => "Name lookups on the network",
         "linux.screen_lock" => "Screen lock",
         "linux.remote_desktop" => "Screen sharing",
         "linux.recent_files" => "Recent files list",
@@ -61,6 +64,15 @@ pub(super) fn impact(id: &str) -> Option<&'static str> {
         "linux.wifi_mac" => {
             "Wi-Fi networks recognizing your computer and following it from place to place"
         }
+        "linux.ptrace" => {
+            "A harmful program reading passwords and secrets from the other programs you run"
+        }
+        "linux.network_redirects" => {
+            "Someone on the same network quietly sending your traffic through their computer"
+        }
+        "linux.llmnr" => {
+            "Someone on the same network tricking your computer into handing over a sign-in password"
+        }
         "linux.screen_lock" => "Anyone walking up to your computer while you are away",
         "linux.remote_desktop" => {
             "Someone watching or controlling your screen from another computer"
@@ -88,6 +100,15 @@ pub(super) fn repair(id: &str) -> Option<&'static str> {
         "linux.guest" => "The guest option will be removed from the sign-in screen.",
         "linux.kernel_protections" => {
             "Extra built-in protections will be switched on. No restart is needed."
+        }
+        "linux.ptrace" => {
+            "Programs will only be able to look inside programs they started themselves. No restart is needed."
+        }
+        "linux.network_redirects" => {
+            "This computer will ignore route changes sent by other computers and stop sending its own."
+        }
+        "linux.llmnr" => {
+            "This computer will stop answering name lookups from other computers on the network."
         }
         "linux.crash_reports" => "Ubuntu will stop collecting crash reports.",
         "linux.countme" => "Fedora will stop counting this computer.",

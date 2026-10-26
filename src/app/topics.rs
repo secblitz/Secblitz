@@ -65,7 +65,9 @@ impl Topic {
                 | "linux.ssh_server"
                 | "linux.ssh_password"
                 | "linux.file_sharing"
-                | "linux.remote_desktop",
+                | "linux.remote_desktop"
+                | "linux.network_redirects"
+                | "linux.llmnr",
             ) => Topic::Network,
             ("linux", "linux.autologin" | "linux.guest" | "linux.screen_lock") => Topic::SignIn,
             (
@@ -303,6 +305,9 @@ mod tests {
             ("linux.screen_lock", SignIn),
             ("linux.auto_updates", Windows),
             ("linux.kernel_protections", Windows),
+            ("linux.ptrace", Windows),
+            ("linux.network_redirects", Network),
+            ("linux.llmnr", Network),
             ("linux.crash_reports", Privacy),
             ("linux.countme", Privacy),
             ("linux.connectivity_check", Privacy),
