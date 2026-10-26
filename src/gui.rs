@@ -567,7 +567,7 @@ impl App {
         }
         let privacy = self.page == Page::Fixes
             && fixes::topic_on_show(&self.fixes) == Some(crate::app::topics::Topic::Privacy);
-        if privacy && !self.privacy_shown {
+        if privacy && !self.privacy_shown && fixes::app_access_applies() {
             task = Task::batch([
                 task,
                 app_access::on_enter(&mut self.app_access, &mut self.ctx),

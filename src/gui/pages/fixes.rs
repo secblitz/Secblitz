@@ -1495,6 +1495,11 @@ pub fn fills_window(ctx: &Ctx) -> bool {
     ctx.engine_error.is_none() && ctx.full_check().is_some()
 }
 
+/// Which apps may use the camera, microphone and location is a Windows setting; other systems keep theirs elsewhere.
+pub fn app_access_applies() -> bool {
+    secblitz::os::Os::CURRENT == secblitz::os::Os::Windows
+}
+
 pub fn view<'a>(
     state: &'a State,
     ctx: &'a Ctx,
@@ -1655,7 +1660,7 @@ pub fn view<'a>(
         };
         let head = container(head).padding([0.0, theme::S4]);
         let mut section = column![head].spacing(theme::S3);
-        if topic == Topic::Privacy {
+        if topic == Topic::Privacy && app_access_applies() {
             section = section.push(super::app_access::view(access, ctx));
         }
         let mut groups = topic_groups(state, ctx, rows, &part, topic, false).into_iter();
