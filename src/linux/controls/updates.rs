@@ -1,13 +1,18 @@
-//! Automatic security updates: `unattended-upgrades` on the Debian family, `dnf5 automatic` on Fedora.
+//! Automatic security updates: `unattended-upgrades` on Ubuntu and Debian, the Update Manager's own automation on Linux
+//! Mint, `dnf5 automatic` on Fedora. Fedora Workstation without it keeps itself updated through the Software app.
 //!
 //! `unattended` is the number of days between automatic updates, 0 when they are off. Secblitz never installs the
 //! updater; it only switches on one that is already there.
 
 use super::units::{self, Unit};
-use super::{ini, num_of, observation, plain, unavailable, Cx, Items, NO_AUTO_UPDATES, NO_RECORD};
+use super::{
+    ini, num_of, observation, plain, unavailable, Cx, Items, NO_AUTO_UPDATES, NO_RECORD,
+    SOFTWARE_APP_UPDATES,
+};
 use crate::hardening::Item;
 use crate::model::Observation;
 use anyhow::Result;
+use std::path::Path;
 
 const APT_DROPIN: &str = "/etc/apt/apt.conf.d/52secblitz-auto-upgrades";
 const APT_NOTE: &str = "// Written by Secblitz. Delete this file to go back to how it was.\n";
@@ -19,17 +24,27 @@ const DNF_FILES: [&str; 3] = [
 ];
 const TIMER: &str = "dnf5-automatic.timer";
 const MEMO: &str = "dnf-automatic";
+const MINT_TOOL: &str = "/usr/bin/mintupdate-automation";
+const MINT_TOUCH: &str = "/var/lib/linuxmint/mintupdate-automatic-upgrades-enabled";
+const MINT_TIMER: &str = "mintupdate-automation-upgrade.timer";
+const MINT_MEMO: &str = "mint-automation";
+const SOFTWARE_APP: &str = "/usr/bin/gnome-software";
 const MAX_DAYS: u32 = 365;
 
 enum Updater {
     Apt,
+    Mint,
     Dnf(Option<Unit>),
 }
 
 fn choose(cx: &Cx) -> Updater {
     // dpkg-query exists only where packages are .deb files.
     if cx.run("/usr/bin/dpkg-query", &["--version"]).is_ok() {
-        Updater::Apt
+        if cx.distro.id == "linuxmint" && matches!(cx.sys.read(Path::new(MINT_TOOL)), Ok(Some(_))) {
+            Updater::Mint
+        } else {
+            Updater::Apt
+        }
     } else {
         Updater::Dnf(units::probe(cx, TIMER))
     }
@@ -38,6 +53,7 @@ fn choose(cx: &Cx) -> Updater {
 pub fn observe(cx: &Cx) -> Result<Observation> {
     match choose(cx) {
         Updater::Apt => observe_apt(cx),
+        Updater::Mint => observe_mint(cx),
         Updater::Dnf(timer) => observe_dnf(cx, timer),
     }
 }
@@ -51,6 +67,7 @@ pub fn write(cx: &Cx, want: &Items) -> Result<()> {
     }
     match choose(cx) {
         Updater::Apt => write_apt(cx, days),
+        Updater::Mint => write_mint(cx, days),
         Updater::Dnf(timer) => write_dnf(cx, timer, days),
     }
 }
@@ -112,6 +129,72 @@ fn write_apt(cx: &Cx, days: u32) -> Result<()> {
     cx.write_text(APT_DROPIN, &text, 0o644)
 }
 
+struct MintState {
+    touch: bool,
+    timer: Option<Unit>,
+}
+
+impl MintState {
+    fn read(cx: &Cx) -> Result<Self> {
+        Ok(Self {
+            touch: cx.sys.read(Path::new(MINT_TOUCH))?.is_some(),
+            timer: units::probe(cx, MINT_TIMER),
+        })
+    }
+
+    fn on(&self) -> bool {
+        self.touch && self.timer.as_ref().is_some_and(Unit::enabled)
+    }
+}
+
+fn observe_mint(cx: &Cx) -> Result<Observation> {
+    let on = MintState::read(cx)?.on();
+    Ok(observation(
+        vec![("unattended", Item::Num(u32::from(on)))],
+        true,
+        "",
+    ))
+}
+
+/// Linux Mint's own switch does the work as root with fixed arguments. What was there before is written down first, so
+/// an undo returns to it, including a half-set-up state.
+fn write_mint(cx: &Cx, days: u32) -> Result<()> {
+    let now = MintState::read(cx)?;
+    if days > 0 {
+        if !now.on() {
+            let (enabled, active) = now
+                .timer
+                .as_ref()
+                .map_or((false, false), |t| (t.enabled(), t.active));
+            cx.memo_write(
+                MINT_MEMO,
+                &[format!(
+                    "mint {} {} {}",
+                    u8::from(now.touch),
+                    u8::from(enabled),
+                    u8::from(active)
+                )],
+            )?;
+            cx.run_ok(MINT_TOOL, &["upgrade", "enable"])?;
+        }
+        return Ok(());
+    }
+    let lines = cx.memo_read(MINT_MEMO)?.ok_or_else(|| plain(NO_RECORD))?;
+    let line = lines.first().map(String::as_str).unwrap_or("");
+    let flags: Vec<&str> = line.split(' ').collect();
+    let ["mint", touch, enabled, active] = flags.as_slice() else {
+        return Err(plain(NO_RECORD));
+    };
+    cx.run_ok(MINT_TOOL, &["upgrade", "disable"])?;
+    if *touch == "1" {
+        cx.write_text(MINT_TOUCH, "", 0o644)?;
+    }
+    if now.timer.is_some() {
+        units::put_back(cx, MINT_TIMER, *enabled == "1", *active == "1")?;
+    }
+    cx.memo_clear(MINT_MEMO)
+}
+
 fn dnf_applies(cx: &Cx) -> Result<bool> {
     let mut apply = None;
     for path in DNF_FILES {
@@ -125,9 +208,18 @@ fn dnf_applies(cx: &Cx) -> Result<bool> {
         .is_some_and(|v| matches!(v.to_ascii_lowercase().as_str(), "yes" | "true" | "1" | "on")))
 }
 
+/// Fedora Workstation without the automatic updater still downloads updates through the Software app.
+fn missing_dnf_reason(cx: &Cx) -> &'static str {
+    if matches!(cx.sys.read(Path::new(SOFTWARE_APP)), Ok(Some(_))) {
+        SOFTWARE_APP_UPDATES
+    } else {
+        NO_AUTO_UPDATES
+    }
+}
+
 fn observe_dnf(cx: &Cx, timer: Option<Unit>) -> Result<Observation> {
     let Some(timer) = timer.filter(|t| !t.masked()) else {
-        return Ok(unavailable("linux.auto_updates", NO_AUTO_UPDATES));
+        return Ok(unavailable("linux.auto_updates", missing_dnf_reason(cx)));
     };
     let on = timer.enabled() && dnf_applies(cx)?;
     Ok(observation(
@@ -140,7 +232,7 @@ fn observe_dnf(cx: &Cx, timer: Option<Unit>) -> Result<Observation> {
 fn write_dnf(cx: &Cx, timer: Option<Unit>, days: u32) -> Result<()> {
     let timer = timer
         .filter(|t| !t.masked())
-        .ok_or_else(|| plain(NO_AUTO_UPDATES))?;
+        .ok_or_else(|| plain(missing_dnf_reason(cx)))?;
     let own = cx.text(DNF_CONF)?;
     let key = |text: &Option<String>| {
         text.as_deref()

@@ -41,6 +41,8 @@ pub const FIREWALL_UNREADABLE: &str =
     "Secblitz could not read the firewall settings, so it leaves them alone.";
 pub const NO_AUTO_UPDATES: &str =
     "Automatic updates are not set up on this computer, so Secblitz leaves this alone.";
+pub const SOFTWARE_APP_UPDATES: &str =
+    "The Software app downloads updates for you on this computer, so Secblitz leaves this alone.";
 pub const NO_REMOTE_SIGN_IN: &str = "Remote sign-in is not installed on this computer.";
 pub const REMOTE_SIGN_IN_OFF: &str =
     "Remote sign-in is switched off, so these settings do not matter right now.";
@@ -53,7 +55,7 @@ pub const MACHINE_ID_MISSING: &str =
     "Secblitz is not fully installed. Reinstall it from the software app.";
 
 /// Every sentence a person can be shown by this folder's controls, for the translation tests.
-pub const SENTENCES: [&str; 15] = [
+pub const SENTENCES: [&str; 16] = [
     READ_FAILED,
     CHANGE_FAILED,
     NO_RECORD,
@@ -62,6 +64,7 @@ pub const SENTENCES: [&str; 15] = [
     FIREWALL_MASKED,
     FIREWALL_UNREADABLE,
     NO_AUTO_UPDATES,
+    SOFTWARE_APP_UPDATES,
     NO_REMOTE_SIGN_IN,
     REMOTE_SIGN_IN_OFF,
     REMOTE_SIGN_IN_UNREADABLE,
