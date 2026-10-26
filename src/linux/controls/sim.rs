@@ -423,6 +423,10 @@ impl Sim {
                 ),
                 (other, _) => bail!("dnf5 {other:?}"),
             },
+            "/usr/bin/mokutil" => match self.get("sb.support").as_str() {
+                "none" => out(255, "This system doesn't support Secure Boot\n"),
+                _ => out(1, "EFI variables are not supported on this system\n"),
+            },
             "/usr/bin/findmnt" => out(0, &format!("{}\n", self.get("root.source"))),
             "/usr/bin/lsblk" => out(
                 0,

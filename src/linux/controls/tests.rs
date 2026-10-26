@@ -1231,6 +1231,30 @@ fn findings_report_what_cannot_be_fixed() {
 }
 
 #[test]
+fn a_computer_without_secure_boot_is_told_so_instead_of_asked_to_check_again() {
+    let sim = ubuntu();
+    sim.tool("/usr/bin/mokutil").set("sb.support", "none");
+    let found = backend(&sim).findings().unwrap();
+    let f = found
+        .iter()
+        .find(|f| f.title == crate::advice::LINUX_SECURE_BOOT)
+        .unwrap();
+    assert_eq!(f.status, CheckStatus::Info);
+    assert_eq!(
+        f.detail,
+        crate::linux::controls::findings::SECURE_BOOT_UNSUPPORTED
+    );
+
+    sim.set("sb.support", "");
+    let found = backend(&sim).findings().unwrap();
+    let f = found
+        .iter()
+        .find(|f| f.title == crate::advice::LINUX_SECURE_BOOT)
+        .unwrap();
+    assert_eq!(f.status, CheckStatus::Unknown);
+}
+
+#[test]
 fn findings_that_cannot_be_told_are_unknown_not_a_problem() {
     let sim = ubuntu();
     let mut b = backend(&sim);

@@ -16,6 +16,8 @@ pub const ENCRYPTION_UNKNOWN: &str = "Secblitz could not tell if the main drive 
 pub const SECURE_BOOT_ON: &str = "Secure Boot is on.";
 pub const SECURE_BOOT_OFF: &str = "Secure Boot is off.";
 pub const SECURE_BOOT_UNKNOWN: &str = "Secblitz could not tell if Secure Boot is on.";
+pub const SECURE_BOOT_UNSUPPORTED: &str =
+    "This computer cannot use Secure Boot, so there is nothing to turn on.";
 pub const NO_UPDATES: &str = "No updates are waiting.";
 pub const UPDATES: &str = "Updates are waiting to be installed.";
 pub const UPDATES_UNKNOWN: &str = "Secblitz could not tell if updates are waiting.";
@@ -26,13 +28,14 @@ pub const APPARMOR_OFF: &str = "AppArmor is not running.";
 pub const SELINUX_ON: &str = "SELinux is on and enforcing its rules.";
 pub const SELINUX_OFF: &str = "SELinux is not enforcing its rules.";
 
-pub const SENTENCES: [&str; 15] = [
+pub const SENTENCES: [&str; 16] = [
     ENCRYPTED,
     NOT_ENCRYPTED,
     ENCRYPTION_UNKNOWN,
     SECURE_BOOT_ON,
     SECURE_BOOT_OFF,
     SECURE_BOOT_UNKNOWN,
+    SECURE_BOOT_UNSUPPORTED,
     NO_UPDATES,
     UPDATES,
     UPDATES_UNKNOWN,
@@ -88,10 +91,23 @@ fn encrypted(cx: &Cx) -> Option<bool> {
         .then(|| chain.stdout.lines().any(|l| l.trim() == "crypt"))
 }
 
-fn secure_boot(cx: &Cx) -> Option<bool> {
-    let bytes = cx.sys.read(Path::new(SECURE_BOOT_VARIABLE)).ok()??;
-    // Four bytes of attributes, then the value.
-    (bytes.len() >= 5).then(|| bytes[4] == 1)
+enum SecureBoot {
+    On(bool),
+    Unsupported,
+}
+
+fn secure_boot(cx: &Cx) -> Option<SecureBoot> {
+    match cx.sys.read(Path::new(SECURE_BOOT_VARIABLE)).ok()? {
+        // Four bytes of attributes, then the value.
+        Some(bytes) => (bytes.len() >= 5).then(|| SecureBoot::On(bytes[4] == 1)),
+        // No variable is also what an unmounted efivarfs looks like, so only mokutil's own answer counts.
+        None => {
+            let out = cx.run("/usr/bin/mokutil", &["--sb-state"]).ok()?;
+            format!("{}{}", out.stdout, out.stderr)
+                .contains("doesn't support Secure Boot")
+                .then_some(SecureBoot::Unsupported)
+        }
+    }
 }
 
 fn updates_waiting(cx: &Cx) -> Option<bool> {
@@ -153,13 +169,23 @@ pub fn collect(cx: &Cx) -> Vec<Finding> {
             NOT_ENCRYPTED,
             ENCRYPTION_UNKNOWN,
         ),
-        finding(
-            TITLES[1],
-            secure_boot(cx),
-            SECURE_BOOT_ON,
-            SECURE_BOOT_OFF,
-            SECURE_BOOT_UNKNOWN,
-        ),
+        match secure_boot(cx) {
+            Some(SecureBoot::Unsupported) => Finding {
+                title: TITLES[1].into(),
+                status: CheckStatus::Info,
+                detail: SECURE_BOOT_UNSUPPORTED.into(),
+            },
+            other => finding(
+                TITLES[1],
+                match other {
+                    Some(SecureBoot::On(on)) => Some(on),
+                    _ => None,
+                },
+                SECURE_BOOT_ON,
+                SECURE_BOOT_OFF,
+                SECURE_BOOT_UNKNOWN,
+            ),
+        },
         finding(
             TITLES[2],
             updates_waiting(cx).map(|waiting| !waiting),
