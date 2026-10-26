@@ -10,6 +10,11 @@ installer has passed its checksum and attestation checks, this copies the real
 SHA-256 and size into the staged copy (never into git). prepare-pages.py then
 proves the page, the installer and the signed feed all agree.
 
+From 1.5.0 the release also carries the four Linux packages. With --packages DIR
+(a folder holding secblitz-X.Y.Z-linux-{x64,arm64}.{deb,rpm}) the same step writes
+the version and each package's SHA-256 into the staged install.sh, so the one-line
+installer pins exactly the files that were verified.
+
 Standard library only. Writes only inside --site.
 """
 import argparse
@@ -24,6 +29,10 @@ SHA_ARM_ELEMENT = re.compile(r'(<code id="sha-arm64">)[0-9a-f]{64}(</code>)')
 DETAILS = re.compile(r"(<p>Version )(\d+\.\d+\.\d+)( · )[0-9.]+( MB installer</p>)")
 ARM_DETAILS = re.compile(r"(<p>ARM version · )[0-9.]+( MB installer</p>)")
 LIMIT = 25 * 1024 * 1024
+LINUX_PLACEHOLDERS = {
+    ("x64", "deb"): "@SHA256_X64_DEB@", ("x64", "rpm"): "@SHA256_X64_RPM@",
+    ("arm64", "deb"): "@SHA256_ARM64_DEB@", ("arm64", "rpm"): "@SHA256_ARM64_RPM@",
+}
 
 
 class FinalizeError(Exception):
@@ -54,12 +63,44 @@ def finalize_html(html, version, digest, size, arm_digest=None, arm_size=None):
     return html
 
 
+def render_install(template, version, digests):
+    """Fill the version and package checksums into install.sh. `digests` maps (arch, kind) to SHA-256."""
+    values = {"@SECBLITZ_VERSION@": version}
+    values.update({LINUX_PLACEHOLDERS[key]: digest for key, digest in digests.items()})
+    if set(values) != {"@SECBLITZ_VERSION@", *LINUX_PLACEHOLDERS.values()}:
+        raise FinalizeError("install.sh needs a checksum for each of the four Linux packages.")
+    for placeholder, value in values.items():
+        if template.count(placeholder) != 1:
+            raise FinalizeError(f"install.sh: expected exactly one {placeholder}, found {template.count(placeholder)}.")
+        template = template.replace(placeholder, value)
+    if re.search(r"@[A-Z0-9_]+@", template):
+        raise FinalizeError("install.sh still has a placeholder after filling it in.")
+    return template
+
+
+def linux_digests(directory, version):
+    digests = {}
+    for (arch, kind) in LINUX_PLACEHOLDERS:
+        name = f"secblitz-{version}-linux-{arch}.{kind}"
+        path = directory / name
+        if path.is_symlink() or not path.is_file():
+            raise FinalizeError(f"--packages must hold a regular file named {name}.")
+        size = path.stat().st_size
+        if size > LIMIT:
+            raise FinalizeError(f"{name} is {size / 1_048_576:.1f} MiB. Cloudflare Pages cannot host a file over 25 MiB, so this release cannot be published as it is.")
+        if size == 0:
+            raise FinalizeError(f"{name} is empty.")
+        digests[(arch, kind)] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return digests
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--site", type=Path, required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--setup", type=Path, required=True)
     parser.add_argument("--setup-arm64", type=Path)
+    parser.add_argument("--packages", type=Path, help="folder with the four Linux packages; fills in install.sh")
     args = parser.parse_args(argv)
     try:
         if not VERSION.fullmatch(args.version):
@@ -84,6 +125,13 @@ def main(argv=None):
         html = finalize_html(page.read_bytes().decode("utf-8"), args.version, hashlib.sha256(data).hexdigest(), len(data),
                          hashlib.sha256(arm).hexdigest() if arm is not None else None, len(arm) if arm is not None else None)
         page.write_bytes(html.encode("utf-8"))
+        if args.packages:
+            script = args.site / "install.sh"
+            if script.is_symlink() or not script.is_file():
+                raise FinalizeError("The site has no install.sh.")
+            script.write_bytes(render_install(script.read_bytes().decode("utf-8"), args.version,
+                                              linux_digests(args.packages, args.version)).encode("utf-8"))
+            print(f"install.sh now installs {args.version} and pins the four Linux package checksums.")
         print(f"index.html now shows {args.version}, {len(data) / 1_000_000:.1f} MB, SHA-256 {hashlib.sha256(data).hexdigest()}.")
     except (FinalizeError, OSError, UnicodeError) as err:
         print(f"error: {err}", file=sys.stderr)

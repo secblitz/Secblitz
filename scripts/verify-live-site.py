@@ -6,12 +6,13 @@
 
 Fetches, from the live origin (default: the update origin compiled into the app,
 assets/update-origin.txt), the signed feeds (releases/stable.json and stable-arm64.json), the download
-page (/) and both setups, and compares the SHA-256 of each with
+page (/) and both setups, and from 1.5.0 also install.sh, the four Linux feeds and
+the four Linux packages, and compares the SHA-256 of each with
 the staged file that was deployed. A fresh deploy can take a short while to
 reach every edge, so a mismatch is retried (--attempts, --delay) and only then
 fails, loudly, with exit code 1. A --feed-origin, such as a legacy update host
 whose front page redirects to the main site, is checked only for the files
-installed copies download from it: the feeds and the setups.
+installed copies download from it: the Windows feeds and the setups.
 Read only: no credentials, no writes.
 Standard library only.
 """
@@ -56,6 +57,13 @@ def fetch(url):
     return data
 
 
+def gate():
+    spec = importlib.util.spec_from_file_location("prepare_pages", ROOT / "scripts/prepare-pages.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def expected_files(site, version):
     files = {
         "/releases/stable.json": site / "releases/stable.json",
@@ -65,6 +73,12 @@ def expected_files(site, version):
     for arch in ("x64", "arm64"):
         setup = f"secblitz-{version}-windows-{arch}-setup.exe"
         files[f"/downloads/{setup}"] = site / "downloads" / setup
+    pages = gate()
+    if pages.has_linux(version):
+        files["/install.sh"] = site / "install.sh"
+        for (arch, kind), package in pages.linux_package_names(version).items():
+            files[f"/downloads/{package}"] = site / "downloads" / package
+            files["/" + pages.PACKAGES[arch]["feeds"][kind]] = site / pages.PACKAGES[arch]["feeds"][kind]
     return files
 
 
@@ -111,18 +125,16 @@ def main(argv=None, fetcher=fetch, sleep=time.sleep):
     args = parser.parse_args(argv)
     if not VERSION.fullmatch(args.version) or args.attempts < 1:
         parser.error("version must be plain X.Y.Z and attempts at least 1")
-    spec = importlib.util.spec_from_file_location("prepare_pages", ROOT / "scripts/prepare-pages.py")
-    gate = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(gate)
-    origins = [gate.origin_value(o) for o in args.origin]
+    pages = gate()
+    origins = [pages.origin_value(o) for o in args.origin]
     if not origins:
-        origins = [gate.origin_value((ROOT / "assets/update-origin.txt").read_text(encoding="utf-8").strip())]
+        origins = [pages.origin_value((ROOT / "assets/update-origin.txt").read_text(encoding="utf-8").strip())]
     files = expected_files(args.site, args.version)
-    feed_files = {path: local for path, local in files.items() if path != "/"}
+    feed_files = {path: local for path, local in files.items() if path != "/" and "linux" not in path and path != "/install.sh"}
     failures = []
     for origin in origins:
         failures += check_origin(origin, files, fetcher, args.attempts, args.delay, sleep)
-    for origin in (gate.origin_value(o) for o in args.feed_origin):
+    for origin in (pages.origin_value(o) for o in args.feed_origin):
         failures += check_origin(origin, feed_files, fetcher, args.attempts, args.delay, sleep)
     if failures:
         print("LIVE SITE DOES NOT MATCH THE DEPLOYED FILES:", file=sys.stderr)

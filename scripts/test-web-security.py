@@ -97,6 +97,9 @@ def http_checks():
     for host in HOSTS:
         for path in (FEED, SETUP):
             request(host, path, "HEAD")
+    _, fields, _ = request(HOSTS[0], "/install.sh", "HEAD")
+    emit(kind="install_script", text_plain=fields.get("content-type", "").startswith("text/plain"),
+         nosniff=fields.get("x-content-type-options") == "nosniff")
     for host in ("www.secblitz.lol", "beacons.lol"):
         request(host, "/?next=https%3A%2F%2Fwww.secblitz.lol%2F&review=plain", "HEAD")
     request("www.secblitz.lol", "//beacons.lol/releases/stable.json", "HEAD")

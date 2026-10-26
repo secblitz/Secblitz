@@ -28,6 +28,7 @@ def load(name):
 bump = load("bump-version")
 notes = load("release-notes")
 finalize = load("finalize-site")
+pages = load("prepare-pages")
 live = load("verify-live-site")
 historical = load("historical-downloads")
 
@@ -94,6 +95,16 @@ class BumpTests(unittest.TestCase):
         self.assertEqual(before["website/releases/stable.json"], after["website/releases/stable.json"])
         self.assertEqual(bump.check_site(self.root, "9.8.7"), [])
         self.assertTrue(bump.check_site(self.root, self.shown))
+
+    def test_bump_moves_the_linux_package_links(self):
+        before = (self.root / "website/index.html").read_text()
+        self.assertEqual(len(re.findall(r"downloads/secblitz-" + re.escape(self.old) + r"-linux-(?:x64|arm64)\.(?:deb|rpm)", before)), 4)
+        code, _, err = self.bump("9.9.9")
+        self.assertEqual(code, 0, err)
+        after = (self.root / "website/index.html").read_text()
+        self.assertEqual(len(re.findall(r"downloads/secblitz-9\.9\.9-linux-(?:x64|arm64)\.(?:deb|rpm)", after)), 4)
+        self.assertNotIn(f"secblitz-{self.old}-linux", after)
+        self.assertEqual(bump.check_site(self.root, "9.9.9"), [])
 
     def test_changelog_moves_unreleased_into_dated_section(self):
         self.assertEqual(self.bump("9.8.7")[0], 0)
@@ -314,8 +325,23 @@ def fake_pe(machine=0x8664, pad=b""):
             + b"\0" * 18 + (0x20b).to_bytes(2, "little") + b"\0" * 100 + pad)
 
 
-class AssembleTests(unittest.TestCase):
+def fake_deb(pad=b""):
+    return b"!<arch>\ndebian-binary   " + b"0" * 30 + pad
+
+
+def fake_rpm(pad=b""):
+    return b"\xed\xab\xee\xdb" + b"\0" * 92 + pad
+
+
+LINUX_PACKAGES = {("linux-x64", "deb"): fake_deb, ("linux-x64", "rpm"): fake_rpm,
+                  ("linux-arm64", "deb"): fake_deb, ("linux-arm64", "rpm"): fake_rpm}
+
+
+class AssembleBase(unittest.TestCase):
     """The whole publish path on a scratch copy of the repo with a throwaway signing key."""
+
+    version = "9.9.9"
+    linux = True
 
     def setUp(self):
         import os
@@ -347,7 +373,10 @@ class AssembleTests(unittest.TestCase):
             "# Changelog\n\n## [Unreleased]\n\n### Fixed\n- A test entry.\n\n"
             "## [0.8.0] - 2026-10-05\n\n### Added\n- Eight.\n", encoding="utf-8")
         self.old = bump.current_version(self.root)
-        self.version = "9.9.9"
+        if not self.linux:
+            page = self.root / "website/index.html"
+            page.write_text(re.sub(r'\n        <div class="linux" id="linux">.*?\n        </div>', "", page.read_text(), flags=re.S))
+            (self.root / "website/install.sh").unlink()
         code, out, err = run(self.version, "--root", str(self.root), "--date", "2030-01-02")
         self.assertEqual(code, 0, err)
         self.assets = base / "assets"
@@ -361,6 +390,12 @@ class AssembleTests(unittest.TestCase):
         (self.assets / "SHA256SUMS").write_text("unused here\n")
         for arch in ("x64", "arm64"):
             (self.assets / f"secblitz-{self.version}-windows-{arch}.cdx.json").write_text("{}\n")
+        self.packages = {}
+        if self.linux:
+            for (arch, kind), make in LINUX_PACKAGES.items():
+                path = self.assets / f"secblitz-{self.version}-{arch}.{kind}"
+                path.write_bytes(make(arch.encode() + kind.encode() * 400))
+                self.packages[(arch, kind)] = path
         self.sign()
         spec = importlib.util.spec_from_file_location("stage_copy", self.root / "scripts/stage-pages.py")
         module = importlib.util.module_from_spec(spec)
@@ -381,6 +416,12 @@ class AssembleTests(unittest.TestCase):
                                         "--version", self.version, "--installer", str(setup), "--arch", arch,
                                         "--output", str(self.assets / feed)], capture_output=True, text=True)
             self.assertEqual(done.returncode, 0, done.stderr)
+        for (arch, kind), path in self.packages.items():
+            done = self.subprocess.run([self.sys.executable, str(self.root / "scripts/sign-release.py"), "--key", str(self.key),
+                                        "--public-key", str(self.root / "assets/update-public-key.hex"),
+                                        "--version", self.version, "--installer", str(path), "--arch", arch, "--package", kind,
+                                        "--output", str(self.assets / f"stable-{arch}-{kind}.json")], capture_output=True, text=True)
+            self.assertEqual(done.returncode, 0, done.stderr)
 
     def assemble(self):
         return self.subprocess.run([self.sys.executable, str(self.root / "scripts/assemble-site.py"),
@@ -388,6 +429,8 @@ class AssembleTests(unittest.TestCase):
                                     "--historical", str(self.old_downloads), "--output", str(self.out)],
                                    capture_output=True, text=True)
 
+
+class AssembleTests(AssembleBase):
     def test_verify_feed_command_used_by_the_workflow(self):
         command = [self.sys.executable, str(self.root / "scripts/prepare-pages.py"), "--verify-feed",
                    str(self.assets / "stable.json"), "--installer-directory", str(self.assets),
@@ -519,6 +562,149 @@ class AssembleTests(unittest.TestCase):
         (self.assets / "extra.txt").unlink()
         (self.assets / "stable.json").unlink()
         self.assertNotEqual(self.assemble().returncode, 0)
+
+    def linux_names(self):
+        return {key: f"secblitz-{self.version}-{key[0]}.{key[1]}" for key in self.packages}
+
+    def test_linux_packages_feeds_and_the_one_line_installer_are_published(self):
+        done = self.assemble()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        names = {p.name for p in (self.out / "downloads").iterdir()}
+        for key, name in self.linux_names().items():
+            self.assertIn(name, names)
+            self.assertEqual((self.out / "downloads" / name).read_bytes(), self.packages[key].read_bytes())
+            feed = f"releases/stable-{key[0]}-{key[1]}.json"
+            self.assertEqual((self.out / feed).read_bytes(), (self.assets / Path(feed).name).read_bytes())
+        script = (self.out / "install.sh").read_text()
+        self.assertEqual(re.findall(r"@[A-Z0-9_]+@", script), [])
+        self.assertIn(f'SECBLITZ_VERSION="{self.version}"', script)
+        for key in self.linux_names():
+            variable = f"SHA256_{key[0].removeprefix('linux-').upper()}_{key[1].upper()}"
+            self.assertIn(f'{variable}="{hashlib.sha256(self.packages[key].read_bytes()).hexdigest()}"', script)
+        page = (self.out / "index.html").read_text()
+        for name in self.linux_names().values():
+            self.assertIn(f'href="downloads/{name}"', page)
+        self.assertIn("curl -fsSL https://secblitz.lol/install.sh | bash", page)
+        self.assertEqual(self.subprocess.run(["bash", "-n", str(self.out / "install.sh")]).returncode, 0)
+
+    def test_installer_script_is_served_as_plain_text_with_the_security_headers(self):
+        headers = (REPO / "website/_headers").read_text()
+        block = re.search(r"^/install\.sh\n((?:  .*\n)+)", headers, re.M)
+        self.assertIsNotNone(block)
+        self.assertIn("Content-Type: text/plain; charset=utf-8", block[1])
+        self.assertNotIn("Content-Disposition", block[1])
+        self.assertIn("X-Content-Type-Options: nosniff", headers.split("\n\n")[0])
+
+    def test_linux_package_changed_after_signing_is_refused(self):
+        for key in self.packages:
+            path = self.packages[key]
+            original = path.read_bytes()
+            path.write_bytes(original + b"changed after signing")
+            done = self.assemble()
+            self.assertNotEqual(done.returncode, 0, key)
+            self.assertFalse(self.out.exists())
+            path.write_bytes(original)
+
+    def test_linux_feed_signed_for_another_package_kind_is_refused(self):
+        shutil.copyfile(self.assets / "stable-linux-x64-rpm.json", self.assets / "stable-linux-x64-deb.json")
+        self.assertNotEqual(self.assemble().returncode, 0)
+        self.assertFalse(self.out.exists())
+
+    def test_missing_linux_file_is_refused(self):
+        for name in ("stable-linux-arm64-rpm.json", f"secblitz-{self.version}-linux-x64.deb"):
+            (self.assets / name).unlink()
+            self.assertNotEqual(self.assemble().returncode, 0)
+
+    def test_linux_package_over_the_pages_limit_is_refused_clearly(self):
+        big = self.assets / f"secblitz-{self.version}-linux-x64.rpm"
+        big.write_bytes(fake_rpm(b"\0" * (25 * 1024 * 1024)))
+        done = self.assemble()
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("Cloudflare Pages cannot host a file over 25 MiB", done.stderr)
+        self.assertIn(big.name, done.stderr)
+
+    def test_site_gate_checks_install_script_against_the_packages(self):
+        self.assertEqual(self.assemble().returncode, 0)
+        command = [self.sys.executable, str(self.root / "scripts/prepare-pages.py"), "--site", str(self.out),
+                   "--require-feed", "--expected-version", self.version]
+        self.assertEqual(self.subprocess.run(command, capture_output=True, text=True).returncode, 0)
+        script = self.out / "install.sh"
+        good = script.read_text()
+        digest = hashlib.sha256(self.packages[("linux-x64", "deb")].read_bytes()).hexdigest()
+        for broken in (good.replace(digest, "0" * 64), good.replace(f'SECBLITZ_VERSION="{self.version}"', 'SECBLITZ_VERSION="9.9.8"'),
+                       good + '\nSHA256_X64_DEB="' + digest + '"\n'):
+            script.write_text(broken)
+            self.assertNotEqual(self.subprocess.run(command, capture_output=True, text=True).returncode, 0)
+        script.write_text(good)
+        page = self.out / "index.html"
+        original = page.read_text()
+        page.write_text(original.replace(f'href="downloads/secblitz-{self.version}-linux-arm64.rpm"', 'href="downloads/other.rpm"'))
+        self.assertNotEqual(self.subprocess.run(command, capture_output=True, text=True).returncode, 0)
+
+    def test_live_check_covers_install_script_linux_feeds_and_packages(self):
+        self.assertEqual(self.assemble().returncode, 0)
+        files = live.expected_files(self.out, self.version)
+        self.assertIn("/install.sh", files)
+        for key, name in self.linux_names().items():
+            self.assertIn(f"/downloads/{name}", files)
+            self.assertIn(f"/releases/stable-{key[0]}-{key[1]}.json", files)
+        served = {"https://secblitz.test" + path: local.read_bytes() for path, local in files.items()}
+        args = ["--site", str(self.out), "--version", self.version, "--origin", "https://secblitz.test", "--attempts", "1"]
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            self.assertEqual(live.main(args, lambda url: served[url], lambda _: None), 0)
+            served["https://secblitz.test/install.sh"] = b"#!/usr/bin/env bash\necho hi\n"
+            self.assertEqual(live.main(args, lambda url: served[url], lambda _: None), 1)
+        self.assertIn("https://secblitz.test/install.sh", err.getvalue())
+        legacy = {"https://legacy.test" + path: local.read_bytes() for path, local in files.items()}
+        fetched = []
+
+        def fetch(url):
+            fetched.append(url)
+            return legacy.get(url) or files_by_url[url]
+
+        files_by_url = {"https://secblitz.test" + path: local.read_bytes() for path, local in files.items()}
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(live.main(args + ["--feed-origin", "https://legacy.test"], fetch, lambda _: None), 0)
+        self.assertEqual([u for u in fetched if u.startswith("https://legacy.test") and ("linux" in u or "install" in u)], [])
+
+
+class LegacyAssembleTests(AssembleBase):
+    """A release before 1.5.0 has no Linux files and must publish exactly as it did."""
+
+    version = "1.4.0"
+    linux = False
+
+    def test_release_without_linux_files_still_publishes(self):
+        done = self.assemble()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertFalse((self.out / "install.sh").exists())
+        self.assertEqual([p for p in (self.out / "downloads").iterdir() if "linux" in p.name], [])
+        self.assertEqual([p for p in (self.out / "releases").iterdir() if "linux" in p.name], [])
+        self.assertNotIn("install.sh", (self.out / "index.html").read_text())
+        self.assertEqual([path for path in live.expected_files(self.out, self.version) if "linux" in path or "install" in path], [])
+
+    def test_linux_files_in_an_older_release_are_refused(self):
+        (self.assets / f"secblitz-{self.version}-linux-x64.deb").write_bytes(fake_deb())
+        self.assertNotEqual(self.assemble().returncode, 0)
+
+
+class GateVersionTests(unittest.TestCase):
+    def test_linux_files_start_with_1_5_0(self):
+        for version, expected in (("1.4.9", False), ("1.5.0", True), ("1.10.0", True), ("2.0.0", True), ("0.99.0", False)):
+            self.assertEqual(pages.has_linux(version), expected, version)
+
+    def test_install_script_template_is_filled_in_once_per_placeholder(self):
+        template = (REPO / "website/install.sh").read_text()
+        digests = {key: format(i, "x") * 64 for i, key in enumerate(finalize.LINUX_PLACEHOLDERS, 1)}
+        filled = finalize.render_install(template, "1.5.0", digests)
+        self.assertEqual(re.findall(r"@[A-Z0-9_]+@", filled), [])
+        self.assertIn('SECBLITZ_VERSION="1.5.0"', filled)
+        self.assertIn('SHA256_ARM64_RPM="' + "4" * 64 + '"', filled)
+        with self.assertRaises(finalize.FinalizeError):
+            finalize.render_install(template, "1.5.0", {key: d for key, d in digests.items() if key != ("x64", "deb")})
+        with self.assertRaises(finalize.FinalizeError):
+            finalize.render_install(filled, "1.5.0", digests)
 
 
 if __name__ == "__main__":

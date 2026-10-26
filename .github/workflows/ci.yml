@@ -157,6 +157,8 @@ jobs:
         run: python3 scripts/release-tests.py
       - name: Version bump, website assembly and release notes tools
         run: python3 scripts/bump-version-tests.py
+      - name: One-line Linux installer
+        run: python3 scripts/install-script-tests.py
       - name: Parts list (SBOM) tool
         run: python3 scripts/make-sbom-tests.py
       - name: Older downloads all have a pinned checksum
