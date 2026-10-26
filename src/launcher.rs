@@ -269,7 +269,8 @@ mod unix_lock {
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(e) => return Err(anyhow::Error::new(e).context(SESSION_UNUSUAL)),
         }
-        let meta = std::fs::symlink_metadata(&dir)?;
+        let meta = std::fs::symlink_metadata(&dir)
+            .map_err(|e| anyhow::Error::new(e).context(SESSION_UNUSUAL))?;
         let mine = unsafe { libc::geteuid() };
         if !meta.is_dir() || meta.uid() != mine || meta.mode() & 0o077 != 0 {
             anyhow::bail!(SESSION_UNUSUAL);
@@ -282,7 +283,9 @@ mod unix_lock {
             .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
             .open(dir.join("gui.lock"))
             .map_err(|e| anyhow::Error::new(e).context(SESSION_UNUSUAL))?;
-        let meta = file.metadata()?;
+        let meta = file
+            .metadata()
+            .map_err(|e| anyhow::Error::new(e).context(SESSION_UNUSUAL))?;
         if !meta.is_file() || meta.uid() != mine {
             anyhow::bail!(SESSION_UNUSUAL);
         }
@@ -1359,6 +1362,17 @@ mod tests {
         let mut loose = words("evil.example");
         loose[2] = "filter now".into();
         assert!(!site_args_are_plain(&loose));
+    }
+
+    #[test]
+    fn unix_start_problems_keep_their_text_and_are_translated() {
+        for known in [NOT_INSTALLED, SESSION_UNUSUAL] {
+            let chained = format!("{known}: Permission denied (os error 13)");
+            assert_eq!(friendly_problem(&chained), known);
+            for lang in [Lang::Es, Lang::Fr, Lang::De, Lang::Pt, Lang::It] {
+                assert_ne!(lang.t(known), known, "{lang:?}");
+            }
+        }
     }
 
     #[test]
