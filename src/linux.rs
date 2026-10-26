@@ -6,3 +6,4 @@ pub mod cmd;
 pub mod controls;
 pub mod distro;
 pub mod person;
+pub mod remove;

@@ -30,6 +30,8 @@ pub enum Request {
     CanStart { undo: bool },
     ChooseItems { picked: ItemChoice },
     StartFresh,
+    /// Takes Secblitz's own package off the computer. It needs no open session.
+    RemoveSelf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -198,6 +200,7 @@ pub fn serve(session: &mut dyn Session, request: Request, emit: &mut dyn FnMut(E
         Request::CanStart { undo } => done(session.can_start(undo)),
         Request::ChooseItems { picked } => done(session.choose_items(picked)),
         Request::StartFresh => Reply::Failed(NOT_DAMAGED.to_owned()),
+        Request::RemoveSelf => Reply::Failed(BAD_ANSWER.to_owned()),
     };
     emit(Event::Done(reply));
 }
@@ -350,6 +353,24 @@ pub fn start_fresh<T: Transport>(transport: &mut T) -> anyhow::Result<()> {
         Reply::Ok => Ok(()),
         Reply::Failed(message) => anyhow::bail!(message),
         Reply::Damaged { kind, files } => Err(anyhow::Error::new(JournalDamaged { kind, files })),
+        _ => anyhow::bail!(BAD_ANSWER),
+    }
+}
+
+/// Asks the helper to take Secblitz's package off the computer. The answer only says the removal has started.
+pub fn remove_self<T: Transport>(transport: &mut T) -> anyhow::Result<()> {
+    let bytes = encode_request(&Request::RemoveSelf)?;
+    let mut reply = None;
+    transport.call(&bytes, &mut |event| {
+        anyhow::ensure!(reply.is_none(), BAD_ANSWER);
+        if let Event::Done(done) = decode_event(event)? {
+            reply = Some(done);
+        }
+        Ok(())
+    })?;
+    match reply.ok_or_else(|| anyhow::anyhow!(NOT_INSTALLED))? {
+        Reply::Ok => Ok(()),
+        Reply::Failed(message) => anyhow::bail!(message),
         _ => anyhow::bail!(BAD_ANSWER),
     }
 }
