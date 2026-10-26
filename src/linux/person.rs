@@ -17,7 +17,7 @@ const GSETTINGS: &str = "/usr/bin/gsettings";
 const DCONF: &str = "/usr/bin/dconf";
 const NO_IDENTITY: &str =
     "Secblitz could not identify this computer, so it will not change anything.";
-const UNAVAILABLE: &str = "This setting is not available on your desktop yet.";
+pub const UNAVAILABLE: &str = "This setting is not available on your desktop yet.";
 const NOT_CONFIRMED: &str = "Secblitz could not confirm that the setting changed.";
 const RECENT_AGE_KEY: &str = "recent-files-max-age";
 const RECENT_REMEMBER_KEY: &str = "remember-recent-files";

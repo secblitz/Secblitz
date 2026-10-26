@@ -88,7 +88,7 @@ const SPECS: &[LinuxSpec] = &[
     LinuxSpec {
         id: "linux.ssh_server",
         scope: Scope::System,
-        ask: false,
+        ask: true,
         reboot: false,
         keys: &[flag("enabled", true)],
     },
@@ -355,6 +355,7 @@ mod tests {
         ];
         let optional = [
             "linux.fedora_open_ports",
+            "linux.ssh_server",
             "linux.connectivity_check",
             "linux.wifi_mac",
             "linux.recent_files",
