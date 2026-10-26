@@ -157,12 +157,12 @@ pub fn for_control(id: &str, status: &CheckStatus, detail: &str) -> Advice {
         }
         CheckStatus::Skipped if managed(detail) => {
             a.status = "Managed elsewhere";
-            a.next = "This PC's owner controls this setting, so we leave it as it is.";
+            a.next = "This computer's owner controls this setting, so we leave it as it is.";
             a.step = NextStep::ReviewWithAdministrator;
         }
         CheckStatus::Skipped if detail == crate::vbs::ALREADY_ON => {
             a.status = "Good to go";
-            a.next = "This protection is already running on this PC. Nothing to change.";
+            a.next = "This protection is already running on this computer. Nothing to change.";
             a.step = NextStep::None;
             a.group = Group::Protected;
         }
@@ -210,7 +210,7 @@ pub fn for_control(id: &str, status: &CheckStatus, detail: &str) -> Advice {
     {
         a.status = "Restart needed";
         a.group = Group::Choice;
-        a.next = "Save your work and restart your PC to finish this change.";
+        a.next = "Save your work and restart your computer to finish this change.";
         a.step = NextStep::Restart;
     }
     a.impact = control_impact(id);
@@ -235,7 +235,7 @@ pub fn for_outcome(outcome: &crate::engine::Outcome) -> Advice {
     }
     if outcome.authority == Some(Authority::Managed) {
         a.status = "Managed elsewhere";
-        a.next = "This PC's owner controls this setting, so we leave it as it is.";
+        a.next = "This computer's owner controls this setting, so we leave it as it is.";
         a.step = NextStep::ReviewWithAdministrator;
         a.group = Group::Choice;
         return a;
@@ -296,21 +296,21 @@ pub fn for_finding(title: &str, status: &CheckStatus, detail: &str) -> Advice {
         "Windows Firewall" => ("Network protection", "Open Windows Security and make sure the firewall is on.", OpenWindowsSecurity),
         "Defender" => ("Virus protection", "Open Windows Security to make sure virus protection is on and up to date.", OpenWindowsSecurity),
         "Windows lifecycle" => ("Windows support", "Open Windows Update to check your version of Windows still gets security updates.", OpenWindowsUpdate),
-        "Device encryption" => ("Protection if your PC is lost", "Open encryption settings. Save your recovery key somewhere safe before you change anything.", OpenEncryption),
-        "Secure Boot" => ("Startup protection", "This is set when your PC starts up. Follow your PC maker's guide before changing it.", ReviewFirmware),
+        "Device encryption" => ("Protection if your computer is lost", "Open encryption settings. Save your recovery key somewhere safe before you change anything.", OpenEncryption),
+        "Secure Boot" => ("Startup protection", "This is set when your computer starts up. Follow your computer maker's guide before changing it.", ReviewFirmware),
         "Windows updates" => ("Windows updates", "Open Windows Update and install anything that is waiting.", OpenWindowsUpdate),
-        "Remote Desktop" => ("Remote access", "Remote access lets someone sign in to this PC from elsewhere. Turn it off in Settings if you don't use it.", OpenRemoteDesktop),
+        "Remote Desktop" => ("Remote access", "Remote access lets someone sign in to this computer from elsewhere. Turn it off in Settings if you don't use it.", OpenRemoteDesktop),
         "SMB1" => ("Older file sharing", "An old way of sharing files is still on. Turn it off in Windows Features unless an old device needs it.", ReviewWindowsFeatures),
         "SmartScreen" => ("Unsafe app and website warnings", "Open Windows Security and make sure warnings about risky apps and websites are on.", OpenWindowsSecurity),
         "Memory integrity" => ("Core system protection", "Open Windows Security and look at the extra protection for the core of Windows. Some older devices don't work with it.", OpenWindowsSecurity),
-        "Memory integrity not running" if undo_ready(detail) => ("Core system protection", "Core system protection is on but is not running. Restart your PC (choose Restart, not Shut down). If it still isn't running, undo it.", ReviewUndo),
-        "Memory integrity not running" => ("Core system protection", "Core system protection is on but is not running. Restart your PC (choose Restart, not Shut down). If it still isn't running, open History and undo your fixes, newest first.", OpenHistory),
-        "Kernel stack protection not running" if undo_ready(detail) => ("Extra core protection", "Extra core protection is on but is not running. Restart your PC (choose Restart, not Shut down). If it still isn't running, undo it.", ReviewUndo),
-        "Kernel stack protection not running" => ("Extra core protection", "Extra core protection is on but is not running. Restart your PC (choose Restart, not Shut down). If it still isn't running, open History and undo your fixes, newest first.", OpenHistory),
+        "Memory integrity not running" if undo_ready(detail) => ("Core system protection", "Core system protection is on but is not running. Restart your computer (choose Restart, not Shut down). If it still isn't running, undo it.", ReviewUndo),
+        "Memory integrity not running" => ("Core system protection", "Core system protection is on but is not running. Restart your computer (choose Restart, not Shut down). If it still isn't running, open History and undo your fixes, newest first.", OpenHistory),
+        "Kernel stack protection not running" if undo_ready(detail) => ("Extra core protection", "Extra core protection is on but is not running. Restart your computer (choose Restart, not Shut down). If it still isn't running, undo it.", ReviewUndo),
+        "Kernel stack protection not running" => ("Extra core protection", "Extra core protection is on but is not running. Restart your computer (choose Restart, not Shut down). If it still isn't running, open History and undo your fixes, newest first.", OpenHistory),
         "A device may not be working" if undo_ready(detail) => ("Core system protection", "Windows is blocking a driver, so a device may not work. If a device stopped working, undo this fix.", ReviewUndo),
         "A device may not be working" => ("Core system protection", "Windows is blocking a driver, so a device may not work. If a device stopped working, open History and undo your fixes, newest first.", OpenHistory),
-        "Management and mutation eligibility" => ("Who manages this PC", "If you're not sure who manages this PC, look at work or school accounts in Settings.", ReviewWithAdministrator),
-        "Automatic logon" => ("Automatic sign-in", "Your PC signs in by itself. Turn that off if other people can get to it.", OpenAccounts),
+        "Management and mutation eligibility" => ("Who manages this computer", "If you're not sure who manages this computer, look at work or school accounts in Settings.", ReviewWithAdministrator),
+        "Automatic logon" => ("Automatic sign-in", "Your computer signs in by itself. Turn that off if other people can get to it.", OpenAccounts),
         "Service permissions: BITS" => ("Update download permissions", "We leave this one alone. If a fix is available, it appears under Needs your attention.", ReviewWithAdministrator),
         "Service permissions: wuauserv" => ("Windows Update permissions", "We leave this one alone. If a fix is available, it appears under Needs your attention.", ReviewWithAdministrator),
         "Service permissions: WinDefend" => ("Antivirus service permissions", "We leave this one alone. If a fix is available, it appears under Needs your attention.", ReviewWithAdministrator),
@@ -463,7 +463,7 @@ mod tests {
             "Not offered: Defender real-time protection is off",
             "Not offered: Defender cloud protection is off",
             "Not offered: Web protection is off",
-            "Not offered: this PC uses Configuration Manager",
+            "Not offered: this computer uses Configuration Manager",
             "Not offered: Microsoft Office was not found",
             "Not offered: this edition of Windows does not include it",
             "Not offered: Defender behavior monitoring is off",
@@ -471,27 +471,27 @@ mod tests {
             "Not offered: the old file-sharing version (SMB1) is still on",
             "Not offered: a shared folder or drive may rely on the old name service",
             "Not offered: a browser rule already turns off every add-on",
-            "Not offered: the browser add-on rules on this PC could not be read",
-            "Not offered: Recall is not available on this PC",
-            "Not offered: Paint was not found on this PC",
-            "Not offered: Notepad was not found on this PC",
+            "Not offered: the browser add-on rules on this computer could not be read",
+            "Not offered: Recall is not available on this computer",
+            "Not offered: Paint was not found on this computer",
+            "Not offered: Notepad was not found on this computer",
             "Not offered: this version of Windows does not have it",
             "Not offered: this setting is not available on Windows Home",
             "Not offered: Windows keeps this setting for you to change yourself",
-            "Not offered: a printer on this PC is shared with other computers",
+            "Not offered: a printer on this computer is shared with other computers",
             "Not offered: printing is busy right now",
             "Not offered: your account has no password",
-            "Not offered: you are connected to this PC from another device right now",
+            "Not offered: you are connected to this computer from another device right now",
             "Not offered: something is using the old file sharing right now",
             "Not offered: Windows Home cannot accept Remote Desktop connections",
-            "Not offered: this PC is set up as a kiosk",
+            "Not offered: this computer is set up as a kiosk",
             "Not offered: Secblitz cannot tell who is signed in",
             "Not offered: you are signed in with the built-in Administrator account",
             "Not offered: a locked sign-in would stay locked until an administrator unlocks it",
             crate::vbs::NOT_SUPPORTED,
             crate::vbs::LOCKED,
             crate::vbs::DRIVER,
-            "Not offered: a driver on this PC may not work with it: old.sys, older.sys",
+            "Not offered: a driver on this computer may not work with it: old.sys, older.sys",
             crate::vbs::DRIVERS_UNREADABLE,
             crate::vbs::NEEDS_MEMORY_INTEGRITY,
             crate::vbs::NEEDS_RESTART,
@@ -506,9 +506,9 @@ mod tests {
             "Not offered: a shared folder would be left with no one who can open it",
             "Not offered: a shared folder would be left that only administrators can open",
             "Not offered: a shared folder has permissions that could not be put back exactly",
-            "Not offered: the recovery tools are missing from this PC",
-            "Not offered: this PC has no Wi-Fi adapter",
-            "Not offered: the Wi-Fi settings of this PC could not be read",
+            "Not offered: the recovery tools are missing from this computer",
+            "Not offered: this computer has no Wi-Fi adapter",
+            "Not offered: the Wi-Fi settings of this computer could not be read",
         ] {
             let a = for_control("lsa.run_as_ppl", &CheckStatus::Skipped, reason);
             assert_eq!(a.status, "Not offered", "{reason}");
@@ -603,7 +603,7 @@ mod tests {
             for reason in [
                 crate::vbs::NOT_SUPPORTED,
                 crate::vbs::LOCKED,
-                "Not offered: a driver on this PC may not work with it: a.sys",
+                "Not offered: a driver on this computer may not work with it: a.sys",
                 crate::vbs::NEEDS_MEMORY_INTEGRITY,
                 crate::vbs::NO_SHADOW_STACKS,
                 crate::vbs::SET_BY_HAND,
@@ -628,7 +628,7 @@ mod tests {
         let driver = for_control(
             "vbs.memory_integrity",
             &CheckStatus::Skipped,
-            "Not offered: a driver on this PC may not work with it: a.sys",
+            "Not offered: a driver on this computer may not work with it: a.sys",
         );
         assert!(driver
             .next

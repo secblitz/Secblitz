@@ -86,7 +86,7 @@ pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
         Msg::DownloadOpened(true) => {}
         Msg::DownloadOpened(false) => {
             return Task::done(Message::Toast(
-                ctx.t("We couldn't open your web browser. Visit secblitz.lol to get the version made for your PC."),
+                ctx.t("We couldn't open your web browser. Visit secblitz.lol to get the version made for your computer."),
                 Tone::Warn,
             ))
         }
@@ -187,7 +187,7 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
     }
     let Some(report) = ctx.report.as_deref() else {
         if let Some(error) = &ctx.check_error {
-            return error_card(ctx, "We couldn't check your PC", error, true);
+            return error_card(ctx, "We couldn't check your computer", error, true);
         }
         return not_checked(ctx);
     };
@@ -210,14 +210,14 @@ fn not_checked<'a>(ctx: &'a Ctx) -> Element<'a, Message> {
         widgets::h1(p, ctx.t("Not checked yet")),
         widgets::muted(
             p,
-            ctx.t("Check your PC to see what's protected. Nothing is changed.")
+            ctx.t("Check your computer to see what's protected. Nothing is changed.")
         ),
     ]
     .spacing(theme::S1);
     let check = widgets::action(
         p,
         ButtonKind::Primary,
-        ctx.t("Check my PC"),
+        ctx.t("Check my computer"),
         Some(Icon::Refresh),
         (!ctx.busy).then_some(Message::CheckNow),
     );
@@ -265,7 +265,7 @@ fn scanning<'a>(state: &'a State, ctx: &'a Ctx, progress: &CheckProgress) -> Ele
     };
     scan::checking_screen(
         p,
-        ctx.t("Checking your PC"),
+        ctx.t("Checking your computer"),
         ctx.t("This takes about a minute. Nothing is changed."),
         ratio,
         art,
@@ -287,7 +287,7 @@ fn error_card<'a>(
     let advice = if can_retry {
         ctx.t("Something got in the way. Trying again usually fixes it.")
     } else {
-        ctx.t("Close Secblitz and open it again. If this keeps happening, restart your PC.")
+        ctx.t("Close Secblitz and open it again. If this keeps happening, restart your computer.")
     };
     let mut content = column![
         widgets::icon(Icon::ShieldAlert, theme::ICON_ROW, p.bad_text),
@@ -386,7 +386,7 @@ fn readiness_notices(ctx: &Ctx, report: &Report) -> Vec<(Tone, String)> {
         if pw.battery_present == Some(true) && pw.ac_connected == Some(false) {
             out.push((
                 Tone::Neutral,
-                ctx.t("Your PC is running on battery. Plug it in before making changes."),
+                ctx.t("Your computer is running on battery. Plug it in before making changes."),
             ));
         }
     }
@@ -651,7 +651,7 @@ fn processor_card<'a>(ctx: &'a Ctx) -> Element<'a, Message> {
         vec![widgets::row_item(
             p,
             Some(Icon::Download),
-            ctx.t("A version made for your PC's processor is available"),
+            ctx.t("A version made for your computer's processor is available"),
             Some(ctx.t("Your settings and history stay when you switch.")),
             widgets::icon(Icon::ChevronRight, 16.0, p.text_muted),
             Some(Message::Home(Msg::OpenDownload)),

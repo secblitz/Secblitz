@@ -130,7 +130,7 @@ impl RepairResult {
             Self::NoProblems => "No problems found",
             Self::ProblemsFound => "Some problems were found",
             Self::Repaired => "Problems were repaired",
-            Self::NeedsRestart => "Almost done. Please restart your PC.",
+            Self::NeedsRestart => "Almost done. Please restart your computer.",
             Self::Stopped => "You stopped the repair",
             Self::CouldNotFinish => "We couldn't finish",
         }
@@ -414,9 +414,11 @@ pub fn repair_why(result: RepairResult, note: Option<&'static str>) -> &'static 
         RepairResult::Repaired => {
             "Windows repaired the problems it found. You don't need to do anything else."
         }
-        RepairResult::NeedsRestart => "Restart your PC to finish the repair.",
+        RepairResult::NeedsRestart => "Restart your computer to finish the repair.",
         RepairResult::Stopped => "You stopped the repair. Nothing else was started.",
-        RepairResult::CouldNotFinish => "The repair didn't finish. Restart your PC and try again.",
+        RepairResult::CouldNotFinish => {
+            "The repair didn't finish. Restart your computer and try again."
+        }
     }
 }
 

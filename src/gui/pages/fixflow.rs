@@ -136,7 +136,7 @@ impl Addon {
             .split(',')
             .filter_map(|w| match w {
                 "sites" => Some("Can read every site you visit"),
-                "programs" => Some("Can talk to other programs on your PC"),
+                "programs" => Some("Can talk to other programs on your computer"),
                 _ => None,
             })
             .collect();
@@ -1107,9 +1107,9 @@ fn review_view<'a>(
             p,
             Icon::AlertTriangle,
             ctx.t(if one {
-                "Your PC will be less protected after this. You can fix it again at any time."
+                "Your computer will be less protected after this. You can fix it again at any time."
             } else {
-                "Your PC will be less protected after this. You can fix these again at any time."
+                "Your computer will be less protected after this. You can fix these again at any time."
             }),
         ));
         c = c.push(widgets::small(
@@ -1289,7 +1289,7 @@ fn working_view<'a>(
     let title = if undo {
         ctx.t("Putting your settings back…")
     } else {
-        ctx.t("Fixing your PC…")
+        ctx.t("Fixing your computer…")
     };
     let settled = state.held.is_some();
     let verifying = phase == Some(Phase::Verifying) || settled;
@@ -1476,7 +1476,7 @@ fn result_view<'a>(
         body = body.push(widgets::inline_notice(
             p,
             Tone::Neutral,
-            ctx.t("Restart your PC when you're ready to finish. We'll never restart it for you."),
+            ctx.t("Restart your computer when you're ready to finish. We'll never restart it for you."),
         ));
     }
     if s.unverified {

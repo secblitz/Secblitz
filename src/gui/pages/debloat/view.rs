@@ -112,7 +112,7 @@ fn apps_tab<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
             p,
             Icon::CheckCircle,
             ctx.t("Nothing to clean up"),
-            ctx.t("None of the apps we know about are on this PC."),
+            ctx.t("None of the apps we know about are on this computer."),
             None,
         ),
         _ => {
@@ -569,9 +569,9 @@ fn review_sheet<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
         point::text_point(
             p,
             &if n == 1 {
-                ctx.t("This app will be removed for everyone who uses this PC. Your own files are not touched.")
+                ctx.t("This app will be removed for everyone who uses this computer. Your own files are not touched.")
             } else {
-                ctx.t("These apps will be removed for everyone who uses this PC. Your own files are not touched.")
+                ctx.t("These apps will be removed for everyone who uses this computer. Your own files are not touched.")
             },
             Words::Muted,
             state.points.has("review:intro"),
@@ -779,7 +779,7 @@ fn menu_labels(lang: Lang, result: String) -> Labels {
         saving: lang.t("Saving a copy of {name}"),
         removing: lang.t("Removing {name}"),
         refused: lang.t("Couldn't remove {name}"),
-        kept: lang.t("{name} stays on your PC"),
+        kept: lang.t("{name} stays on your computer"),
         protected: lang.t("Windows protects {name}"),
         more_one: lang.t("1 more app"),
         more_many: lang.t("{n} more apps"),
@@ -842,7 +842,7 @@ fn kept_text(kept: &Kept) -> &'static str {
         Kept::NoSpace => {
             "Kept: not enough free space to save a copy. Free up some space and try again."
         }
-        Kept::NoCopy(_) => "Kept: couldn't save a copy first. Restart your PC and try again.",
+        Kept::NoCopy(_) => "Kept: couldn't save a copy first. Restart your computer and try again.",
     }
 }
 
@@ -1032,7 +1032,7 @@ fn batch_report<'a>(
     if any_failed {
         body.push(widgets::small(
             p,
-            ctx.t("Restart your PC and try again. Nothing else was changed."),
+            ctx.t("Restart your computer and try again. Nothing else was changed."),
         ));
     }
     let mut technical = Vec::new();

@@ -20,16 +20,19 @@ pub fn is_vbs_check_id(id: &str) -> bool {
 }
 
 // Exact "not offered" reasons. advice.rs knows each one and shows a calm line.
-pub const NOT_SUPPORTED: &str = "Not offered: this PC's hardware or firmware does not support it";
-pub const LOCKED: &str = "Not offered: it is locked in your PC's firmware";
-pub const DRIVER: &str = "Not offered: a driver on this PC may not work with it";
-pub const DRIVERS_UNREADABLE: &str = "Not offered: we could not check this PC's drivers";
+pub const NOT_SUPPORTED: &str =
+    "Not offered: this computer's hardware or firmware does not support it";
+pub const LOCKED: &str = "Not offered: it is locked in your computer's firmware";
+pub const DRIVER: &str = "Not offered: a driver on this computer may not work with it";
+pub const DRIVERS_UNREADABLE: &str = "Not offered: we could not check this computer's drivers";
 pub const ALREADY_ON: &str = "Not offered: it is already running";
 pub const NEEDS_MEMORY_INTEGRITY: &str = "Not offered: it needs memory integrity running first";
-pub const NEEDS_RESTART: &str = "Not offered: restart your PC to finish memory integrity first";
-pub const NO_SHADOW_STACKS: &str = "Not offered: this PC's processor does not support it";
-pub const UNREADABLE: &str = "Not offered: we could not check this PC's protection support";
-pub const SET_BY_HAND: &str = "Not offered: this PC's virtualization security was set up by hand";
+pub const NEEDS_RESTART: &str =
+    "Not offered: restart your computer to finish memory integrity first";
+pub const NO_SHADOW_STACKS: &str = "Not offered: this computer's processor does not support it";
+pub const UNREADABLE: &str = "Not offered: we could not check this computer's protection support";
+pub const SET_BY_HAND: &str =
+    "Not offered: this computer's virtualization security was set up by hand";
 pub const OLD_WINDOWS: &str = "Not offered: this version of Windows does not support it";
 
 pub fn is_driver_reason(reason: &str) -> bool {

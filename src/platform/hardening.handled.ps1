@@ -864,7 +864,7 @@ function HSetExtension([string]$name, $v) {
 function HAddonPreflight() {
     foreach ($browser in @('chrome', 'edge')) {
         foreach ($text in @((HAddonList $browser).Values)) {
-            if ($null -eq $text) { throw 'Not offered: the browser add-on rules on this PC could not be read' }
+            if ($null -eq $text) { throw 'Not offered: the browser add-on rules on this computer could not be read' }
             if ($text -ceq '*') { throw 'Not offered: a browser rule already turns off every add-on' }
         }
     }

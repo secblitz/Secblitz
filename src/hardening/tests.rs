@@ -1794,7 +1794,7 @@ fn says_restart(text: &str) -> bool {
         "needs a restart",
         "needs restart",
         "restart to apply",
-        "restart your pc",
+        "restart your computer",
         "after a restart",
         "after you restart",
         "you restart",

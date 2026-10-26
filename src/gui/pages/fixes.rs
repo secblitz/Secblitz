@@ -671,7 +671,7 @@ fn other_line(
     if bucket == Bucket::Managed {
         (
             None,
-            "This PC's owner controls this setting, so we leave it as it is.",
+            "This computer's owner controls this setting, so we leave it as it is.",
         )
     } else if has_guide && bucket == Bucket::Look && !a.impact.is_empty() {
         (Some("Turning it on protects you from:"), a.impact)
@@ -746,7 +746,7 @@ fn item_lines(ctx: &Ctx, items: &[secblitz::model::ItemLabel]) -> Vec<String> {
                 for why in item.why.split(',') {
                     parts.push(match why {
                         "sites" => ctx.t("Can read every site you visit"),
-                        "programs" => ctx.t("Can talk to other programs on your PC"),
+                        "programs" => ctx.t("Can talk to other programs on your computer"),
                         _ => continue,
                     });
                 }
@@ -1442,7 +1442,7 @@ fn first_check<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
     let (ratio, sub) = check_status(ctx);
     scan::checking_screen(
         ctx.palette,
-        ctx.t("Checking your PC"),
+        ctx.t("Checking your computer"),
         sub,
         ratio,
         check_art(state, ctx, Plate::Bg, ratio),
@@ -1459,7 +1459,7 @@ fn checking_region<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
     let (ratio, sub) = check_status(ctx);
     let live = anim::animating();
     let mut text = column![
-        widgets::h2(p, ctx.t("Checking your PC")),
+        widgets::h2(p, ctx.t("Checking your computer")),
         widgets::muted(p, sub)
     ]
     .spacing(theme::S1)
@@ -1505,7 +1505,7 @@ pub fn view<'a>(
         ctx.t("To check ({n})")
             .replace("{n}", &to_check.to_string())
     } else {
-        ctx.t("Everything we check on your PC, in plain words.")
+        ctx.t("Everything we check on your computer, in plain words.")
     };
     let header = widgets::page_header(p, ctx.t("Protection"), Some(subtitle));
     let bar = shows_search(ctx).then(|| search_bar(state, ctx));
@@ -1537,7 +1537,7 @@ pub fn view<'a>(
                     Icon::ShieldAlert,
                     ctx.t("We couldn't start the protection check"),
                     ctx.t(
-                        "Close Secblitz and open it again. If this keeps happening, restart your PC.",
+                        "Close Secblitz and open it again. If this keeps happening, restart your computer.",
                     ),
                     Some(error_details(
                         ctx,
@@ -1851,11 +1851,11 @@ fn not_checked<'a>(ctx: &Ctx) -> Element<'a, Message> {
             p,
             Icon::ShieldCheck,
             ctx.t("Not checked yet"),
-            ctx.t("Check your PC to see what's protected. Nothing is changed."),
+            ctx.t("Check your computer to see what's protected. Nothing is changed."),
             Some(widgets::action(
                 p,
                 ButtonKind::Primary,
-                ctx.t("Check my PC"),
+                ctx.t("Check my computer"),
                 Some(Icon::Refresh),
                 (!ctx.busy).then_some(Message::CheckNow),
             )),
@@ -1879,7 +1879,7 @@ fn check_failed<'a>(ctx: &Ctx, error: &str) -> Element<'a, Message> {
             p,
             Icon::ShieldAlert,
             ctx.t("We couldn't finish checking"),
-            ctx.t("Nothing was changed. Press Check again. If it keeps failing, restart your PC."),
+            ctx.t("Nothing was changed. Press Check again. If it keeps failing, restart your computer."),
             Some(
                 column![
                     again,

@@ -27,7 +27,7 @@ impl TipProfile {
     pub fn blurb(self) -> &'static str {
         match self {
             Self::Everyday => "Browsing, email and video calls",
-            Self::Gaming => "Smooth play and a healthy PC",
+            Self::Gaming => "Smooth play and a healthy computer",
             Self::Work => "Coding, remote work and shared files",
             Self::Extra => "The strongest protection Windows offers",
         }
@@ -146,14 +146,14 @@ pub fn tip_title(id: diag::ProbeId) -> &'static str {
         P::DefenderHealth => "Virus protection",
         P::DefenderPolicy => "Extra virus shields",
         P::SecurityProviders => "Security apps and firewall",
-        P::Management => "Who manages this PC",
+        P::Management => "Who manages this computer",
         P::SecureBoot => "Startup protection",
         P::Tpm => "Security chip",
         P::BitLocker => "Disk encryption",
         P::Vbs => "Core system protection",
         P::WinRe => "Recovery tools",
         P::Accounts => "Sign-in accounts",
-        P::RemoteAccess => "Access from other PCs",
+        P::RemoteAccess => "Access from other computers",
         P::Software => "Old apps",
         P::BrowserExtensions => "Browser add-ons",
         P::Storage => "Drive health",
@@ -237,15 +237,15 @@ pub fn tip_advice(id: diag::ProbeId) -> &'static str {
     use diag::ProbeId as P;
     match id {
         P::UpdateCache | P::UpdateHistory => {
-            "Your PC may be missing security updates. Open Windows Update to install them."
+            "Your computer may be missing security updates. Open Windows Update to install them."
         }
         P::DefenderHealth | P::DefenderPolicy => "Turn on and update Windows virus protection.",
         P::SecurityProviders => "Make sure one virus protection and the firewall are on.",
-        P::Management => "Your PC is managed by an organization. Ask them before changing it.",
-        P::SecureBoot => "Turn on Secure Boot (startup protection) in your PC's start-up settings.",
-        P::Tpm => "Your security chip is off or not ready. Check your PC's start-up settings.",
-        P::BitLocker => "Turn on disk encryption so your files stay private if the PC is lost.",
-        P::Vbs => "Core system protection (Memory integrity) is off. Protection shows whether this PC can turn it on safely.",
+        P::Management => "Your computer is managed by an organization. Ask them before changing it.",
+        P::SecureBoot => "Turn on Secure Boot (startup protection) in your computer's start-up settings.",
+        P::Tpm => "Your security chip is off or not ready. Check your computer's start-up settings.",
+        P::BitLocker => "Turn on disk encryption so your files stay private if the computer is lost.",
+        P::Vbs => "Core system protection (Memory integrity) is off. Protection shows whether this computer can turn it on safely.",
         P::WinRe => "Recovery tools are off. They help if Windows ever stops starting.",
         P::Accounts => "Use a normal account every day, and switch off the guest account.",
         P::RemoteAccess => "Switch off remote access if you don't use it.",
@@ -258,14 +258,14 @@ pub fn tip_advice(id: diag::ProbeId) -> &'static str {
         P::Vpn => "Check your VPN settings.",
         P::Permissions => "Some protected services have loose settings. A fix may be available.",
         P::OsSupport => "Your Windows version is running out of safety updates. Install the newest version in Windows Update.",
-        P::SecureBootCerts => "Your PC's startup security needs a renewal. Install all Windows updates and check your PC maker's website.",
+        P::SecureBootCerts => "Your computer's startup security needs a renewal. Install all Windows updates and check your computer maker's website.",
         P::DefenderProtection => "Open Windows Security and check your virus protection settings.",
         P::SmartScreen => "Turn on warnings for risky downloads and websites in Windows Security.",
-        P::UpdatePolicy => "Turn automatic Windows updates back on and restart your PC when asked.",
+        P::UpdatePolicy => "Turn automatic Windows updates back on and restart your computer when asked.",
         P::LegacyFeatures => "Remove a very old Windows tool that is rarely needed.",
         P::HostsFile => "A hidden file may be sending trusted websites somewhere else. Ask someone you trust to check it.",
         P::Persistence => "Something is set up to run quietly in the background. Ask someone you trust to look at it.",
-        P::AccountHygiene => "Turn off hidden or unused accounts on this PC.",
+        P::AccountHygiene => "Turn off hidden or unused accounts on this computer.",
         P::Sharing => "Stop sharing folders you don't need.",
         P::FirewallRules => "Some apps in your personal folders are allowed through the firewall. Remove ones you don't know.",
         P::AccountSetup => "Use a normal account every day, and turn on Find my device on a laptop.",
@@ -331,7 +331,7 @@ pub fn tip_fix<'r>(
 
 pub fn core_restart_advice(control: &str) -> &'static str {
     if control == secblitz::vbs::STACK_PROTECTION {
-        "Extra core protection is on but is not running. Restart your PC (choose Restart, not Shut down)."
+        "Extra core protection is on but is not running. Restart your computer (choose Restart, not Shut down)."
     } else {
         crate::app::score::RESTART_TO_START
     }
@@ -864,7 +864,7 @@ mod tests {
             tip_words(&winre, TipFix::Offered("recovery.winre_enabled")).0,
             winre.fix_advice
         );
-        let reason = "Not offered: the recovery tools are missing from this PC";
+        let reason = "Not offered: the recovery tools are missing from this computer";
         let r = protection("recovery.winre_enabled", "skipped", reason);
         assert_eq!(
             tip_fix(&winre, Some(&r), &fixes),
@@ -1450,7 +1450,7 @@ mod tests {
                 "maker",
                 (|f: &mut diag::SecureBootCerts| f.maker_blocked_event = Known(true))
                     as fn(&mut diag::SecureBootCerts),
-                "PC maker needs to update",
+                "computer maker needs to update",
             ),
             (
                 "task",

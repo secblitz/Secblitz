@@ -308,8 +308,8 @@ function HReadWifiRandom() {
     return $out
 }
 function HWifiRandomPreflight() {
-    if (@(HWifiAdapters).Count -eq 0) { throw 'Not offered: this PC has no Wi-Fi adapter' }
-    if ((HReadWifiRandom).Count -eq 0) { throw 'Not offered: the Wi-Fi settings of this PC could not be read' }
+    if (@(HWifiAdapters).Count -eq 0) { throw 'Not offered: this computer has no Wi-Fi adapter' }
+    if ((HReadWifiRandom).Count -eq 0) { throw 'Not offered: the Wi-Fi settings of this computer could not be read' }
 }
 function HReadNetbios() {
     Load 'CimCmdlets'
@@ -511,7 +511,7 @@ function HPreflight() {
             Load 'Defender'
             $status = Get-MpComputerStatus
             if ($status.RealTimeProtectionEnabled -ne $true) { throw 'Not offered: Defender real-time protection is off' }
-            if (Test-Path -LiteralPath 'HKLM:\SOFTWARE\Microsoft\CCM') { throw 'Not offered: this PC uses Configuration Manager' }
+            if (Test-Path -LiteralPath 'HKLM:\SOFTWARE\Microsoft\CCM') { throw 'Not offered: this computer uses Configuration Manager' }
             if (@('defender.asr.web_script_email','defender.asr.ransomware_usb','defender.network_protection','defender.cloud_block_level') -ccontains $spec.id) {
                 $maps = HEnumNumber (Get-MpPreference).MAPSReporting $hMaps
                 if ($maps -eq 0) { throw 'Not offered: Defender cloud protection is off' }
@@ -526,7 +526,7 @@ function HPreflight() {
             Load 'Defender'
             $status = Get-MpComputerStatus
             if ($status.RealTimeProtectionEnabled -ne $true) { throw 'Not offered: Defender real-time protection is off' }
-            if (Test-Path -LiteralPath 'HKLM:\SOFTWARE\Microsoft\CCM') { throw 'Not offered: this PC uses Configuration Manager' }
+            if (Test-Path -LiteralPath 'HKLM:\SOFTWARE\Microsoft\CCM') { throw 'Not offered: this computer uses Configuration Manager' }
             $mode = HCfaMode
             if ($spec.id -ceq 'defender.cfa_allowed_apps' -and $mode -eq 0) { throw 'Not offered: folder protection is off' }
         }
@@ -560,21 +560,21 @@ function HPreflight() {
         }
         'printer.spooler_remote' {
             Load 'PrintManagement'
-            if (@(Get-Printer -ErrorAction Stop | Where-Object { $_.Shared -eq $true }).Count -gt 0) { throw 'Not offered: a printer on this PC is shared with other computers' }
+            if (@(Get-Printer -ErrorAction Stop | Where-Object { $_.Shared -eq $true }).Count -gt 0) { throw 'Not offered: a printer on this computer is shared with other computers' }
             if (HPrintBusy) { throw 'Not offered: printing is busy right now' }
         }
         'privacy.recall' {
-            if ((HFeatureState 'Recall') -ceq 'Missing') { throw 'Not offered: Recall is not available on this PC' }
+            if ((HFeatureState 'Recall') -ceq 'Missing') { throw 'Not offered: Recall is not available on this computer' }
         }
         'ai.click_to_do' {
             Load 'CimCmdlets'
             if ([int](Get-CimInstance Win32_OperatingSystem).BuildNumber -lt 26100) { throw 'Not offered: this version of Windows does not have it' }
         }
         'ai.paint' {
-            if (!(HPackageInstalled 'Microsoft.Paint')) { throw 'Not offered: Paint was not found on this PC' }
+            if (!(HPackageInstalled 'Microsoft.Paint')) { throw 'Not offered: Paint was not found on this computer' }
         }
         'ai.notepad' {
-            if (!(HPackageInstalled 'Microsoft.WindowsNotepad')) { throw 'Not offered: Notepad was not found on this PC' }
+            if (!(HPackageInstalled 'Microsoft.WindowsNotepad')) { throw 'Not offered: Notepad was not found on this computer' }
         }
         'debloat.widgets_policy' {
             $edition = [string](Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name 'EditionID' -ErrorAction Stop).EditionID
@@ -601,13 +601,13 @@ function HPreflight() {
                     if ($null -eq $sub) { $set = $true; break }
                     try { $set = @($sub.GetValueNames()).Count -gt 0 -or @($sub.GetSubKeyNames()).Count -gt 0 } finally { $sub.Close() }
                 }
-                if ($set) { throw 'Not offered: this PC is set up as a kiosk' }
+                if ($set) { throw 'Not offered: this computer is set up as a kiosk' }
             }
         }
         'remote_desktop.disabled' {
             $edition = [string](Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -Name 'EditionID' -ErrorAction Stop).EditionID
             if ($edition -cmatch '^Core') { throw 'Not offered: Windows Home cannot accept Remote Desktop connections' }
-            if (HRemoteSessionActive) { throw 'Not offered: you are connected to this PC from another device right now' }
+            if (HRemoteSessionActive) { throw 'Not offered: you are connected to this computer from another device right now' }
         }
         'smb1.disabled' {
             if ($script:hSmb1Unreadable) { throw 'Not offered: the old file-sharing version could not be checked' }
@@ -617,7 +617,7 @@ function HPreflight() {
         'recovery.winre_enabled' {
             # Windows can only turn the tools back on from the image it keeps
             # while they are off, with its own ReAgentc.exe.
-            if (!(HRecoveryImageReady) -or ![IO.File]::Exists((HReagentPath))) { throw 'Not offered: the recovery tools are missing from this PC' }
+            if (!(HRecoveryImageReady) -or ![IO.File]::Exists((HReagentPath))) { throw 'Not offered: the recovery tools are missing from this computer' }
         }
         'persistence.run_and_tasks' { HStartupPreflight }
         'browser.extensions_off' { HAddonPreflight }
@@ -802,7 +802,7 @@ function HSetWifiRandom($name, $v) {
     # The adapter name goes into a quoted argument: refuse anything that could end the quote.
     if ($iface.Length -lt 1 -or $iface.Length -gt 256 -or $iface -cmatch '[\x00-\x1f\x7f"]' -or $iface.Trim() -cne $iface -or $iface.EndsWith('\')) { throw 'This Wi-Fi adapter has a name that cannot be used safely' }
     $exe = HNetshPath
-    if (![IO.File]::Exists($exe)) { throw 'The Wi-Fi tool is missing from this PC' }
+    if (![IO.File]::Exists($exe)) { throw 'The Wi-Fi tool is missing from this computer' }
     $enabled = $(if ([int]$v -eq 1) { 'yes' } else { 'no' })
     $code = HRunHidden $exe ('wlan set randomization enabled=' + $enabled + ' interface="' + $iface + '"')
     if ($code -ne 0) { throw "Windows could not change the Wi-Fi address setting (code $code)" }
@@ -810,7 +810,7 @@ function HSetWifiRandom($name, $v) {
 function HSetOutbound($v) {
     Load 'NetSecurity'
     if ([int]$v -eq 1) {
-        New-NetFirewallRule -PolicyStore PersistentStore -Name $hOutboundRule -DisplayName $hOutboundName -Description 'Added by Secblitz. Stops this PC sending file-sharing traffic to the internet.' -Direction Outbound -Action Block -Protocol TCP -RemotePort 445,139 -RemoteAddress Internet -Profile Any -Enabled True -ErrorAction Stop | Out-Null
+        New-NetFirewallRule -PolicyStore PersistentStore -Name $hOutboundRule -DisplayName $hOutboundName -Description 'Added by Secblitz. Stops this computer sending file-sharing traffic to the internet.' -Direction Outbound -Action Block -Protocol TCP -RemotePort 445,139 -RemoteAddress Internet -Profile Any -Enabled True -ErrorAction Stop | Out-Null
     } else {
         Remove-NetFirewallRule -PolicyStore PersistentStore -Name $hOutboundRule -ErrorAction Stop
     }
@@ -1861,7 +1861,7 @@ function HRunHidden([string]$exe, [string]$arguments) {
 function HRunReagent([string]$verb) {
     if (@('/enable', '/disable') -cnotcontains $verb) { throw 'Unknown recovery tools change' }
     $exe = HReagentPath
-    if (![IO.File]::Exists($exe)) { throw 'The recovery tools are missing from this PC' }
+    if (![IO.File]::Exists($exe)) { throw 'The recovery tools are missing from this computer' }
     return (HRunHidden $exe $verb)
 }
 function HSetRecovery([string]$name, $v) {

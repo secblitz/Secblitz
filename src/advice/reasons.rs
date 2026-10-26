@@ -6,35 +6,35 @@ pub(super) fn not_offered(reason: &str) -> Option<&'static str> {
     // shown in "More details", never matched here.
     if v::is_driver_reason(reason) {
         return Some(
-            "A driver on this PC may not work with it, so we leave this alone. To look yourself, open Windows Security, then Device security, then Core isolation details.",
+            "A driver on this computer may not work with it, so we leave this alone. To look yourself, open Windows Security, then Device security, then Core isolation details.",
         );
     }
     Some(match reason {
         r if r == v::NOT_SUPPORTED => {
-            "This PC doesn't support it, or virtualization is off in its start-up settings, so we leave this alone."
+            "This computer doesn't support it, or virtualization is off in its start-up settings, so we leave this alone."
         }
         r if r == v::LOCKED => {
-            "It is locked in your PC's start-up settings, so we leave this alone."
+            "It is locked in your computer's start-up settings, so we leave this alone."
         }
         r if r == v::DRIVERS_UNREADABLE => "We couldn't check your drivers, so we leave this alone.",
         r if r == v::NEEDS_MEMORY_INTEGRITY => {
             "Turn on Core system protection first, then check again."
         }
         r if r == v::NEEDS_RESTART => {
-            "Restart your PC to finish turning on Core system protection, then check again."
+            "Restart your computer to finish turning on Core system protection, then check again."
         }
         r if r == v::SET_BY_HAND => {
-            "Virtualization security was set up by hand on this PC, so we leave it alone."
+            "Virtualization security was set up by hand on this computer, so we leave it alone."
         }
         r if r == v::OLD_WINDOWS => {
             "This version of Windows doesn't have it, so there is nothing to turn on."
         }
         r if r == v::NO_SHADOW_STACKS => {
-            "This PC's processor doesn't support it, so there is nothing to turn on."
+            "This computer's processor doesn't support it, so there is nothing to turn on."
         }
-        r if r == v::UNREADABLE => "We couldn't check this PC's support for it, so we leave it alone.",
+        r if r == v::UNREADABLE => "We couldn't check this computer's support for it, so we leave it alone.",
         "Not offered: Secure Boot is off" => {
-            "This protection needs Secure Boot, which is off on this PC. We leave it alone."
+            "This protection needs Secure Boot, which is off on this computer. We leave it alone."
         }
         "Not offered: Smart App Control is on" => {
             "Smart App Control already guards this part of Windows, so we leave it alone."
@@ -68,7 +68,7 @@ pub(super) fn not_offered(reason: &str) -> Option<&'static str> {
         "Not offered: Defender cloud protection is off" => {
             "Turn on cloud threat lookups first, then check again."
         }
-        "Not offered: this PC uses Configuration Manager" => {
+        "Not offered: this computer uses Configuration Manager" => {
             "Your organization's tools manage this, so we leave it alone."
         }
         "Not offered: Microsoft Office was not found" => {
@@ -80,8 +80,8 @@ pub(super) fn not_offered(reason: &str) -> Option<&'static str> {
         "Not offered: Windows Home cannot accept Remote Desktop connections" => {
             "Windows Home can't accept Remote Desktop connections, so there is nothing to turn off."
         }
-        "Not offered: this PC is set up as a kiosk" => {
-            "This PC is set up as a kiosk that signs in by itself, so we leave this alone."
+        "Not offered: this computer is set up as a kiosk" => {
+            "This computer is set up as a kiosk that signs in by itself, so we leave this alone."
         }
         "Not offered: Defender behavior monitoring is off" => {
             "Turn on suspicious app detection first, then check again."
@@ -95,13 +95,13 @@ pub(super) fn not_offered(reason: &str) -> Option<&'static str> {
         "Not offered: a shared folder or drive may rely on the old name service" => {
             "A shared folder or drive here may need this, so we leave it alone."
         }
-        "Not offered: Recall is not available on this PC" => {
-            "Recall is not on this PC, so there is nothing to change."
+        "Not offered: Recall is not available on this computer" => {
+            "Recall is not on this computer, so there is nothing to change."
         }
-        "Not offered: Paint was not found on this PC" => {
+        "Not offered: Paint was not found on this computer" => {
             "Paint isn't installed here, so there is nothing to turn off."
         }
-        "Not offered: Notepad was not found on this PC" => {
+        "Not offered: Notepad was not found on this computer" => {
             "The Notepad app isn't installed here, so there is nothing to turn off."
         }
         "Not offered: this version of Windows does not have it" => {
@@ -113,13 +113,13 @@ pub(super) fn not_offered(reason: &str) -> Option<&'static str> {
         "Not offered: this setting is not available on Windows Home" => {
             "Windows Home does not support this setting, so we leave it alone."
         }
-        "Not offered: a printer on this PC is shared with other computers" => {
-            "A printer on this PC is shared with others, so we leave this alone."
+        "Not offered: a printer on this computer is shared with other computers" => {
+            "A printer on this computer is shared with others, so we leave this alone."
         }
         "Not offered: printing is busy right now" => {
             "Something is waiting to print, so we leave this for now. Try again when printing is finished."
         }
-        "Not offered: you are connected to this PC from another device right now" => {
+        "Not offered: you are connected to this computer from another device right now" => {
             "You are connected from another device, so we leave this alone. Turning it off would cut you off."
         }
         "Not offered: something is using the old file sharing right now" => {
@@ -158,20 +158,20 @@ pub(super) fn not_offered(reason: &str) -> Option<&'static str> {
         "Not offered: a shared folder has permissions that could not be put back exactly" => {
             "A shared folder has permissions we could not put back exactly, so we leave this alone."
         }
-        "Not offered: the recovery tools are missing from this PC" => {
-            "The files the recovery tools need are missing from this PC, so we leave this alone."
+        "Not offered: the recovery tools are missing from this computer" => {
+            "The files the recovery tools need are missing from this computer, so we leave this alone."
         }
-        "Not offered: this PC has no Wi-Fi adapter" => {
-            "This PC has no Wi-Fi adapter, so there is nothing to change."
+        "Not offered: this computer has no Wi-Fi adapter" => {
+            "This computer has no Wi-Fi adapter, so there is nothing to change."
         }
-        "Not offered: the Wi-Fi settings of this PC could not be read" => {
-            "We couldn't read this PC's Wi-Fi settings, so we leave them alone."
+        "Not offered: the Wi-Fi settings of this computer could not be read" => {
+            "We couldn't read this computer's Wi-Fi settings, so we leave them alone."
         }
         "Not offered: a browser rule already turns off every add-on" => {
-            "A rule on this PC already turns off browser add-ons, so we leave it alone."
+            "A rule on this computer already turns off browser add-ons, so we leave it alone."
         }
-        "Not offered: the browser add-on rules on this PC could not be read" => {
-            "We couldn't read this PC's browser add-on rules, so we leave them alone."
+        "Not offered: the browser add-on rules on this computer could not be read" => {
+            "We couldn't read this computer's browser add-on rules, so we leave them alone."
         }
         _ => return None,
     })
@@ -185,7 +185,7 @@ pub(super) fn repair_help(id: &str) -> &'static str {
         | "firewall.domain.inbound"
         | "firewall.private.inbound"
         | "firewall.public.inbound" => {
-            "It stops uninvited connections to your PC."
+            "It stops uninvited connections to your computer."
         }
         "permissions.service.bits" | "permissions.service.wuauserv" => {
             "It keeps Windows updates safe from unwanted changes."
@@ -196,7 +196,7 @@ pub(super) fn repair_help(id: &str) -> &'static str {
         "uac.enabled" => "Windows will ask before big changes are made.",
         "uac.consent" => "Windows will ask for approval before big changes.",
         "installer.always_install_elevated" => {
-            "App installers will no longer get full control of your PC."
+            "App installers will no longer get full control of your computer."
         }
         "lsa.restrict_anonymous_sam" => {
             "Other devices on the network will no longer see your account names."

@@ -431,7 +431,7 @@ pub(super) static SPECS: &[Spec] = &[
     Spec {
         id: "remote_assistance.disabled",
         title: "Block unsolicited Remote Assistance",
-        description: "Set fAllowToGetHelp to 0 so nobody can be invited to control this PC through Remote Assistance. Quick Assist is separate and unaffected.",
+        description: "Set fAllowToGetHelp to 0 so nobody can be invited to control this computer through Remote Assistance. Quick Assist is separate and unaffected.",
         source: Source::Registry,
         reboot: false,
         ask: true,
@@ -568,7 +568,7 @@ pub(super) static SPECS: &[Spec] = &[
     Spec {
         id: "privacy.wifi_random_address",
         title: "Random hardware address on Wi-Fi",
-        description: "Turn on random hardware addresses on each Wi-Fi adapter, so Wi-Fi networks cannot recognise this PC from one visit to the next. Applies from the next Wi-Fi connection. Not offered when the PC has no Wi-Fi adapter. Undo restores every adapter.",
+        description: "Turn on random hardware addresses on each Wi-Fi adapter, so Wi-Fi networks cannot recognise this computer from one visit to the next. Applies from the next Wi-Fi connection. Not offered when the computer has no Wi-Fi adapter. Undo restores every adapter.",
         source: Source::WifiRandomAddress,
         reboot: false,
         ask: true,
@@ -581,7 +581,7 @@ pub(super) static SPECS: &[Spec] = &[
     Spec {
         id: "privacy.online_speech",
         title: "Online speech recognition",
-        description: "Stop people on this PC from turning on cloud-based speech recognition (AllowInputPersonalization=0). Voice typing stops working. Not offered on Windows Home. Undo restores the earlier value.",
+        description: "Stop people on this computer from turning on cloud-based speech recognition (AllowInputPersonalization=0). Voice typing stops working. Not offered on Windows Home. Undo restores the earlier value.",
         source: Source::Registry,
         reboot: false,
         ask: true,
@@ -711,7 +711,7 @@ pub(super) static SPECS: &[Spec] = &[
     },
     Spec {
         id: "net.stack_hardening",
-        title: "Harden how this PC handles network traffic",
+        title: "Harden how this computer handles network traffic",
         description: "Ignore ICMP redirects, refuse source-routed packets (IPv4 and IPv6) and stop answering name-release requests. Undo restores the original values. Restart required.",
         source: Source::Registry,
         reboot: true,
@@ -750,7 +750,7 @@ pub(super) static SPECS: &[Spec] = &[
     Spec {
         id: "net.mdns",
         title: "Turn off multicast name lookups (mDNS)",
-        description: "Set EnableMDNS to 0 so this PC neither asks nor answers local-network name lookups. Casting, AirPrint and some smart-home devices may stop being found. Undo restores the original value. Restart required.",
+        description: "Set EnableMDNS to 0 so this computer neither asks nor answers local-network name lookups. Casting, AirPrint and some smart-home devices may stop being found. Undo restores the original value. Restart required.",
         source: Source::Registry,
         reboot: true,
         ask: true,
@@ -873,8 +873,8 @@ pub(super) static SPECS: &[Spec] = &[
     },
     Spec {
         id: "printer.spooler_remote",
-        title: "Print sharing on this PC",
-        description: "Stop the Print Spooler accepting connections from other computers (RegisterSpoolerRemoteRpcEndPoint=2) when no printer on this PC is shared and nothing is waiting to print. The Spooler restarts once; local printing is unaffected.",
+        title: "Print sharing on this computer",
+        description: "Stop the Print Spooler accepting connections from other computers (RegisterSpoolerRemoteRpcEndPoint=2) when no printer on this computer is shared and nothing is waiting to print. The Spooler restarts once; local printing is unaffected.",
         source: Source::Registry,
         reboot: false,
         ask: true,
@@ -913,8 +913,8 @@ pub(super) static SPECS: &[Spec] = &[
     },
     Spec {
         id: "session.lock_on_wake",
-        title: "Ask for your password when the PC wakes",
-        description: "Require sign-in when the PC wakes from sleep, on the active power plan (plugged in and on battery). Not offered when the signed-in account has no password.",
+        title: "Ask for your password when the computer wakes",
+        description: "Require sign-in when the computer wakes from sleep, on the active power plan (plugged in and on battery). Not offered when the signed-in account has no password.",
         source: Source::LockOnWake,
         reboot: false,
         ask: true,
@@ -1026,7 +1026,7 @@ pub(super) static SPECS: &[Spec] = &[
     Spec {
         id: "privacy.recall",
         title: "Recall screenshots",
-        description: "Stop Windows saving snapshots of your screen for Recall (DisableAIDataAnalysis=1) on PCs that have the Recall feature. Existing snapshots are removed by Windows. Not offered where Recall does not exist; undo removes the setting.",
+        description: "Stop Windows saving snapshots of your screen for Recall (DisableAIDataAnalysis=1) on computers that have the Recall feature. Existing snapshots are removed by Windows. Not offered where Recall does not exist; undo removes the setting.",
         source: Source::Registry,
         reboot: false,
         ask: true,
@@ -1086,7 +1086,7 @@ pub(super) static SPECS: &[Spec] = &[
     Spec {
         id: "debloat.widgets_policy",
         title: "Widgets button and news board",
-        description: "Turn off the Widgets button and its news board for everyone on this PC (AllowNewsAndInterests=0). Not offered on Windows Home, which ignores it, or while Windows protects the value from apps; undo restores the earlier value.",
+        description: "Turn off the Widgets button and its news board for everyone on this computer (AllowNewsAndInterests=0). Not offered on Windows Home, which ignores it, or while Windows protects the value from apps; undo restores the earlier value.",
         source: Source::Registry,
         reboot: false,
         ask: true,
@@ -1137,8 +1137,8 @@ pub(super) static SPECS: &[Spec] = &[
     },
     Spec {
         id: "privacy.delivery_optimization",
-        title: "Update sharing with other PCs",
-        description: "Stop this PC sharing Windows and app downloads with other computers (DODownloadMode=0). Updates still download from Microsoft. Undo restores the earlier value.",
+        title: "Update sharing with other computers",
+        description: "Stop this computer sharing Windows and app downloads with other computers (DODownloadMode=0). Updates still download from Microsoft. Undo restores the earlier value.",
         source: Source::Registry,
         reboot: false,
         ask: true,
@@ -1189,7 +1189,7 @@ pub(super) static SPECS: &[Spec] = &[
     Spec {
         id: "remote_desktop.disabled",
         title: "Remote Desktop connections",
-        description: "Stop this PC accepting Remote Desktop connections by setting only fDenyTSConnections to 1. Firewall rules, network-level sign-in and services are not touched. Not offered while you are connected remotely or where Windows cannot host Remote Desktop; undo writes the earlier value back.",
+        description: "Stop this computer accepting Remote Desktop connections by setting only fDenyTSConnections to 1. Firewall rules, network-level sign-in and services are not touched. Not offered while you are connected remotely or where Windows cannot host Remote Desktop; undo writes the earlier value back.",
         source: Source::Registry,
         reboot: false,
         ask: true,
@@ -1304,7 +1304,7 @@ pub(super) static SPECS: &[Spec] = &[
     Spec {
         id: "browser.shopping_ai",
         title: "Shopping and AI sidebars in your browsers",
-        description: "Set the Edge policies EdgeShoppingAssistantEnabled and HubsSidebarEnabled to 0 and the Chrome policies ShoppingListEnabled to 0 and GeminiSettings to 1. Browsers then show that a setting was made for the whole PC. Undo puts back every value exactly, or removes it if it was not there.",
+        description: "Set the Edge policies EdgeShoppingAssistantEnabled and HubsSidebarEnabled to 0 and the Chrome policies ShoppingListEnabled to 0 and GeminiSettings to 1. Browsers then show that a setting was made for the whole computer. Undo puts back every value exactly, or removes it if it was not there.",
         source: Source::Registry,
         reboot: false,
         ask: true,
@@ -1324,7 +1324,7 @@ pub(super) static SPECS: &[Spec] = &[
     Spec {
         id: "browser.data_collection",
         title: "Usage data your browsers send",
-        description: "Turn off the browsers' own data collection with the Edge policies DiagnosticData and PersonalizationReportingEnabled, the Chrome policies MetricsReportingEnabled, UrlKeyedAnonymizedDataCollectionEnabled and the four PrivacySandbox ad policies, and the Firefox policies DisableTelemetry and DisableFirefoxStudies. Browsers then show that a setting was made for the whole PC. Undo puts back every value exactly, or removes it if it was not there.",
+        description: "Turn off the browsers' own data collection with the Edge policies DiagnosticData and PersonalizationReportingEnabled, the Chrome policies MetricsReportingEnabled, UrlKeyedAnonymizedDataCollectionEnabled and the four PrivacySandbox ad policies, and the Firefox policies DisableTelemetry and DisableFirefoxStudies. Browsers then show that a setting was made for the whole computer. Undo puts back every value exactly, or removes it if it was not there.",
         source: Source::Registry,
         reboot: false,
         ask: true,
@@ -1353,7 +1353,7 @@ pub(super) static SPECS: &[Spec] = &[
     Spec {
         id: "browser.safety_mode",
         title: "Stronger protection in your browsers",
-        description: "Set the Edge policy EnhanceSecurityMode to 1 (balanced) and the Firefox policy EnableTrackingProtection to on. Chrome's warnings are handled by the browser warnings control. Browsers then show that a setting was made for the whole PC. Undo puts back every value exactly, or removes it if it was not there.",
+        description: "Set the Edge policy EnhanceSecurityMode to 1 (balanced) and the Firefox policy EnableTrackingProtection to on. Chrome's warnings are handled by the browser warnings control. Browsers then show that a setting was made for the whole computer. Undo puts back every value exactly, or removes it if it was not there.",
         source: Source::Registry,
         reboot: false,
         ask: true,
@@ -1377,7 +1377,7 @@ pub(super) static SPECS: &[Spec] = &[
     Spec {
         id: "browser.dns_bypass",
         title: "Browsers use Web protection",
-        description: "Set the Edge, Chrome and Brave policy DnsOverHttpsMode to off and the Firefox policy DNSOverHTTPS to disabled and locked, so the browsers use the PC's own lookups, which Web protection filters, instead of their own private lookups. Browsers then show that a setting was made for the whole PC. Undo puts back every value exactly, or removes it if it was not there.",
+        description: "Set the Edge, Chrome and Brave policy DnsOverHttpsMode to off and the Firefox policy DNSOverHTTPS to disabled and locked, so the browsers use the computer's own lookups, which Web protection filters, instead of their own private lookups. Browsers then show that a setting was made for the whole computer. Undo puts back every value exactly, or removes it if it was not there.",
         source: Source::Registry,
         reboot: false,
         ask: true,
@@ -1413,7 +1413,7 @@ pub(super) static SPECS: &[Spec] = &[
     Spec {
         id: "browser.extensions_off",
         title: "Turn off a browser add-on",
-        description: "Turn off the Chrome or Edge add-ons you pick, from those that can read every site you visit or talk to other programs, by adding each one to the browser's block list. Only the entry Secblitz adds is ever removed again, so undo turns the add-on back on with its data. Other entries, a block-everything rule and managed browsers are left alone. This applies to everyone who uses the browser on this PC.",
+        description: "Turn off the Chrome or Edge add-ons you pick, from those that can read every site you visit or talk to other programs, by adding each one to the browser's block list. Only the entry Secblitz adds is ever removed again, so undo turns the add-on back on with its data. Other entries, a block-everything rule and managed browsers are left alone. This applies to everyone who uses the browser on this computer.",
         source: Source::BrowserExtensions,
         reboot: false,
         ask: true,
@@ -1438,7 +1438,7 @@ pub(super) static SPECS: &[Spec] = &[
     Spec {
         id: "clickfix.run_box",
         title: "Turn off the Run box",
-        description: "Turn off the Run box (Win+R and Run in the Start menu) for every account on this PC by setting NoRun=1. Task Manager, Command Prompt and everything else still work. Undo restores the earlier value.",
+        description: "Turn off the Run box (Win+R and Run in the Start menu) for every account on this computer by setting NoRun=1. Task Manager, Command Prompt and everything else still work. Undo restores the earlier value.",
         source: Source::Registry,
         reboot: false,
         ask: true,

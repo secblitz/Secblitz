@@ -43,7 +43,7 @@ pub enum Msg {
 
 pub const FAILED: &str =
     "Windows wouldn't let Secblitz move the files. Close Secblitz everywhere and try again.";
-pub const DONE: &str = "Done. Check your PC again.";
+pub const DONE: &str = "Done. Check your computer again.";
 
 /// Nothing starts without the second question: only `Confirm` can lead to `Working`.
 fn next(msg: Msg, step: Step) -> Option<Step> {
@@ -86,7 +86,7 @@ fn say(msg: Msg) -> Option<Message> {
 pub fn card<'a>(ctx: &'a Ctx, info: &DamageInfo) -> Element<'a, Message> {
     let p = ctx.palette;
     let title = if info.kind == DamageKind::OtherPc {
-        ctx.t("This undo history comes from another PC")
+        ctx.t("This undo history comes from another computer")
     } else {
         ctx.t("Secblitz's undo history is damaged")
     };
@@ -103,7 +103,7 @@ pub fn card<'a>(ctx: &'a Ctx, info: &DamageInfo) -> Element<'a, Message> {
                 .push(widgets::h2(p, title))
                 .push(widgets::muted(
                     p,
-                    ctx.t("Secblitz can't check your PC until this is sorted out."),
+                    ctx.t("Secblitz can't check your computer until this is sorted out."),
                 ))
                 .push(widgets::action(
                     p,
@@ -119,7 +119,7 @@ pub fn card<'a>(ctx: &'a Ctx, info: &DamageInfo) -> Element<'a, Message> {
                 .push(widgets::h2(p, title))
                 .push(widgets::muted(
                     p,
-                    ctx.t("Secblitz can't check your PC or undo earlier fixes until this is sorted out. Starting fresh keeps a copy of the damaged files. Fixes you already made stay on your PC, but Secblitz can no longer undo them."),
+                    ctx.t("Secblitz can't check your computer or undo earlier fixes until this is sorted out. Starting fresh keeps a copy of the damaged files. Fixes you already made stay on your computer, but Secblitz can no longer undo them."),
                 ));
             if info.kind == DamageKind::Partial {
                 content = content.push(widgets::small(

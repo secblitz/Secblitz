@@ -55,7 +55,7 @@ pub enum Step {
 
 const SETTING_CHANGED: &str =
     "{title}: it has changed since Secblitz set it, so it was left as it is. No action is needed.";
-const SETTING_MACHINE_NOT_POSSIBLE: &str = "{title}: this could not be put back, so it was left as it is. Restart your PC and try again. If it still does not work, you can leave it as it is.";
+const SETTING_MACHINE_NOT_POSSIBLE: &str = "{title}: this could not be put back, so it was left as it is. Restart your computer and try again. If it still does not work, you can leave it as it is.";
 const SETTING_NOT_POSSIBLE: &str = "{title}: this could not be put back, so it was left as it is. You can change it yourself in Windows Settings.";
 const APP_FAILED: &str =
     "{name} could not be brought back. Try again later, or get it again from the Microsoft Store.";
@@ -448,7 +448,7 @@ mod tests {
             Lang::En,
         );
         assert!(
-            machine.contains("Restart your PC and try again"),
+            machine.contains("Restart your computer and try again"),
             "{machine}"
         );
         assert!(!machine.contains("Windows Settings"), "{machine}");

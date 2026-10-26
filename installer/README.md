@@ -146,7 +146,7 @@ itself and starts `unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SECBLI
 the Windows Settings entry asks it on a plain form (radio buttons, Cancel / Remove
 Secblitz) before anything changes. Cancel stops the uninstall untouched.
 
-* **Keep my PC as it is now**: no put-back.
+* **Keep my computer as it is now**: no put-back.
 * **Put everything back the way it was**: the uninstaller's status line reads
   "Putting your settings back"; `secblitz.exe uninstall-revert --user` runs as the
   original user (it refuses to run elevated; its exit code is the number of personal

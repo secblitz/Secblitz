@@ -687,7 +687,7 @@ pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
                 Tone::Good,
             )),
             Err(_) => Task::done(Message::Toast(
-                ctx.t("We couldn't restart your PC. Restart it from the Start menu instead."),
+                ctx.t("We couldn't restart your computer. Restart it from the Start menu instead."),
                 Tone::Warn,
             )),
         },

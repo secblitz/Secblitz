@@ -127,7 +127,7 @@ pub fn update(state: &mut State, msg: Msg, ctx: &mut Ctx) -> Task<Message> {
         Msg::Changed(setting, reply) => {
             let note = match reply {
                 Ok(Reply::Done) => None,
-                Ok(Reply::Unavailable) => Some(ctx.t("This setting can't be changed on this PC. Your work or school may control it.")),
+                Ok(Reply::Unavailable) => Some(ctx.t("This setting can't be changed on this computer. Your work or school may control it.")),
                 Ok(Reply::ChangedSince) => Some(ctx.t("This setting was changed again after Secblitz set it. Whatever you changed was left as it is.")),
                 Err(e) if e == "unavailable" => Some(ctx.t(ctx.helper.blocker().unwrap_or(crate::gui::REOPEN_TO_DO_THIS))),
                 _ => Some(ctx.t("We couldn't change that setting. It was left as it was. Please try again.")),

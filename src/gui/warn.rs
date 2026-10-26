@@ -169,7 +169,7 @@ fn heading_key(kind: Kind) -> &'static str {
 
 fn sentence_key(kind: Kind) -> &'static str {
     match kind {
-        Kind::Dangerous => "Secblitz stopped {site} before it opened. Sites like this try to steal passwords, money or control of your PC.",
+        Kind::Dangerous => "Secblitz stopped {site} before it opened. Sites like this try to steal passwords, money or control of your computer.",
         _ => "Secblitz stopped {site} before it opened. Sites like this try to trick you into paying or giving away your details.",
     }
 }
