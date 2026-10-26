@@ -337,6 +337,17 @@ LINUX_PACKAGES = {("linux-x64", "deb"): fake_deb, ("linux-x64", "rpm"): fake_rpm
                   ("linux-arm64", "deb"): fake_deb, ("linux-arm64", "rpm"): fake_rpm}
 
 
+def rewind(root, version):
+    """Puts a scratch copy back to an older version, so a test can release one below the repository's."""
+    old = bump.current_version(root)
+    steps = {"Cargo.toml": bump.bump_cargo_toml, "Cargo.lock": bump.bump_cargo_lock,
+             "assets/secblitz.rc": bump.bump_rc, "assets/secblitz.manifest": bump.bump_manifest}
+    for rel, step in steps.items():
+        (root / rel).write_text(step((root / rel).read_text(), old, version))
+    for rel in bump.site_text_files(root):
+        (root / rel).write_text(bump.bump_site_text((root / rel).read_text(), old, version, rel, required=False))
+
+
 class AssembleBase(unittest.TestCase):
     """The whole publish path on a scratch copy of the repo with a throwaway signing key."""
 
@@ -372,6 +383,8 @@ class AssembleBase(unittest.TestCase):
         (self.root / "CHANGELOG.md").write_text(
             "# Changelog\n\n## [Unreleased]\n\n### Fixed\n- A test entry.\n\n"
             "## [0.8.0] - 2026-10-05\n\n### Added\n- Eight.\n", encoding="utf-8")
+        if bump.parse(self.version) <= bump.parse(bump.current_version(self.root)):
+            rewind(self.root, "0.1.0")
         self.old = bump.current_version(self.root)
         if not self.linux:
             page = self.root / "website/index.html"
