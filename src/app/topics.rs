@@ -96,7 +96,6 @@ impl Topic {
                 | "linux.browser_tracking"
                 | "linux.browser_ad_topics"
                 | "linux.browser_sponsored"
-                | "linux.browser_pocket"
                 | "linux.browser_safe_browsing"
                 | "linux.browser_password_leaks"
                 | "linux.browser_background"
@@ -119,8 +118,7 @@ impl Topic {
                 | "linux.problem_reports"
                 | "linux.app_usage"
                 | "linux.old_files"
-                | "linux.crash_files"
-                | "linux.usage_stats",
+                | "linux.crash_files",
             ) => Topic::Privacy,
             ("linux", "linux.printer_sharing" | "linux.printer_discovery") => Topic::Network,
             ("linux", "linux.ubuntu_news" | "linux.usage_survey") => Topic::Privacy,
@@ -396,7 +394,6 @@ mod tests {
             ("linux.screen_off_delay", SignIn),
             ("linux.lock_delay", SignIn),
             ("linux.lock_on_suspend", SignIn),
-            ("linux.usage_stats", Privacy),
             ("linux.browser_data_collection", Browsers),
             ("linux.browser_https_only", Browsers),
             ("linux.memory_shuffle", Windows),
@@ -415,7 +412,6 @@ mod tests {
             ("linux.browser_tracking", Browsers),
             ("linux.browser_ad_topics", Browsers),
             ("linux.browser_sponsored", Browsers),
-            ("linux.browser_pocket", Browsers),
             ("linux.browser_safe_browsing", Browsers),
             ("linux.browser_password_leaks", Browsers),
             ("linux.browser_background", Browsers),

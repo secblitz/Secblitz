@@ -14,11 +14,10 @@ use std::collections::BTreeMap;
 const MEMO: &str = "/var/lib/secblitz/Linux";
 const POLICIES: &str = "/etc/firefox/policies/policies.json";
 const CHROME_DIR: &str = "/etc/opt/chrome/policies/managed";
-const NINE: [Ctl; 9] = [
+const NEW: [Ctl; 8] = [
     Ctl::Tracking,
     Ctl::AdTopics,
     Ctl::Sponsored,
-    Ctl::Pocket,
     Ctl::SafeBrowsing,
     Ctl::PasswordLeaks,
     Ctl::Background,
@@ -120,7 +119,6 @@ fn a_fresh_install_of_each_distribution_shows_what_its_firefox_does() {
                 json!({"items": {"firefox": 1, "chromium": null}}),
             ),
             (Ctl::Sponsored, json!({"items": {"firefox": 1}})),
-            (Ctl::Pocket, json!({"items": {"firefox": 1}})),
             (
                 Ctl::SafeBrowsing,
                 json!({"items": {"firefox": 0, "chromium": null}}),
@@ -153,7 +151,7 @@ fn a_fresh_install_of_each_distribution_shows_what_its_firefox_does() {
 
 #[test]
 fn only_the_optional_ones_ask_first() {
-    for ctl in NINE {
+    for ctl in NEW {
         let asks = matches!(ctl, Ctl::Suggestions | Ctl::EncryptedDns);
         assert_eq!(spec(ctl.id()).unwrap().ask, asks, "{}", ctl.id());
     }
@@ -165,7 +163,7 @@ fn each_check_is_fixed_and_undone_on_every_distribution_with_every_browser_prese
         chrome(&sim);
         edge(&sim);
         sim.file("/usr/bin/brave-browser", "");
-        for ctl in NINE {
+        for ctl in NEW {
             let before_files = snapshot(&sim);
             let before = value(&sim, ctl);
             fix(&sim, ctl);
@@ -192,7 +190,6 @@ fn the_firefox_policies_are_written_with_their_documented_names_and_values() {
     for ctl in [
         Ctl::Tracking,
         Ctl::Sponsored,
-        Ctl::Pocket,
         Ctl::Suggestions,
         Ctl::EncryptedDns,
     ] {
@@ -204,7 +201,6 @@ fn the_firefox_policies_are_written_with_their_documented_names_and_values() {
             "EnableTrackingProtection": {"Value": true, "Cryptomining": true, "Fingerprinting": true},
             "FirefoxHome": {"SponsoredTopSites": false, "SponsoredPocket": false},
             "FirefoxSuggest": {"SponsoredSuggestions": false},
-            "DisablePocket": true,
             "SearchSuggestEnabled": false,
             "DNSOverHTTPS": {"Enabled": true, "Fallback": true}
         }})
@@ -216,7 +212,7 @@ fn the_firefox_policies_are_written_with_their_documented_names_and_values() {
 fn the_chromium_policies_are_written_with_their_documented_names_and_values() {
     let sim = Sim::fixture("fedora-44");
     chrome(&sim);
-    for ctl in NINE {
+    for ctl in NEW {
         if ctl.chromium() {
             fix(&sim, ctl);
         }
@@ -244,7 +240,7 @@ fn the_nine_can_be_undone_in_any_order_and_the_last_undo_leaves_nothing_behind()
             chrome(&sim);
             let start = snapshot(&sim);
             let mut done = Vec::new();
-            for ctl in NINE {
+            for ctl in NEW {
                 let before = value(&sim, ctl);
                 fix(&sim, ctl);
                 done.push((ctl, before));
@@ -394,11 +390,9 @@ fn a_check_shows_only_where_a_browser_that_supports_it_is_installed() {
             .eligible
     );
     without_firefox(&sim);
-    for ctl in [Ctl::Sponsored, Ctl::Pocket] {
-        let o = backend(&sim).observe(ctl.id()).unwrap();
-        assert!(!o.eligible, "{}", ctl.id());
-        assert_eq!(o.reason, super::browsers::NO_FIREFOX);
-    }
+    let o = backend(&sim).observe(Ctl::Sponsored.id()).unwrap();
+    assert!(!o.eligible);
+    assert_eq!(o.reason, super::browsers::NO_FIREFOX);
     let o = backend(&sim).observe(Ctl::Tracking.id()).unwrap();
     assert!(o.eligible);
     assert_eq!(o.value, json!({"items": {"firefox": null, "chromium": 1}}));
@@ -476,7 +470,7 @@ fn a_firefox_policy_file_that_is_not_understood_is_never_touched() {
     let sim = Sim::fixture("mint-22.3");
     for bad in ["not json", "[1, 2]", r#"{"policies": 3}"#] {
         sim.file(POLICIES, bad);
-        for ctl in [Ctl::Tracking, Ctl::Pocket, Ctl::EncryptedDns] {
+        for ctl in [Ctl::Tracking, Ctl::Sponsored, Ctl::EncryptedDns] {
             let o = backend(&sim).observe(ctl.id()).unwrap();
             assert!(!o.eligible, "{bad:?}");
             assert_eq!(o.reason, UNRECOGNISED);
@@ -496,14 +490,9 @@ fn an_undo_without_a_record_changes_nothing() {
     let sim = Sim::fixture("fedora-44");
     sim.file(POLICIES, ADMIN);
     let before = snapshot(&sim);
-    for ctl in [
-        Ctl::Tracking,
-        Ctl::Sponsored,
-        Ctl::Pocket,
-        Ctl::EncryptedDns,
-    ] {
+    for ctl in [Ctl::Tracking, Ctl::Sponsored, Ctl::EncryptedDns] {
         let undo_all = json!({"items": {"firefox": 1, "chromium": null}});
-        let want = if ctl == Ctl::Sponsored || ctl == Ctl::Pocket {
+        let want = if ctl == Ctl::Sponsored {
             json!({"items": {"firefox": 1}})
         } else {
             undo_all
@@ -519,10 +508,10 @@ fn a_value_that_is_not_a_flag_is_refused() {
     let sim = Sim::fixture("ubuntu-26.04");
     let mut b = backend(&sim);
     assert!(b
-        .write(Ctl::Pocket.id(), &json!({"items": {"firefox": 2}}))
+        .write(Ctl::Sponsored.id(), &json!({"items": {"firefox": 2}}))
         .is_err());
     assert!(b
-        .write(Ctl::Pocket.id(), &json!({"items": {"firefox": "yes"}}))
+        .write(Ctl::Sponsored.id(), &json!({"items": {"firefox": "yes"}}))
         .is_err());
     assert!(!sim.has(POLICIES));
 }

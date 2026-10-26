@@ -477,14 +477,6 @@ const SPECS: &[LinuxSpec] = &[
         reboot: false,
         keys: &[set("lock_on_suspend", "", &[1, 2], false, Some(1), 2)],
     },
-    // send: 1 when the desktop sends the makers of its software statistics about how it is used.
-    LinuxSpec {
-        id: "linux.usage_stats",
-        scope: Scope::Person,
-        ask: false,
-        reboot: false,
-        keys: &[flag("send", true)],
-    },
     // firefox, chromium: 1 when that browser (Chromium means Chrome, Chromium or Brave) still shares usage data; null when none is installed.
     LinuxSpec {
         id: "linux.browser_data_collection",
@@ -636,14 +628,6 @@ const SPECS: &[LinuxSpec] = &[
         reboot: false,
         keys: &[flag("firefox", true)],
     },
-    // firefox: 1 when Pocket is not switched off in Firefox; null when it is not installed.
-    LinuxSpec {
-        id: "linux.browser_pocket",
-        scope: Scope::System,
-        ask: false,
-        reboot: false,
-        keys: &[flag("firefox", true)],
-    },
     // firefox, chromium: 1 when a policy has turned the dangerous site warning off; null when no supporting browser is installed.
     LinuxSpec {
         id: "linux.browser_safe_browsing",
@@ -790,7 +774,7 @@ mod tests {
         for windows in crate::engine::catalog::ids(Os::Windows) {
             assert!(spec(windows).is_none(), "{windows}");
         }
-        assert_eq!(specs().len(), 69);
+        assert_eq!(specs().len(), 67);
     }
 
     #[test]
@@ -812,7 +796,6 @@ mod tests {
             "linux.screen_off_delay",
             "linux.lock_delay",
             "linux.lock_on_suspend",
-            "linux.usage_stats",
         ];
         let optional = [
             "linux.fedora_open_ports",

@@ -10,7 +10,6 @@ pub enum Ctl {
     Tracking,
     AdTopics,
     Sponsored,
-    Pocket,
     SafeBrowsing,
     PasswordLeaks,
     Background,
@@ -24,13 +23,12 @@ const SAFE_BROWSING_PREFS: [&str; 2] = [
 ];
 
 impl Ctl {
-    pub const ALL: [Ctl; 11] = [
+    pub const ALL: [Ctl; 10] = [
         Ctl::Data,
         Ctl::Https,
         Ctl::Tracking,
         Ctl::AdTopics,
         Ctl::Sponsored,
-        Ctl::Pocket,
         Ctl::SafeBrowsing,
         Ctl::PasswordLeaks,
         Ctl::Background,
@@ -45,7 +43,6 @@ impl Ctl {
             Ctl::Tracking => "linux.browser_tracking",
             Ctl::AdTopics => "linux.browser_ad_topics",
             Ctl::Sponsored => "linux.browser_sponsored",
-            Ctl::Pocket => "linux.browser_pocket",
             Ctl::SafeBrowsing => "linux.browser_safe_browsing",
             Ctl::PasswordLeaks => "linux.browser_password_leaks",
             Ctl::Background => "linux.browser_background",
@@ -61,7 +58,6 @@ impl Ctl {
             Ctl::Tracking => "browser_firefox_tracking",
             Ctl::AdTopics => "browser_firefox_ad_topics",
             Ctl::Sponsored => "browser_firefox_sponsored",
-            Ctl::Pocket => "browser_firefox_pocket",
             Ctl::SafeBrowsing => "browser_firefox_safe_browsing",
             Ctl::PasswordLeaks => "browser_firefox_password_leaks",
             Ctl::Background => "browser_firefox_background",
@@ -75,7 +71,7 @@ impl Ctl {
     }
 
     pub fn chromium(self) -> bool {
-        !matches!(self, Ctl::Https | Ctl::Sponsored | Ctl::Pocket)
+        !matches!(self, Ctl::Https | Ctl::Sponsored)
     }
 
     /// Edge reads other names for these settings, so a policy written under the Chromium names would change nothing there.
@@ -101,7 +97,6 @@ impl Ctl {
                 ),
                 ("FirefoxSuggest", json!({"SponsoredSuggestions": false})),
             ],
-            Ctl::Pocket => vec![("DisablePocket", json!(true))],
             Ctl::SafeBrowsing => {
                 let prefs: Map<String, Value> = SAFE_BROWSING_PREFS
                     .iter()
@@ -156,7 +151,7 @@ impl Ctl {
             Ctl::Background => vec![("BackgroundModeEnabled", json!(false))],
             Ctl::Suggestions => vec![("SearchSuggestEnabled", json!(false))],
             Ctl::EncryptedDns => vec![("DnsOverHttpsMode", json!("automatic"))],
-            Ctl::Https | Ctl::Sponsored | Ctl::Pocket => Vec::new(),
+            Ctl::Https | Ctl::Sponsored => Vec::new(),
         }
     }
 

@@ -24,7 +24,7 @@ pub struct LinuxBackend<S: Sys> {
     memo: PathBuf,
 }
 
-const TEXT: [(&str, &str, &str); 52] = [
+const TEXT: [(&str, &str, &str); 51] = [
     (
         "linux.firewall",
         "Firewall",
@@ -254,11 +254,6 @@ const TEXT: [(&str, &str, &str); 52] = [
         "linux.browser_sponsored",
         "Sponsored shortcuts",
         "Whether Firefox shows paid shortcuts, stories and suggestions on the new tab page and in the address bar.",
-    ),
-    (
-        "linux.browser_pocket",
-        "Pocket suggestions",
-        "Whether Firefox suggests stories and saves pages through the Pocket service.",
     ),
     (
         "linux.browser_safe_browsing",

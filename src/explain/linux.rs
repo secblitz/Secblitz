@@ -222,11 +222,6 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             "Paid items sit next to your own favorites, and Firefox shares what you click with the companies behind them.",
             "Paid shortcuts, stories and suggestions disappear. Your own shortcuts stay where they are. You can undo this.",
         ),
-        "linux.browser_pocket" => e(
-            "Pocket is a service owned by Mozilla that Firefox uses to suggest stories and to save pages for later.",
-            "Firefox sends details about what you read and click to that service so it can pick stories for you.",
-            "Pocket is switched off in Firefox. Pages you saved there stay in your Pocket account. You can undo this.",
-        ),
         "linux.browser_safe_browsing" => e(
             "Browsers can warn you before they open a site known to steal passwords or to spread harmful programs.",
             "With the warning off, a fake bank page or a harmful download opens as if it were fine.",
@@ -341,11 +336,6 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             "When you close the lid or send the computer to sleep, it can lock the screen so a password is needed on waking. This checks that this is on.",
             "Whoever wakes the computer can use it without a password and see everything you left open.",
             "Waking the computer shows the sign-in screen first. Your open work is kept, and you can undo this.",
-        ),
-        "linux.usage_stats" => e(
-            "Your desktop can send the makers of your software statistics about which programs you use and how often. This checks whether that is on.",
-            "The statistics describe how you use your computer, and can say more about you than you would expect.",
-            "No more statistics are sent. Everything works as before, and you can undo this.",
         ),
         "linux.home_private" => e(
             "Your home folder holds your documents and settings. This checks whether other accounts on this computer are able to open it.",

@@ -63,7 +63,6 @@ pub(super) fn label(id: &str) -> Option<&'static str> {
         "linux.screen_off_delay" => "Time before the screen goes dark",
         "linux.lock_delay" => "Wait before the screen locks",
         "linux.lock_on_suspend" => "Lock when the computer sleeps",
-        "linux.usage_stats" => "Software usage statistics",
         "linux.browser_data_collection" => "Browser usage data",
         "linux.browser_https_only" => "Secure connections only",
         "linux.memory_shuffle" => "Memory layout",
@@ -82,7 +81,6 @@ pub(super) fn label(id: &str) -> Option<&'static str> {
         "linux.browser_tracking" => "Tracker blocking",
         "linux.browser_ad_topics" => "Interest-based ads",
         "linux.browser_sponsored" => "Sponsored shortcuts",
-        "linux.browser_pocket" => "Pocket suggestions",
         "linux.browser_safe_browsing" => "Warnings about dangerous sites",
         "linux.browser_password_leaks" => "Leaked password warnings",
         "linux.browser_background" => "Browser running after you close it",
@@ -192,7 +190,6 @@ pub(super) fn impact(id: &str) -> Option<&'static str> {
         "linux.screen_off_delay" => "Your screen staying readable for a long time after you walk away",
         "linux.lock_delay" => "Anyone using your computer in the moments after the screen goes dark",
         "linux.lock_on_suspend" => "Anyone who wakes your computer finding it already unlocked",
-        "linux.usage_stats" => "Details about how you use your software being sent to its makers",
         "linux.browser_data_collection" => {
             "Details about the sites you visit and how you browse being sent to the companies behind your browsers"
         }
@@ -236,9 +233,6 @@ pub(super) fn impact(id: &str) -> Option<&'static str> {
         }
         "linux.browser_sponsored" => {
             "Paid shortcuts and stories being placed where you look first in Firefox"
-        }
-        "linux.browser_pocket" => {
-            "Firefox suggesting stories from a third party and sending it details about what you read"
         }
         "linux.browser_safe_browsing" => {
             "Opening a fake or harmful site with no warning"
@@ -325,7 +319,6 @@ pub(super) fn repair(id: &str) -> Option<&'static str> {
         "linux.screen_off_delay" => "The screen will go dark after five minutes without use.",
         "linux.lock_delay" => "The screen will lock the moment it goes dark.",
         "linux.lock_on_suspend" => "The screen will lock whenever the computer goes to sleep.",
-        "linux.usage_stats" => "Sending software usage statistics will be switched off.",
         "linux.browser_data_collection" => {
             "Your browsers will stop sending usage data to the companies that make them."
         }
@@ -361,7 +354,6 @@ pub(super) fn repair(id: &str) -> Option<&'static str> {
         "linux.browser_tracking" => "Your browsers will block the trackers that follow you from site to site.",
         "linux.browser_ad_topics" => "Your browser will stop building a list of your interests for ads.",
         "linux.browser_sponsored" => "Firefox will stop showing paid shortcuts, stories and suggestions.",
-        "linux.browser_pocket" => "Pocket will be switched off in Firefox.",
         "linux.browser_safe_browsing" => "Your browsers will warn you again before opening dangerous sites.",
         "linux.browser_password_leaks" => "Your browser will warn you when a saved password has been leaked.",
         "linux.browser_background" => "Your browser will stop running after you close its windows.",

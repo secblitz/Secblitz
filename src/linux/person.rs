@@ -270,12 +270,6 @@ const CINNAMON_LOCK_ON_SUSPEND: &[Gs] = &[gs(
     "lock-on-suspend",
     Shape::Lock,
 )];
-const GNOME_USAGE_STATS: &[Gs] = &[gs(
-    "send",
-    "org.gnome.desktop.privacy",
-    "send-software-usage-stats",
-    Shape::Plain,
-)];
 
 /// The desktop settings behind a control on this desktop; empty when the control has none here. GNOME locks on sleep by
 /// itself and has a setting for it only on Ubuntu.
@@ -289,7 +283,6 @@ fn desktop_keys(id: &str, desktop: Desktop, distro: &str) -> &'static [Gs] {
         ("linux.lock_delay", Desktop::Cinnamon) => CINNAMON_LOCK_DELAY,
         ("linux.lock_on_suspend", Desktop::Gnome) if distro == "ubuntu" => UBUNTU_LOCK_ON_SUSPEND,
         ("linux.lock_on_suspend", Desktop::Cinnamon) => CINNAMON_LOCK_ON_SUSPEND,
-        ("linux.usage_stats", Desktop::Gnome) => GNOME_USAGE_STATS,
         ("linux.screen_lock", Desktop::Gnome) => GNOME_LOCK,
         ("linux.screen_lock", Desktop::Cinnamon) => CINNAMON_LOCK,
         ("linux.remote_desktop", Desktop::Gnome) => GNOME_REMOTE,
@@ -1121,8 +1114,7 @@ mod tests {
                 "linux.home_private",
                 "linux.screen_off_delay",
                 "linux.lock_delay",
-                "linux.lock_on_suspend",
-                "linux.usage_stats"
+                "linux.lock_on_suspend"
             ]
         );
         assert_eq!(
@@ -1166,7 +1158,6 @@ mod tests {
             items(&mut b, "linux.lock_on_suspend"),
             json!({"lock_on_suspend": 2})
         );
-        assert_eq!(items(&mut b, "linux.usage_stats"), json!({"send": 0}));
         assert_eq!(b.machine_id().unwrap(), "0123456789abcdef");
     }
 
@@ -1201,8 +1192,7 @@ mod tests {
                 "linux.old_files",
                 "linux.home_private",
                 "linux.screen_off_delay",
-                "linux.lock_delay",
-                "linux.usage_stats"
+                "linux.lock_delay"
             ]
         );
         assert_eq!(
@@ -2017,7 +2007,6 @@ mod tests {
             "linux.screen_off_delay",
             "linux.lock_delay",
             "linux.lock_on_suspend",
-            "linux.usage_stats",
         ] {
             assert_eq!(status(&mut e, id), "compliant", "{id}");
         }
@@ -2034,10 +2023,6 @@ mod tests {
             one(&mut b, "linux.screen_off_delay"),
             json!({"items": {"delay": 0}})
         );
-        assert_eq!(
-            one(&mut b, "linux.usage_stats"),
-            json!({"items": {"send": 0}})
-        );
 
         let mint = Rc::new(Desk::mint());
         let mut b = backend(&mint, "linuxmint", Desktop::Cinnamon, true);
@@ -2053,7 +2038,6 @@ mod tests {
             one(&mut b, "linux.lock_on_suspend"),
             json!({"items": {"lock_on_suspend": 2}})
         );
-        assert!(!ids(&b).contains(&"linux.usage_stats".to_owned()));
     }
 
     #[test]
@@ -2198,25 +2182,6 @@ mod tests {
     }
 
     #[test]
-    fn usage_statistics_that_are_sent_are_switched_off_and_undone_exactly() {
-        for (desk, distro) in [(Desk::stock(), "ubuntu"), (Desk::fedora(), "fedora")] {
-            let desk = Rc::new(desk);
-            desk.put(
-                "org.gnome.desktop.privacy",
-                "send-software-usage-stats",
-                "true",
-            );
-            let (fixed, undo_calls) =
-                apply_and_undo(&desk, "linux.usage_stats", distro, Desktop::Gnome);
-            assert!(fixed.contains("false"), "{fixed}");
-            assert!(
-                undo_calls.contains("set org.gnome.desktop.privacy send-software-usage-stats true"),
-                "{undo_calls}"
-            );
-        }
-    }
-
-    #[test]
     fn a_wait_that_cannot_be_read_exactly_is_never_changed() {
         for text in ["uint32 soon", "uint32 -5", "uint32 4000000000", ""] {
             let desk = Rc::new(Desk::mint());
@@ -2262,11 +2227,7 @@ mod tests {
         let desk = Rc::new(Desk::stock());
         let listed = ids(&backend(&desk, "debian", Desktop::Gnome, true));
         assert!(!listed.contains(&"linux.lock_on_suspend".to_owned()));
-        for id in [
-            "linux.screen_off_delay",
-            "linux.lock_delay",
-            "linux.usage_stats",
-        ] {
+        for id in ["linux.screen_off_delay", "linux.lock_delay"] {
             assert!(listed.contains(&id.to_owned()), "{id}");
         }
     }
