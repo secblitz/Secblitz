@@ -82,7 +82,7 @@ pub(super) fn repair(id: &str) -> Option<&'static str> {
         "linux.auto_updates" => "Security updates will install by themselves in the background.",
         "linux.ssh_server" => "The remote sign-in service will be switched off.",
         "linux.ssh_password" => {
-            "Remote sign-in will stop accepting passwords and the main administrator account."
+            "Remote sign-in will stop accepting passwords, including for the main administrator account."
         }
         "linux.file_sharing" => "File sharing with Windows computers will be switched off.",
         "linux.autologin" => "Your computer will ask for your password when it starts.",
