@@ -17,7 +17,7 @@ WORK=""
 FANCY=0
 RESET="" BOLD="" DIM="" GREEN="" RED="" CYAN=""
 OK_MARK="ok" BAD_MARK="failed"
-FRAMES=('|' '/' '-' '\')
+FRAMES=('|' '/' '-' "\\")
 KIND="" ARCH_TAG="" EXPECTED_SHA="" PACKAGE_NAME="" PACKAGE_FILE="" IS_ROOT=0
 
 cleanup() {
