@@ -302,7 +302,7 @@ def main(argv=None):
     parser.add_argument("--arch", choices=sorted(ARCHES), default="x86_64")
     parser.add_argument("--key", help="the owner's public signing key, ASCII armored")
     parser.add_argument("--without-repository", action="store_true",
-                        help="leave the repository entry and key out (test builds only)")
+                        help="leave the repository entry and key out (CI and release builds)")
     parser.add_argument("--skip-glibc-check", action="store_true", help="for placeholder binaries in tests")
     parser.add_argument("--build-binary", action="store_true", help="compile BINARY inside debian:12 first")
     parser.add_argument("--formats", default="deb,rpm")

@@ -21,7 +21,7 @@ check /usr/bin/secblitz "755 root:root"
 check /usr/lib/systemd/system/secblitz-helper.service "644 root:root"
 check /usr/share/polkit-1/actions/org.secblitz.policy "644 root:root"
 file -b /usr/bin/secblitz | grep -q "$WANT_ARCH"
-secblitz --version | grep -q "$VERSION"
+secblitz --version | grep -qF "$VERSION"
 for u in secblitz-helper.service secblitz-monitor.service; do
   systemd-analyze verify --man=no /usr/lib/systemd/system/$u
 done
@@ -44,11 +44,11 @@ echo OK
 
 RPM_SCRIPT = r"""
 set -eu
-dnf -y -q install file /w/PACKAGE >/dev/null 2>&1
+dnf -y -q install file /w/PACKAGE >/dev/null
 test "$(rpm -q --qf '%{VERSION}' secblitz)" = "$VERSION"
 """ + CHECKS + r"""
 rpm -ql secblitz > /tmp/files
-dnf -y -q remove secblitz >/dev/null 2>&1
+dnf -y -q remove secblitz >/dev/null
 while read -r f; do
   if [ -f "$f" ] || [ -L "$f" ]; then echo "left behind: $f"; exit 1; fi
 done < /tmp/files
