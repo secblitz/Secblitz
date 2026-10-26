@@ -3,7 +3,7 @@
 use anyhow::{bail, Context, Result};
 use std::fs::{DirBuilder, Metadata};
 use std::os::unix::fs::{DirBuilderExt, MetadataExt};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 pub const LINUX_STATE: &str = "/var/lib/secblitz";
 pub const MACOS_STATE: &str = "/Library/Application Support/Secblitz";
@@ -35,6 +35,12 @@ pub fn check_private_dir(dir: &Path, owner_uid: u32) -> Result<()> {
 pub fn check_private_dir_from(dir: &Path, owner_uid: u32, trusted_root: &Path) -> Result<()> {
     if !dir.is_absolute() {
         return Err(refusal("relative-path", dir));
+    }
+    if dir
+        .components()
+        .any(|c| matches!(c, Component::ParentDir | Component::CurDir))
+    {
+        return Err(refusal("indirect-path", dir));
     }
     let meta = real_dir(dir)?;
     if meta.uid() != owner_uid {
@@ -195,6 +201,17 @@ mod tests {
         let link = c.top.join("link");
         symlink(&real, &link).unwrap();
         assert!(check_private_dir_from(&link.join("state"), uid(), &c.top).is_err());
+    }
+
+    #[test]
+    fn refuses_a_path_that_climbs_out_of_the_checked_ancestors() {
+        let c = chain();
+        let open = child(&c.top, "open", 0o777);
+        let dir = child(&c.top, "state", 0o700);
+        let sneaky = open.join("..").join("state");
+        assert!(sneaky.exists());
+        assert!(check_private_dir_from(&sneaky, uid(), &c.top).is_err());
+        check_private_dir_from(&dir, uid(), &c.top).unwrap();
     }
 
     #[test]
