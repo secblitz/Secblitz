@@ -28,6 +28,8 @@ pub(super) fn label(id: &str) -> Option<&'static str> {
         "linux.recent_files" => "Recent files list",
         "linux.lock_previews" => "Messages on the lock screen",
         "linux.ubuntu_insights" => "Ubuntu usage reports",
+        "linux.browser_data_collection" => "Browser usage data",
+        "linux.browser_https_only" => "Secure connections only",
         _ => return None,
     })
 }
@@ -70,6 +72,12 @@ pub(super) fn impact(id: &str) -> Option<&'static str> {
         "linux.ubuntu_insights" => {
             "Details about your computer and software being sent to Ubuntu's makers"
         }
+        "linux.browser_data_collection" => {
+            "Details about the sites you visit and how you browse being sent to the companies behind your browsers"
+        }
+        "linux.browser_https_only" => {
+            "Someone on the same network reading or changing a page that is not protected"
+        }
         _ => return None,
     })
 }
@@ -95,6 +103,9 @@ pub(super) fn repair(id: &str) -> Option<&'static str> {
         "linux.remote_desktop" => "Screen sharing from other computers will be switched off.",
         "linux.lock_previews" => "The text of messages will be hidden while the screen is locked.",
         "linux.ubuntu_insights" => "Sending usage reports to Ubuntu will be switched off.",
+        "linux.browser_data_collection" => {
+            "Your browsers will stop sending usage data to the companies that make them."
+        }
         _ => return None,
     })
 }
@@ -106,6 +117,7 @@ pub(super) fn consequence(id: &str) -> Option<&'static str> {
         "linux.connectivity_check" => "Your computer stops contacting an outside address. Wi-Fi sign-in pages may no longer pop up by themselves.",
         "linux.wifi_mac" => "Each Wi-Fi network sees a made-up address. A network that knew your old one may ask you to sign in again.",
         "linux.recent_files" => "The list of recent files is forgotten after 30 days. Your files stay where they are. You can undo this.",
+        "linux.browser_https_only" => "Firefox warns you before opening a page that is not protected. You can still open it. You can undo this.",
         _ => return None,
     })
 }
@@ -170,6 +182,8 @@ pub(super) fn not_offered(reason: &str) -> Option<&'static str> {
         c::REMOTE_SIGN_IN_UNREADABLE,
         c::NO_NETWORK_MANAGER,
         c::UNRECOGNISED,
+        c::browsers::NO_BROWSER,
+        c::browsers::NO_FIREFOX,
         crate::linux::person::UNAVAILABLE,
     ]
     .into_iter()
@@ -250,6 +264,7 @@ mod tests {
             "linux.connectivity_check",
             "linux.wifi_mac",
             "linux.recent_files",
+            "linux.browser_https_only",
         ] {
             assert_eq!(crate::advice::extra_section(id), Some("Privacy extras"));
             let a = for_control(id, &CheckStatus::Attention, "Eligible");
@@ -296,6 +311,8 @@ mod tests {
             c::REMOTE_SIGN_IN_UNREADABLE,
             c::NO_NETWORK_MANAGER,
             c::UNRECOGNISED,
+            c::browsers::NO_BROWSER,
+            c::browsers::NO_FIREFOX,
             crate::linux::person::UNAVAILABLE,
         ] {
             let a = for_control("linux.firewall", &CheckStatus::Skipped, reason);

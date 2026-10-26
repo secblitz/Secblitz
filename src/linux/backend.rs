@@ -19,7 +19,7 @@ pub struct LinuxBackend<S: Sys> {
     memo: PathBuf,
 }
 
-const TEXT: [(&str, &str, &str); 13] = [
+const TEXT: [(&str, &str, &str); 15] = [
     (
         "linux.firewall",
         "Firewall",
@@ -84,6 +84,16 @@ const TEXT: [(&str, &str, &str); 13] = [
         "linux.wifi_mac",
         "Wi-Fi address",
         "Whether new Wi-Fi connections show the real hardware address of this computer to the network.",
+    ),
+    (
+        "linux.browser_data_collection",
+        "Browser usage data",
+        "Whether your web browsers send details about how you use them to the companies that make them.",
+    ),
+    (
+        "linux.browser_https_only",
+        "Secure connections only",
+        "Whether Firefox warns you before it opens a page that is not protected.",
     ),
 ];
 
@@ -199,6 +209,8 @@ impl<S: Sys> Backend for LinuxBackend<S> {
             "linux.countme" => controls::privacy::observe_countme(&cx),
             "linux.connectivity_check" => controls::privacy::observe_connectivity(&cx),
             "linux.wifi_mac" => controls::privacy::observe_wifi_mac(&cx),
+            "linux.browser_data_collection" => controls::browsers::observe_data_collection(&cx),
+            "linux.browser_https_only" => controls::browsers::observe_https_only(&cx),
             _ => bail!("Unknown control id: {id}"),
         };
         result.map_err(|e| detail(id, &e, READ_FAILED))
@@ -223,6 +235,10 @@ impl<S: Sys> Backend for LinuxBackend<S> {
             "linux.countme" => controls::privacy::write_countme(&cx, &want),
             "linux.connectivity_check" => controls::privacy::write_connectivity(&cx, &want),
             "linux.wifi_mac" => controls::privacy::write_wifi_mac(&cx, &want),
+            "linux.browser_data_collection" => {
+                controls::browsers::write_data_collection(&cx, &want)
+            }
+            "linux.browser_https_only" => controls::browsers::write_https_only(&cx, &want),
             _ => bail!("Unknown control id: {id}"),
         };
         result.map_err(|e| detail(id, &e, CHANGE_FAILED))

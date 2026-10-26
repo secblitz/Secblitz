@@ -23,7 +23,10 @@ use reasons::{managed, not_offered, repair_help};
 pub fn extra_section(id: &str) -> Option<&'static str> {
     if matches!(
         id,
-        "linux.connectivity_check" | "linux.wifi_mac" | "linux.recent_files"
+        "linux.connectivity_check"
+            | "linux.wifi_mac"
+            | "linux.recent_files"
+            | "linux.browser_https_only"
     ) {
         return Some("Privacy extras");
     }
