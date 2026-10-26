@@ -51,6 +51,15 @@ const fn off_by_default(name: &'static str) -> Key {
     set(name, "", &[1], false, Some(1), 2)
 }
 
+/// The longest wait, in seconds, that a delay setting can be read exactly. Longer waits are left alone.
+pub const DELAY_CAP: u32 = 1_000_000;
+
+/// A wait that is safe within a range: 0 is safe, any other value is `1 + 2 * seconds` for a wait the person set, and one
+/// more when nothing was ever set. Undo puts back the exact seconds, or resets the setting when it was at its default.
+const fn delay(name: &'static str) -> Key {
+    set(name, "", &[0], false, Some(0), 2 * DELAY_CAP + 2)
+}
+
 const fn on(name: &'static str) -> Key {
     set(name, "", &[1], false, Some(1), 1)
 }
@@ -365,6 +374,40 @@ const SPECS: &[LinuxSpec] = &[
         reboot: false,
         keys: &[set("others", "", &[0], false, Some(0), 7)],
     },
+    // delay: 0 when the screen goes dark after 1 to 600 seconds, otherwise the unsafe wait (0 means never, over 600 is too
+    // long) as 1 + 2 * seconds, plus 1 when it is the desktop's own default; fixed to 300 seconds.
+    LinuxSpec {
+        id: "linux.screen_off_delay",
+        scope: Scope::Person,
+        ask: false,
+        reboot: false,
+        keys: &[delay("delay")],
+    },
+    // delay: 0 when the screen locks within 30 seconds of going dark, otherwise the unsafe wait as 1 + 2 * seconds, plus 1
+    // when it is the desktop's own default; fixed to 0 seconds.
+    LinuxSpec {
+        id: "linux.lock_delay",
+        scope: Scope::Person,
+        ask: false,
+        reboot: false,
+        keys: &[delay("delay")],
+    },
+    // lock_on_suspend: 0 when the screen does not lock on sleep, 1 when it locks because the person set that, 2 when it locks by default.
+    LinuxSpec {
+        id: "linux.lock_on_suspend",
+        scope: Scope::Person,
+        ask: false,
+        reboot: false,
+        keys: &[set("lock_on_suspend", "", &[1, 2], false, Some(1), 2)],
+    },
+    // send: 1 when the desktop sends the makers of its software statistics about how it is used.
+    LinuxSpec {
+        id: "linux.usage_stats",
+        scope: Scope::Person,
+        ask: false,
+        reboot: false,
+        keys: &[flag("send", true)],
+    },
     // firefox, chromium: 1 when that browser (Chromium means Chrome, Chromium or Brave) still shares usage data; null when none is installed.
     LinuxSpec {
         id: "linux.browser_data_collection",
@@ -486,7 +529,7 @@ mod tests {
         for windows in crate::engine::catalog::ids(Os::Windows) {
             assert!(spec(windows).is_none(), "{windows}");
         }
-        assert_eq!(specs().len(), 34);
+        assert_eq!(specs().len(), 38);
     }
 
     #[test]
@@ -503,6 +546,10 @@ mod tests {
             "linux.app_usage",
             "linux.old_files",
             "linux.home_private",
+            "linux.screen_off_delay",
+            "linux.lock_delay",
+            "linux.lock_on_suspend",
+            "linux.usage_stats",
         ];
         let optional = [
             "linux.fedora_open_ports",

@@ -7,3 +7,5 @@ org.cinnamon.desktop.screensaver lock-enabled true
 org.cinnamon.desktop.session idle-delay uint32 900
 org.cinnamon.desktop.privacy remember-recent-files true
 org.cinnamon.desktop.privacy recent-files-max-age 7
+org.cinnamon.desktop.screensaver lock-delay uint32 0
+org.cinnamon.settings-daemon.plugins.power lock-on-suspend true
