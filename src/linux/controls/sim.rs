@@ -436,10 +436,7 @@ impl Sim {
             "/usr/bin/ls" => self.ls(args[1]),
             "/usr/bin/test" => match args {
                 ["-d", path] => out(i32::from(!self.dir_exists(path)), ""),
-                ["-e", path] => out(
-                    i32::from(!(self.dir_exists(path) || self.has(path))),
-                    "",
-                ),
+                ["-e", path] => out(i32::from(!(self.dir_exists(path) || self.has(path))), ""),
                 other => bail!("test {other:?}"),
             },
             "/usr/bin/mkdir" => match args {
@@ -480,10 +477,7 @@ impl Sim {
                 } else {
                     key.replace('.', "/")
                 };
-                self.file(
-                    &format!("/proc/sys/{key}"),
-                    &format!("{value}\n"),
-                );
+                self.file(&format!("/proc/sys/{key}"), &format!("{value}\n"));
                 out(0, "")
             }
             "/usr/bin/dnf5" => {

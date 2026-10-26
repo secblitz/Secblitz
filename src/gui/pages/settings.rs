@@ -19,6 +19,7 @@ enum Remote<T> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UpdateView {
     UpToDate,
+    NotPublished,
     Ready,
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
     Waiting,
@@ -34,6 +35,7 @@ pub fn update_view(status: &secblitz::updater::UpdateStatus) -> UpdateView {
     use secblitz::updater::UpdateOutcome as O;
     match &status.result {
         O::UpToDate | O::Installed { .. } | O::DeferredRollout { .. } => UpdateView::UpToDate,
+        O::NotPublished => UpdateView::NotPublished,
         O::DeferredBusy if status.checked_at == 0 => UpdateView::Checking,
         O::WorkerStarted { .. } | O::Available { .. } | O::DeferredBusy => UpdateView::Ready,
         O::Failed { .. } => UpdateView::Unknown,
@@ -771,6 +773,10 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
             widgets::pill(p, t("Up to date"), Tone::Good),
             t("You have the latest version of Secblitz."),
         ),
+        Remote::Ready(UpdateView::NotPublished) => (
+            widgets::pill(p, t("No update yet"), Tone::Neutral),
+            t("No update has been published for your computer yet."),
+        ),
         Remote::Ready(UpdateView::Ready) => (
             widgets::pill(p, t("Update ready"), Tone::Warn),
             t(if cfg!(target_os = "linux") {
@@ -1080,6 +1086,10 @@ mod tests {
                 5
             )),
             UpdateView::Ready
+        );
+        assert_eq!(
+            update_view(&status(O::NotPublished, 5)),
+            UpdateView::NotPublished
         );
         assert_eq!(update_view(&status(O::DeferredBusy, 5)), UpdateView::Ready);
         assert_eq!(

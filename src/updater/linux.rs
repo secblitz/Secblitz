@@ -4,6 +4,7 @@
 //! and hash against the signed feed.
 use super::*;
 use crate::linux::cmd::Sys;
+use crate::linux::distro::{self, Family};
 use anyhow::bail;
 use fs2::FileExt;
 use std::fs::{File, OpenOptions};
@@ -36,10 +37,11 @@ pub const START_FAILED: &str = "Secblitz could not start the update. Try again, 
 pub const TIMER_FAILED: &str =
     "Secblitz could not change the background check. Try again in a moment.";
 pub const BUSY: &str = "Secblitz is already looking for updates. Try again in a moment.";
+pub const NOT_PUBLISHED: &str = "No update has been published for your computer yet.";
 const CHECK_FAILED: &str = "Update check failed";
 
 /// Every sentence this file can show a person, for the translation tests.
-pub const SENTENCES: [&str; 7] = [
+pub const SENTENCES: [&str; 8] = [
     NOT_ROOT,
     BY_SOFTWARE_APP,
     WRONG_PACKAGE,
@@ -47,7 +49,21 @@ pub const SENTENCES: [&str; 7] = [
     START_FAILED,
     TIMER_FAILED,
     BUSY,
+    NOT_PUBLISHED,
 ];
+
+/// One binary serves both package kinds, so the feed is picked by the kind of system it runs on.
+fn feed_for(family: Family) -> Option<&'static str> {
+    match family {
+        Family::Debian => Some(arch::STABLE_FEED_DEB),
+        Family::Fedora => Some(arch::STABLE_FEED_RPM),
+        Family::Other => None,
+    }
+}
+
+fn feed_missing(error: &anyhow::Error) -> bool {
+    error.downcast_ref::<FeedMissing>().is_some()
+}
 
 fn is_root() -> bool {
     // SAFETY: geteuid has no preconditions and cannot fail.
@@ -178,9 +194,40 @@ pub fn repository_configured(sys: &dyn Sys) -> bool {
         .any(|path| !matches!(sys.read(Path::new(path)), Ok(None)))
 }
 
+/// A feed that answers 404 means no release exists for this kind of system yet, which is not a failure.
+fn run_check(
+    sys: &dyn Sys,
+    dir: &Path,
+    fetched: Result<Vec<u8>>,
+    key: &[u8; 32],
+    time: u64,
+    current: &str,
+) -> Result<UpdateOutcome> {
+    let result = match fetched {
+        Err(e) if feed_missing(&e) => record(sys, dir, UpdateOutcome::NotPublished, time),
+        other => other.and_then(|feed| {
+            evaluate(sys, dir, &feed, key, time, current).map(|(_, outcome)| outcome)
+        }),
+    };
+    if result.is_err() {
+        let _ = record(
+            sys,
+            dir,
+            UpdateOutcome::Failed {
+                reason: CHECK_FAILED.into(),
+            },
+            time,
+        );
+    }
+    result
+}
+
 /// Looks at the signed feed and records the result. Root only; this is what the daily timer runs.
 pub fn check(sys: &dyn Sys) -> Result<UpdateOutcome> {
     let Some(origin) = config()? else {
+        return Ok(UpdateOutcome::NotConfigured);
+    };
+    let Some(feed) = feed_for(distro::detect(sys, None).family) else {
         return Ok(UpdateOutcome::NotConfigured);
     };
     require_root()?;
@@ -188,22 +235,15 @@ pub fn check(sys: &dyn Sys) -> Result<UpdateOutcome> {
     let Some(_lock) = lock(&dir)? else {
         return Ok(UpdateOutcome::DeferredBusy);
     };
-    let result = (|| {
-        let feed = fetch_manifest(&client()?, origin.join(arch::STABLE_FEED)?)?;
-        evaluate(sys, &dir, &feed, &key()?, now()?, env!("CARGO_PKG_VERSION"))
-            .map(|(_, outcome)| outcome)
-    })();
-    if result.is_err() {
-        let _ = record(
-            sys,
-            &dir,
-            UpdateOutcome::Failed {
-                reason: CHECK_FAILED.into(),
-            },
-            now().unwrap_or(0),
-        );
-    }
-    result
+    let fetched = client().and_then(|client| fetch_manifest(&client, origin.join(feed)?));
+    run_check(
+        sys,
+        &dir,
+        fetched,
+        &key()?,
+        now().unwrap_or(0),
+        env!("CARGO_PKG_VERSION"),
+    )
 }
 
 /// What the last check found. Root only: the folder is private.
@@ -324,6 +364,9 @@ pub fn install(sys: &dyn Sys) -> Result<UpdateOutcome> {
     let Some(origin) = config()? else {
         return Ok(UpdateOutcome::NotConfigured);
     };
+    let Some(feed_file) = feed_for(distro::detect(sys, None).family) else {
+        return Ok(UpdateOutcome::NotConfigured);
+    };
     require_root()?;
     let dir = folder()?;
     let Some(_lock) = lock(&dir)? else {
@@ -331,7 +374,12 @@ pub fn install(sys: &dyn Sys) -> Result<UpdateOutcome> {
     };
     let started = Instant::now();
     let client = client()?;
-    let feed = fetch_manifest(&client, origin.join(arch::STABLE_FEED)?)?;
+    let feed = match fetch_manifest(&client, origin.join(feed_file)?) {
+        Err(e) if feed_missing(&e) => {
+            return record(sys, &dir, UpdateOutcome::NotPublished, now()?);
+        }
+        other => other?,
+    };
     install_from(
         sys,
         &dir,
@@ -440,6 +488,115 @@ mod tests {
             |_| Ok(Box::new(served) as Box<dyn Read>),
             |_| tool,
         )
+    }
+
+    fn detected(distro: &str) -> Family {
+        let sys = FakeSys::default();
+        let text = std::fs::read(format!(
+            "{}/tests/fixtures/os-release/{distro}",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap();
+        sys.file("/etc/os-release", &text);
+        distro::detect(&sys, None).family
+    }
+
+    #[test]
+    fn each_kind_of_system_reads_only_its_own_feed() {
+        for name in [
+            "ubuntu-24.04",
+            "ubuntu-26.04",
+            "mint-22.3",
+            "debian-12",
+            "debian-13",
+        ] {
+            let feed = feed_for(detected(name)).unwrap();
+            assert!(feed.ends_with("-deb.json"), "{name}");
+            assert!(
+                feed.contains(arch::SETUP_TAG.trim_start_matches("linux-")),
+                "{name}"
+            );
+        }
+        for name in ["fedora-43", "fedora-44"] {
+            assert!(
+                feed_for(detected(name)).unwrap().ends_with("-rpm.json"),
+                "{name}"
+            );
+        }
+        assert_eq!(feed_for(Family::Other), None);
+        assert_ne!(arch::STABLE_FEED_DEB, arch::STABLE_FEED_RPM);
+    }
+
+    #[test]
+    fn a_missing_feed_is_not_a_failure() {
+        let sys = FakeSys::default();
+        let dir = Path::new("/state/Updates");
+        let (_, key) = signed_feed("9.0.0", ".deb", body());
+        let outcome = run_check(&sys, dir, Err(FeedMissing.into()), &key, NOW, "1.0.0").unwrap();
+        assert_eq!(outcome, UpdateOutcome::NotPublished);
+        let saved = read_status(&sys, dir).unwrap();
+        assert_eq!(saved.checked_at, NOW);
+        assert_eq!(saved.result, UpdateOutcome::NotPublished);
+        assert!(read_floor(&sys, dir).unwrap().is_none());
+    }
+
+    #[test]
+    fn any_other_feed_problem_still_fails_and_is_recorded() {
+        let sys = FakeSys::default();
+        let dir = Path::new("/state/Updates");
+        let (feed, key) = signed_feed("9.0.0", ".deb", body());
+        let error = run_check(
+            &sys,
+            dir,
+            Err(anyhow::anyhow!("Manifest HTTP request failed")),
+            &key,
+            NOW,
+            "1.0.0",
+        );
+        assert!(error.is_err());
+        assert_eq!(
+            read_status(&sys, dir).unwrap().result,
+            UpdateOutcome::Failed {
+                reason: CHECK_FAILED.into()
+            }
+        );
+        let other = SigningKey::from_bytes(&[43; 32]).verifying_key().to_bytes();
+        assert!(run_check(&sys, dir, Ok(feed.clone()), &other, NOW, "1.0.0").is_err());
+        let ok = run_check(&sys, dir, Ok(feed), &key, NOW, "1.0.0").unwrap();
+        assert_eq!(
+            ok,
+            UpdateOutcome::Available {
+                version: "9.0.0".into()
+            }
+        );
+    }
+
+    fn serve_once(status: &'static str) -> reqwest::Url {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            use std::io::{Read, Write};
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buf = [0u8; 1024];
+            let _ = stream.read(&mut buf);
+            let reply =
+                format!("HTTP/1.1 {status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            stream.write_all(reply.as_bytes()).unwrap();
+        });
+        format!("http://127.0.0.1:{port}/releases/feed.json")
+            .parse()
+            .unwrap()
+    }
+
+    #[test]
+    fn only_a_404_from_the_server_reads_as_no_release() {
+        let client = reqwest::blocking::Client::new();
+        let missing = fetch_manifest(&client, serve_once("404 Not Found")).unwrap_err();
+        assert!(feed_missing(&missing));
+        assert_eq!(format!("{missing:#}"), "Manifest HTTP request failed");
+        let broken = fetch_manifest(&client, serve_once("500 Internal Server Error")).unwrap_err();
+        assert!(!feed_missing(&broken));
+        assert_eq!(format!("{broken:#}"), "Manifest HTTP request failed");
     }
 
     #[test]

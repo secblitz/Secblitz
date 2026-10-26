@@ -122,22 +122,66 @@ class ReleaseTests(unittest.TestCase):
             name = "secblitz-9.0.0-linux-x64.rpm"
             (site / "downloads" / name).write_bytes(self.artifact)
             m = self.package_manifest("linux-x86_64", name, published_at=now - 10, expires_at=now + 1000)
-            (site / "releases/stable-linux-x64.json").write_bytes(sign.signed_envelope(m, self.key))
+            (site / "releases/stable-linux-x64-rpm.json").write_bytes(sign.signed_envelope(m, self.key))
             with patch.object(pages, "ROOT", root):
-                self.assertEqual(pages.verify_feed(site, "9.0.0", arch="linux-x64")["target"], "linux-x86_64")
+                self.assertEqual(pages.verify_feed(site, "9.0.0", arch="linux-x64", package="rpm")["target"], "linux-x86_64")
                 with self.assertRaises(ValueError):
-                    pages.verify_feed(site, "9.0.0", site / "releases/stable-linux-x64.json", arch="linux-arm64")
+                    pages.verify_feed(site, "9.0.0", site / "releases/stable-linux-x64-rpm.json", arch="linux-arm64", package="rpm")
+                with self.assertRaises(ValueError):
+                    pages.verify_feed(site, "9.0.0", arch="linux-x64")
+                with self.assertRaises(ValueError):
+                    pages.verify_feed(site, "9.0.0", site / "releases/stable-linux-x64-rpm.json", arch="linux-x64", package="deb")
+                with self.assertRaises(FileNotFoundError):
+                    pages.verify_feed(site, "9.0.0", arch="linux-x64", package="deb")
                 with self.assertRaises(KeyError):
                     pages.verify_feed(site, "9.0.0", arch="windows")
                 bad = self.package_manifest("linux-x86_64", "secblitz-9.0.0-linux-x64-setup.exe",
                                             published_at=now - 10, expires_at=now + 1000)
-                (site / "releases/stable-linux-x64.json").write_bytes(sign.signed_envelope(bad, self.key))
+                (site / "releases/stable-linux-x64-rpm.json").write_bytes(sign.signed_envelope(bad, self.key))
                 with self.assertRaises(ValueError):
-                    pages.verify_feed(site, "9.0.0", arch="linux-x64")
+                    pages.verify_feed(site, "9.0.0", arch="linux-x64", package="rpm")
+
+    def test_linux_signing_needs_a_package_kind_that_matches_the_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            key = root / "key.pem"
+            key.write_bytes(self.key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                                   serialization.NoEncryption()))
+            os.chmod(key, 0o600)
+            (root / "public.hex").write_text(self.public.hex())
+            for name in ("secblitz-9.0.0-linux-x64.deb", "secblitz-9.0.0-linux-x64.rpm"):
+                (root / name).write_bytes(self.artifact)
+
+            def run(name, *extra):
+                args = ["sign-release.py", "--key", str(key), "--public-key", str(root / "public.hex"), "--version", "9.0.0",
+                        "--installer", str(root / name), "--output", str(root / "out.json"), *extra]
+                with patch("sys.argv", args), redirect_stdout(io.StringIO()):
+                    sign.main()
+
+            for refused in [("secblitz-9.0.0-linux-x64.deb", "--arch", "linux-x64"),
+                            ("secblitz-9.0.0-linux-x64.deb", "--arch", "linux-x64", "--package", "rpm"),
+                            ("secblitz-9.0.0-linux-x64.rpm", "--arch", "linux-x64", "--package", "deb")]:
+                with self.assertRaises(SystemExit):
+                    run(*refused)
+                self.assertFalse((root / "out.json").exists())
+            run("secblitz-9.0.0-linux-x64.rpm", "--arch", "linux-x64", "--package", "rpm")
+            self.assertEqual(sign.verify_envelope((root / "out.json").read_bytes(), self.public)["filename"],
+                             "secblitz-9.0.0-linux-x64.rpm")
 
     def test_the_windows_tables_are_untouched_by_the_new_targets(self):
         self.assertEqual(set(sign.ARCHES), {"x64", "arm64"})
-        self.assertEqual(sign.PACKAGES["linux-x64"]["feed"], "stable-linux-x64.json")
+        self.assertEqual(sign.feed_name("linux-x64", "deb"), "stable-linux-x64-deb.json")
+        self.assertEqual(sign.feed_name("linux-x64", "rpm"), "stable-linux-x64-rpm.json")
+        self.assertEqual(sign.feed_name("linux-arm64", "deb"), "stable-linux-arm64-deb.json")
+        self.assertEqual(sign.feed_name("linux-arm64", "rpm"), "stable-linux-arm64-rpm.json")
+        for bad in (("linux-x64", None), ("linux-x64", "dmg"), ("macos", "deb"), ("x64", "deb")):
+            with self.assertRaises(ValueError):
+                sign.feed_name(*bad)
+        self.assertEqual(sign.feed_name("x64"), "stable.json")
+        self.assertEqual(sign.feed_name("arm64"), "stable-arm64.json")
+        self.assertEqual(sign.package_of("secblitz-9.0.0-linux-x64.deb"), "deb")
+        self.assertEqual(sign.package_of("secblitz-9.0.0-linux-x64.rpm"), "rpm")
+        self.assertIsNone(sign.package_of("secblitz-9.0.0-macos-universal.dmg"))
         self.assertEqual(sign.PACKAGES["macos"]["feed"], "stable-macos.json")
         self.assertTrue(set(sign.ARCHES).isdisjoint(sign.PACKAGES))
         with self.assertRaises(ValueError):

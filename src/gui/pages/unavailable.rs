@@ -71,6 +71,32 @@ mod tests {
     }
 
     #[test]
+    fn linux_hides_the_empty_pages_everywhere_and_windows_keeps_all() {
+        assert_eq!(Page::visible(Os::Windows), Page::ALL.to_vec());
+        assert_eq!(
+            Page::visible(Os::Linux),
+            [
+                Page::Home,
+                Page::Fixes,
+                Page::Debloat,
+                Page::History,
+                Page::Settings
+            ]
+        );
+        for page in Page::ALL {
+            assert_eq!(page.on(Os::Windows), page);
+            assert_eq!(page.shown_on(Os::Linux), !applies(Os::Linux, page));
+        }
+        for page in [Page::Web, Page::Tools] {
+            assert_eq!(page.on(Os::Linux), Page::Home);
+        }
+        assert_eq!(Page::Settings.on(Os::Linux), Page::Settings);
+        for word in ["web", "tools", "nonsense"] {
+            assert_eq!(Page::open_target(word).on(Os::Linux), Page::Home);
+        }
+    }
+
+    #[test]
     fn the_words_are_plain_and_exist_in_every_language() {
         for lang in [Lang::Es, Lang::Fr, Lang::De, Lang::Pt, Lang::It] {
             for key in [TITLE, HELP, GO] {

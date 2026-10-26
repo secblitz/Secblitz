@@ -62,7 +62,8 @@ mod arch {
     pub const OTHER_TARGET: &str = "linux-x86_64";
     pub const SETUP_TAG: &str = "linux-arm64";
     pub const SETUP_SUFFIXES: &[&str] = &[".deb", ".rpm"];
-    pub const STABLE_FEED: &str = "releases/stable-linux-arm64.json";
+    pub const STABLE_FEED_DEB: &str = "releases/stable-linux-arm64-deb.json";
+    pub const STABLE_FEED_RPM: &str = "releases/stable-linux-arm64-rpm.json";
     pub const CANDIDATE_FEED: &str = "releases/candidate-linux-arm64.json";
     pub const DELIVERY_FEED: &str = "releases/delivery-linux-arm64.json";
     pub const DELIVERY_FLOOR: &str = "delivery-floor-linux-arm64.json";
@@ -74,7 +75,8 @@ mod arch {
     pub const OTHER_TARGET: &str = "linux-aarch64";
     pub const SETUP_TAG: &str = "linux-x64";
     pub const SETUP_SUFFIXES: &[&str] = &[".deb", ".rpm"];
-    pub const STABLE_FEED: &str = "releases/stable-linux-x64.json";
+    pub const STABLE_FEED_DEB: &str = "releases/stable-linux-x64-deb.json";
+    pub const STABLE_FEED_RPM: &str = "releases/stable-linux-x64-rpm.json";
     pub const CANDIDATE_FEED: &str = "releases/candidate-linux-x64.json";
     pub const DELIVERY_FEED: &str = "releases/delivery-linux-x64.json";
     pub const DELIVERY_FLOOR: &str = "delivery-floor-linux-x64.json";
@@ -288,6 +290,7 @@ pub enum UpdateOutcome {
     UpToDate,
     DeferredBusy,
     DeferredRollout { version: String },
+    NotPublished,
     WorkerStarted { version: String },
     Installed { version: String },
     Available { version: String },
@@ -356,8 +359,20 @@ fn key() -> Result<[u8; 32]> {
         anyhow::anyhow!("Embedded update public key must be 32 bytes")
     })
 }
+/// The feed answered 404: nothing has been published there. Reads like any other failed request.
+#[derive(Debug)]
+struct FeedMissing;
+impl std::fmt::Display for FeedMissing {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Manifest HTTP request failed")
+    }
+}
+impl std::error::Error for FeedMissing {}
 fn fetch_manifest(client: &reqwest::blocking::Client, url: reqwest::Url) -> Result<Vec<u8>> {
     let response = client.get(url).send()?;
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(FeedMissing.into());
+    }
     ensure!(
         response.status() == reqwest::StatusCode::OK,
         "Manifest HTTP request failed"

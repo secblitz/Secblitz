@@ -480,6 +480,7 @@ impl UpdateReport {
         match self.outcome() {
             UpdateOutcome::NotConfigured => "Updates aren't available for this installation.",
             UpdateOutcome::UpToDate => "Secblitz is up to date.",
+            UpdateOutcome::NotPublished => "No update has been published for your computer yet.",
             UpdateOutcome::DeferredBusy => "We'll try updating when Secblitz is closed.",
             UpdateOutcome::DeferredRollout { .. } => {
                 "This update is not yet offered to this device."
@@ -630,7 +631,8 @@ fn run_gui(args: &[std::ffi::OsString], lang: Lang) -> i32 {
         let open = flag_value(args, "--open");
         let start = flag_value(args, "--self-test")
             .and_then(gui::Page::parse)
-            .or_else(|| open.map(gui::Page::open_target));
+            .or_else(|| open.map(gui::Page::open_target))
+            .map(|page| page.on(secblitz::os::Os::CURRENT));
         #[cfg(windows)]
         {
             if !platform::is_elevated_or_false() {
@@ -1089,6 +1091,7 @@ mod tests {
         use updater::{UpdateOutcome, UpdateStatus};
         for outcome in [
             UpdateOutcome::NotConfigured,
+            UpdateOutcome::NotPublished,
             UpdateOutcome::UpToDate,
             UpdateOutcome::DeferredBusy,
             UpdateOutcome::WorkerStarted {
@@ -1185,6 +1188,7 @@ mod tests {
         for lang in [Lang::En, Lang::Es, Lang::Fr, Lang::De, Lang::Pt, Lang::It] {
             for outcome in [
                 UpdateOutcome::NotConfigured,
+                UpdateOutcome::NotPublished,
                 UpdateOutcome::UpToDate,
                 UpdateOutcome::DeferredBusy,
                 UpdateOutcome::WorkerStarted {

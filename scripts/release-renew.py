@@ -113,7 +113,7 @@ def main():
     if public_text != args.expected_public_key or hashlib.sha256(current).hexdigest() != args.current_sha256:
         raise ValueError("key/current bytes changed")
     public = bytes.fromhex(public_text)
-    feed = sign.TARGETS[args.arch]["feed"]
+    feed = sign.feed_name(args.arch, sign.package_of(args.installer.name))
     if live_feed(origin, feed) != current:
         raise ValueError("live feed differs from renewal snapshot")
     now = int(time.time())
