@@ -5,6 +5,7 @@
 //! Value shapes, one line per id: every value is `{"items": {<key>: <u32 | text | null>}}`; null is "not present".
 
 use crate::hardening::{self, set, Item, Key};
+use anyhow::ensure;
 use serde_json::Value;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -222,6 +223,19 @@ const SPECS: &[LinuxSpec] = &[
     },
 ];
 
+/// The only words these keys can hold. Other text keys hold names or ranges, so they are only kept to plain ASCII.
+fn closed_words(id: &str, key: &str) -> Option<&'static [&'static str]> {
+    Some(match (id, key) {
+        ("linux.firewall", "enabled") => &["yes", "no"],
+        ("linux.firewall", "incoming") => &["deny", "reject", "allow"],
+        ("linux.autologin", "gdm_automatic") | ("linux.guest", "allow_guest") => &["true", "false"],
+        ("linux.ssh_password", "root_login") => {
+            &["yes", "no", "prohibit-password", "forced-commands-only"]
+        }
+        _ => return None,
+    })
+}
+
 pub fn specs() -> &'static [LinuxSpec] {
     SPECS
 }
@@ -239,8 +253,26 @@ impl LinuxSpec {
         hardening::fixed_target(self.keys)
     }
 
+    /// Text ends up in files and commands run as root, so it is checked more tightly than the shared rules do.
     fn parse(&self, value: &Value) -> anyhow::Result<Vec<(String, Item)>> {
-        hardening::parse_items(self.id, value, |n| self.key(n), Some(self.keys.len()))
+        let items = hardening::parse_items(self.id, value, |n| self.key(n), Some(self.keys.len()))?;
+        for (name, item) in &items {
+            if let Item::Text(t) = item {
+                ensure!(
+                    t.chars().all(|c| c.is_ascii_graphic() || c == ' '),
+                    "{} holds text that is not a legal setting",
+                    self.id
+                );
+                if let Some(words) = closed_words(self.id, name) {
+                    ensure!(
+                        words.contains(&t.as_str()),
+                        "{} holds a setting that is not allowed",
+                        self.id
+                    );
+                }
+            }
+        }
+        Ok(items)
     }
 
     pub fn validate(&self, value: &Value) -> anyhow::Result<()> {
@@ -366,6 +398,27 @@ mod tests {
         let mut value = kernel.catalog_target();
         value["items"]["kptr_restrict"] = json!(3);
         assert!(kernel.validate(&value).is_err());
+    }
+
+    #[test]
+    fn text_is_plain_and_closed_keys_hold_only_their_words() {
+        let firewall = spec("linux.firewall").unwrap();
+        for bad in ["maybe", "Yes", "yes ", "ye\u{2028}s", "y\u{e9}s"] {
+            let value = json!({"items": {"enabled": bad, "incoming": "deny"}});
+            assert!(firewall.validate(&value).is_err(), "{bad:?}");
+        }
+        let root = spec("linux.ssh_password").unwrap();
+        let value = json!({"items": {"password": 1, "root_login": "no\u{2029}yes"}});
+        assert!(root.validate(&value).is_err());
+        let mac = spec("linux.wifi_mac").unwrap();
+        mac.validate(&json!({"items": {"cloned_mac": "00:11:22:33:44:55"}}))
+            .unwrap();
+        assert!(mac
+            .validate(&json!({"items": {"cloned_mac": "caf\u{e9}"}}))
+            .is_err());
+        let autologin = spec("linux.autologin").unwrap();
+        let value = json!({"items": {"gdm_automatic": "false", "lightdm_user": "sam"}});
+        autologin.validate(&value).unwrap();
     }
 
     #[test]
