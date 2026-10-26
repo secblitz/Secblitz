@@ -634,12 +634,27 @@ fn run_gui(args: &[std::ffi::OsString], lang: Lang) -> i32 {
 }
 
 fn dispatch_gui(args: &[std::ffi::OsString], lang: Lang) -> Option<i32> {
-    match first_word(args)? {
-        "gui" => Some(run_gui(args, lang)),
-        "tray" => Some(tray::run(lang).unwrap_or(1)),
-        "warn" => Some(gui::warn::run(args, lang)),
+    match first_word(args) {
+        Some("gui") => Some(run_gui(args, lang)),
+        Some("tray") => Some(tray::run(lang).unwrap_or(1)),
+        Some("warn") => Some(gui::warn::run(args, lang)),
+        #[cfg(not(windows))]
+        None if opens_window(args) => Some(run_gui(args, lang)),
         _ => None,
     }
+}
+
+/// Off Windows there is no elevation launcher: the menu entry starts the window
+/// directly, with nothing but a language or a page to open.
+#[cfg(not(windows))]
+fn opens_window(args: &[std::ffi::OsString]) -> bool {
+    let mut args = args.iter().skip(1);
+    while let Some(arg) = args.next() {
+        if !(arg == "--lang" || arg == "--open") || args.next().is_none() {
+            return false;
+        }
+    }
+    true
 }
 
 fn main() {
@@ -788,6 +803,29 @@ mod tests {
             execute(&no_json, Lang::En).unwrap_err().to_string(),
             "update-health-requires-json"
         );
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn a_bare_start_opens_the_window_but_commands_and_help_do_not() {
+        let words = |list: &[&str]| -> Vec<std::ffi::OsString> {
+            std::iter::once("secblitz")
+                .chain(list.iter().copied())
+                .map(Into::into)
+                .collect()
+        };
+        assert!(opens_window(&words(&[])));
+        assert!(opens_window(&words(&["--lang", "fr"])));
+        assert!(opens_window(&words(&["--open", "network", "--lang", "de"])));
+        for other in [
+            &["--help"][..],
+            &["--version"],
+            &["--lang"],
+            &["check"],
+            &["--json"],
+        ] {
+            assert!(!opens_window(&words(other)), "{other:?}");
+        }
     }
 
     #[test]
