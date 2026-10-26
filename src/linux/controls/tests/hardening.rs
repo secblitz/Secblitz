@@ -1268,3 +1268,30 @@ fn a_value_outside_each_controls_range_is_refused_before_anything_runs() {
     }
     assert!(sim.calls.borrow().is_empty());
 }
+
+#[test]
+fn files_kept_behind_links_are_skipped_so_the_checks_still_read() {
+    let sim = ubuntu_h();
+    sim.file(
+        "/etc/modprobe.d/blacklist-oss.conf",
+        "blacklist snd_mixer_oss\n",
+    );
+    sim.set("link:/etc/modprobe.d/blacklist-oss.conf", "1");
+    let before = snapshot(&sim);
+    let (was, fixed) = cycle(&sim, "linux.rare_protocols");
+    assert_eq!(was, json!({"items": {"open": 1}}));
+    assert_eq!(fixed, json!({"items": {"open": 0}}));
+    assert_same(&sim, &before);
+
+    let sim = fedora_h();
+    sim.file(
+        "/usr/lib/systemd/coredump.conf.d/50-vendor.conf",
+        "[Coredump]\n",
+    );
+    sim.set("link:/usr/lib/systemd/coredump.conf.d/50-vendor.conf", "1");
+    let before = snapshot(&sim);
+    let (was, fixed) = cycle(&sim, "linux.crash_files");
+    assert_eq!(was, json!({"items": {"stored": 1}}));
+    assert_eq!(fixed, json!({"items": {"stored": 0}}));
+    assert_same(&sim, &before);
+}

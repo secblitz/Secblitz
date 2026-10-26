@@ -254,12 +254,14 @@ fn coredump_keeps(cx: &Cx) -> Result<Option<bool>> {
             }
         }
     }
+    // A file kept behind a link is not read; at worst Secblitz then writes a file that says the same.
     let mut texts = Vec::new();
-    for path in COREDUMP_MAIN {
-        texts.extend(cx.text(path)?);
-    }
-    for path in by_name.into_values() {
-        texts.extend(cx.text(&path)?);
+    for path in COREDUMP_MAIN
+        .iter()
+        .copied()
+        .chain(by_name.values().map(String::as_str))
+    {
+        texts.extend(cx.text(path).ok().flatten());
     }
     let mut word = String::new();
     for text in &texts {
@@ -368,9 +370,10 @@ fn modprobe_rules(cx: &Cx, skip_ours: bool) -> Result<Vec<Vec<String>>> {
             }
         }
     }
+    // Ubuntu keeps some of these files behind links, which are not read; at worst Secblitz then blocks a protocol again.
     let mut rules = Vec::new();
     for path in by_name.into_values() {
-        for line in cx.text(&path)?.unwrap_or_default().lines() {
+        for line in cx.text(&path).ok().flatten().unwrap_or_default().lines() {
             let line = line.trim();
             if !line.starts_with('#') && !line.is_empty() {
                 rules.push(line.split_whitespace().map(str::to_string).collect());
