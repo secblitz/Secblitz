@@ -532,6 +532,7 @@ impl Engine {
                 | "App"
                 | super::recover::DAMAGED
                 | crate::platform::WEB_PROTECTION
+                | crate::platform::LINUX_NOTES
         ) {
             // Module-owned protected namespaces, never journal payloads.
             // Production platform validation supplies ACL/owner protection.

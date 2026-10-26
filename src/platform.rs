@@ -397,6 +397,8 @@ pub const APP_BACKUPS: &str = "AppBackups";
 /// leaves it alone: no journal is ever read from or written to it.
 pub const WEB_PROTECTION: &str = "Filter";
 pub const UPDATES: &str = "Updates";
+/// What the Linux fixes write down so an undo can put things back exactly, inside the state directory. Never a journal.
+pub const LINUX_NOTES: &str = "Linux";
 
 pub fn app_dir() -> Result<PathBuf> {
     let dir = state_dir()?.join("App");
