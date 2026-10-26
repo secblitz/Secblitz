@@ -219,6 +219,15 @@ impl Sim {
             }
             ["--force", "enable"] => {
                 self.set("ufw.active", "1");
+                for line in self
+                    .text("/etc/ufw/sysctl.conf")
+                    .unwrap_or_default()
+                    .lines()
+                {
+                    if let Some((key, value)) = line.split_once('=') {
+                        self.file(&format!("/proc/sys/{key}"), &format!("{value}\n"));
+                    }
+                }
                 self.edit("/etc/ufw/ufw.conf", |t| ini::set(t, "", "ENABLED", "yes"));
                 out(0, "")
             }

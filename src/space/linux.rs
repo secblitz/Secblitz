@@ -21,7 +21,7 @@ pub const CRASH_DAYS: u64 = 7;
 pub const APT_ARCHIVES: &str = "/var/cache/apt/archives";
 pub const DNF_CACHES: [&str; 2] = ["/var/cache/libdnf5", "/var/cache/dnf"];
 
-const FLATPAK: &str = "/usr/bin/flatpak";
+pub const FLATPAK: &str = "/usr/bin/flatpak";
 const GIO: &str = "/usr/bin/gio";
 pub const APT_GET: &str = "/usr/bin/apt-get";
 pub const DPKG_QUERY: &str = "/usr/bin/dpkg-query";

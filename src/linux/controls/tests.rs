@@ -204,6 +204,41 @@ fn a_stock_ubuntu_install_reads_as_it_really_is() {
 }
 
 #[test]
+fn what_ufw_changes_in_the_kernel_when_it_starts_is_put_back_by_the_undo() {
+    const ALL: &str = "/proc/sys/net/ipv4/conf/all/accept_redirects";
+    let sim = ubuntu();
+    assert_eq!(sim.text(ALL).unwrap(), "1\n");
+    let mut b = backend(&sim);
+    let before = value(&mut b, "linux.firewall");
+    let fixed = spec("linux.firewall")
+        .unwrap()
+        .derive_target(&before)
+        .unwrap();
+    b.write("linux.firewall", &fixed).unwrap();
+    assert_eq!(sim.text(ALL).unwrap(), "0\n");
+    b.write("linux.firewall", &before).unwrap();
+    assert_eq!(sim.text(ALL).unwrap(), "1\n");
+    assert!(!sim.has("/var/lib/secblitz/Linux/ufw-sysctl.txt"));
+
+    b.write("linux.firewall", &fixed).unwrap();
+    sim.file(
+        "/etc/sysctl.d/90-secblitz-network-redirects.conf",
+        "net.ipv4.conf.all.accept_redirects = 0\n",
+    );
+    b.write("linux.firewall", &before).unwrap();
+    assert_eq!(
+        sim.text(ALL).unwrap(),
+        "0\n",
+        "the redirect fix still keeps it off"
+    );
+    assert_eq!(
+        sim.text("/proc/sys/net/ipv6/conf/all/accept_redirects")
+            .unwrap(),
+        "1\n"
+    );
+}
+
+#[test]
 fn ubuntu_firewall_is_turned_on_and_off_again_exactly() {
     let sim = ubuntu();
     let (before, fixed) = cycle(&sim, "linux.firewall");

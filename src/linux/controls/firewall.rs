@@ -18,6 +18,8 @@ const FIREWALL_CMD: &str = "/usr/bin/firewall-cmd";
 const FIREWALL_OFFLINE_CMD: &str = "/usr/bin/firewall-offline-cmd";
 const FIREWALLD: &str = "firewalld.service";
 const MEMO: &str = "firewalld";
+const UFW_SYSCTL_MEMO: &str = "ufw-sysctl";
+const UFW_SYSCTL_DEFAULT: &str = "/etc/ufw/sysctl.conf";
 /// A range of at least this many ports counts as wide.
 const WIDE: u32 = 1000;
 const MAX_RANGES: usize = 8;
@@ -103,6 +105,7 @@ fn write_ufw(cx: &Cx, want: &Items) -> Result<()> {
     let now_on = ufw_enabled(cx) == Some(true);
     if enabled == Some("no") && now_on {
         cx.run_ok(UFW, &["disable"])?;
+        restore_ufw_sysctl(cx)?;
     }
     if let Some(policy) = incoming {
         if !matches!(policy, "deny" | "reject" | "allow") {
@@ -113,9 +116,108 @@ fn write_ufw(cx: &Cx, want: &Items) -> Result<()> {
         }
     }
     if enabled == Some("yes") && !now_on {
+        let before = ufw_sysctl(cx)?;
         cx.run_ok(UFW, &["--force", "enable"])?;
+        record_ufw_sysctl(cx, &before)?;
     }
     Ok(())
+}
+
+/// The kernel settings ufw writes from its own file each time it starts, with their values now. ufw never puts them
+/// back when it stops, so the fix records what starting it changed and the undo restores that.
+fn ufw_sysctl(cx: &Cx) -> Result<Vec<(String, String)>> {
+    let file = cx
+        .text("/etc/default/ufw")?
+        .and_then(|t| ini::get(&t, &[""], "IPT_SYSCTL"))
+        .unwrap_or_else(|| UFW_SYSCTL_DEFAULT.to_string());
+    if !file.starts_with("/etc/ufw/") || file.contains("..") {
+        return Ok(Vec::new());
+    }
+    let mut found = Vec::new();
+    for line in cx.text(&file)?.unwrap_or_default().lines() {
+        let line = line.trim();
+        if line.starts_with('#') {
+            continue;
+        }
+        let Some((key, _)) = line.split_once('=') else {
+            continue;
+        };
+        let key = key.trim().replace('.', "/");
+        if !sysctl_key_ok(&key) {
+            continue;
+        }
+        if let Some(value) = cx.text(&format!("/proc/sys/{key}"))? {
+            found.push((key, value.trim().to_string()));
+        }
+    }
+    Ok(found)
+}
+
+fn sysctl_key_ok(key: &str) -> bool {
+    key.starts_with("net/")
+        && !key.contains("..")
+        && key
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"/_-".contains(&b))
+}
+
+fn number_ok(value: &str) -> bool {
+    let digits = value.strip_prefix('-').unwrap_or(value);
+    !digits.is_empty() && digits.len() <= 10 && digits.bytes().all(|b| b.is_ascii_digit())
+}
+
+fn record_ufw_sysctl(cx: &Cx, before: &[(String, String)]) -> Result<()> {
+    if cx.memo_read(UFW_SYSCTL_MEMO)?.is_some() {
+        return Ok(());
+    }
+    let mut lines = Vec::new();
+    for (key, old) in before {
+        let Some(new) = cx.text(&format!("/proc/sys/{key}"))? else {
+            continue;
+        };
+        let new = new.trim();
+        if new != old && number_ok(old) && number_ok(new) {
+            lines.push(format!("{key} {old} {new}"));
+        }
+    }
+    if !lines.is_empty() {
+        cx.memo_write(UFW_SYSCTL_MEMO, &lines)?;
+    }
+    Ok(())
+}
+
+/// Puts back what starting ufw changed, unless something changed it again since or Secblitz's own network file
+/// still keeps it off.
+fn restore_ufw_sysctl(cx: &Cx) -> Result<()> {
+    let Some(lines) = cx.memo_read(UFW_SYSCTL_MEMO)? else {
+        return Ok(());
+    };
+    let kept = cx
+        .text(super::network::REDIRECTS_DROPIN)?
+        .unwrap_or_default();
+    for line in &lines {
+        let mut parts = line.split(' ');
+        let (Some(key), Some(old), Some(new), None) =
+            (parts.next(), parts.next(), parts.next(), parts.next())
+        else {
+            continue;
+        };
+        if !sysctl_key_ok(key) || !number_ok(old) || !number_ok(new) {
+            continue;
+        }
+        let dotted = key.replace('/', ".");
+        if kept
+            .lines()
+            .any(|l| l.trim_start().starts_with(&format!("{dotted} ")))
+        {
+            continue;
+        }
+        let now = cx.text(&format!("/proc/sys/{key}"))?;
+        if now.as_deref().map(str::trim) == Some(new) {
+            cx.run_ok(super::kernel::SYSCTL, &["-w", &format!("{key}={old}")])?;
+        }
+    }
+    cx.memo_clear(UFW_SYSCTL_MEMO)
 }
 
 /// firewalld's own commands, for the running service or, when it is stopped, for its files.

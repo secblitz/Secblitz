@@ -504,7 +504,7 @@ fn item_ids_are_fixed() {
 }
 
 #[test]
-fn rows_for_old_apps_and_old_system_versions_appear_only_where_their_tools_exist() {
+fn rows_for_old_apps_old_system_versions_and_app_parts_appear_only_where_their_tools_exist() {
     let with = |present: &'static [&'static str]| move |path: &str| present.contains(&path);
     let nothing = with(&[]);
     let snap = with(&["/usr/bin/snap"]);
@@ -516,6 +516,8 @@ fn rows_for_old_apps_and_old_system_versions_appear_only_where_their_tools_exist
     assert!(!Item::OldKernels.applies(&nothing));
     assert!(!Item::OldKernels.applies(&half_apt));
     assert!(Item::OldKernels.applies(&apt));
+    assert!(!Item::FlatpakRuntimes.applies(&nothing));
+    assert!(Item::FlatpakRuntimes.applies(&with(&["/usr/bin/flatpak"])));
     for item in [Item::PackageCaches, Item::Trash, Item::Temp] {
         assert!(item.applies(&nothing));
     }

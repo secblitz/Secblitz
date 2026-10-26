@@ -89,6 +89,7 @@ impl Item {
         match self {
             Item::OldSnaps => exists(linux::SNAP),
             Item::OldKernels => exists(linux::APT_GET) && exists(linux::DPKG_QUERY),
+            Item::FlatpakRuntimes => exists(linux::FLATPAK),
             _ => true,
         }
     }

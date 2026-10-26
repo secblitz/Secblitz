@@ -15,7 +15,7 @@ use crate::model::Observation;
 use anyhow::Result;
 use std::collections::BTreeSet;
 
-const REDIRECTS_DROPIN: &str = "/etc/sysctl.d/90-secblitz-network-redirects.conf";
+pub(super) const REDIRECTS_DROPIN: &str = "/etc/sysctl.d/90-secblitz-network-redirects.conf";
 const REDIRECTS_MEMO: &str = "network_redirects";
 const CONF_DIRS: [(&str, &str); 2] = [
     ("net.ipv4", "/proc/sys/net/ipv4/conf"),

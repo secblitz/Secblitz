@@ -23,7 +23,7 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
         Some(ctx.t(if cfg!(windows) {
             "Remove apps you don't need. You can bring them back any time."
         } else {
-            "Remove remote-control apps you don't use. You can install them again later."
+            "Remove remote-control and file-sharing apps you don't use. You can install them again later."
         })),
     );
     let removed_label = if state.removed.is_empty() {
