@@ -24,7 +24,16 @@ pub fn message_box(title: &str, text: &str) {
 
 const DAMAGED_HISTORY: &str = "Secblitz's undo history is damaged. Open Home and choose Start fresh. Secblitz keeps a copy of the damaged files.";
 
+pub const NOT_INSTALLED: &str =
+    "Secblitz is not fully installed. Reinstall it from the software app.";
+pub const SESSION_UNUSUAL: &str = "Secblitz cannot start because this sign-in session is not set up the usual way. Sign out, sign back in, then open Secblitz again.";
+
 pub fn friendly_problem(raw: &str) -> &'static str {
+    for known in [NOT_INSTALLED, SESSION_UNUSUAL] {
+        if raw.contains(known) {
+            return known;
+        }
+    }
     let r = raw.to_ascii_lowercase();
     let has = |needles: &[&str]| needles.iter().any(|n| r.contains(n));
     if has(&[
@@ -185,6 +194,7 @@ pub fn elevate_and_wait(args: &[String]) -> anyhow::Result<i32> {
 
 /// A "Run as administrator" start has no broker: start again the normal way
 /// and let this copy close. False when that is not possible or not needed.
+#[cfg_attr(not(windows), allow(dead_code))]
 pub fn reopen_normally(lang: Lang, open: Option<&str>) -> bool {
     #[cfg(windows)]
     {
@@ -220,6 +230,8 @@ pub struct Guard {
     _handle: imp::Owned,
     #[cfg(windows)]
     _namespace: Option<imp::Namespace>,
+    #[cfg(unix)]
+    _lock: std::fs::File,
 }
 
 pub fn single_instance(open: Option<&str>) -> anyhow::Result<Instance> {
@@ -227,10 +239,123 @@ pub fn single_instance(open: Option<&str>) -> anyhow::Result<Instance> {
     {
         imp::single_instance(open)
     }
-    #[cfg(not(windows))]
+    #[cfg(unix)]
+    {
+        let _ = open;
+        let runtime = std::env::var_os("XDG_RUNTIME_DIR")
+            .map(std::path::PathBuf::from)
+            .filter(|p| p.is_absolute())
+            .ok_or_else(|| anyhow::anyhow!(SESSION_UNUSUAL))?;
+        unix_lock::acquire(&runtime)
+    }
+    #[cfg(not(any(windows, unix)))]
     {
         let _ = open;
         Ok(Instance::First(Guard {}))
+    }
+}
+
+#[cfg(unix)]
+mod unix_lock {
+    use super::{Guard, Instance, SESSION_UNUSUAL};
+    use std::fs::{DirBuilder, OpenOptions};
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
+    use std::path::Path;
+
+    /// Takes the one-window lock under `runtime/secblitz`, a folder only this user can use.
+    pub fn acquire(runtime: &Path) -> anyhow::Result<Instance> {
+        let dir = runtime.join("secblitz");
+        match DirBuilder::new().mode(0o700).create(&dir) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(anyhow::Error::new(e).context(SESSION_UNUSUAL)),
+        }
+        let meta = std::fs::symlink_metadata(&dir)
+            .map_err(|e| anyhow::Error::new(e).context(SESSION_UNUSUAL))?;
+        let mine = unsafe { libc::geteuid() };
+        if !meta.is_dir() || meta.uid() != mine || meta.mode() & 0o077 != 0 {
+            anyhow::bail!(SESSION_UNUSUAL);
+        }
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+            .open(dir.join("gui.lock"))
+            .map_err(|e| anyhow::Error::new(e).context(SESSION_UNUSUAL))?;
+        let meta = file
+            .metadata()
+            .map_err(|e| anyhow::Error::new(e).context(SESSION_UNUSUAL))?;
+        if !meta.is_file() || meta.uid() != mine {
+            anyhow::bail!(SESSION_UNUSUAL);
+        }
+        match file.try_lock() {
+            Ok(()) => Ok(Instance::First(Guard { _lock: file })),
+            Err(std::fs::TryLockError::WouldBlock) => Ok(Instance::Existing),
+            Err(std::fs::TryLockError::Error(e)) => {
+                Err(anyhow::Error::new(e).context(SESSION_UNUSUAL))
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use std::os::unix::fs::{symlink, PermissionsExt};
+
+        fn runtime() -> tempfile::TempDir {
+            let dir = tempfile::tempdir().unwrap();
+            std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+            dir
+        }
+
+        #[test]
+        fn a_second_window_is_told_one_is_open() {
+            let rt = runtime();
+            let first = acquire(rt.path()).unwrap();
+            assert!(matches!(first, Instance::First(_)));
+            assert!(matches!(acquire(rt.path()).unwrap(), Instance::Existing));
+            drop(first);
+            assert!(matches!(acquire(rt.path()).unwrap(), Instance::First(_)));
+        }
+
+        #[test]
+        fn the_lock_folder_is_private() {
+            let rt = runtime();
+            let _ = acquire(rt.path()).unwrap();
+            let mode = std::fs::metadata(rt.path().join("secblitz"))
+                .unwrap()
+                .mode();
+            assert_eq!(mode & 0o777, 0o700);
+        }
+
+        #[test]
+        fn a_symlinked_lock_file_is_refused() {
+            let rt = runtime();
+            let dir = rt.path().join("secblitz");
+            DirBuilder::new().mode(0o700).create(&dir).unwrap();
+            let target = rt.path().join("elsewhere");
+            std::fs::write(&target, b"keep").unwrap();
+            symlink(&target, dir.join("gui.lock")).unwrap();
+            assert!(acquire(rt.path()).is_err());
+            assert_eq!(std::fs::read(&target).unwrap(), b"keep");
+        }
+
+        #[test]
+        fn a_symlinked_or_open_folder_is_refused() {
+            let rt = runtime();
+            let real = rt.path().join("real");
+            DirBuilder::new().mode(0o700).create(&real).unwrap();
+            symlink(&real, rt.path().join("secblitz")).unwrap();
+            assert!(acquire(rt.path()).is_err());
+
+            let rt = runtime();
+            let dir = rt.path().join("secblitz");
+            DirBuilder::new().mode(0o755).create(&dir).unwrap();
+            std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+            assert!(acquire(rt.path()).is_err());
+        }
     }
 }
 
@@ -1238,6 +1363,17 @@ mod tests {
         let mut loose = words("evil.example");
         loose[2] = "filter now".into();
         assert!(!site_args_are_plain(&loose));
+    }
+
+    #[test]
+    fn unix_start_problems_keep_their_text_and_are_translated() {
+        for known in [NOT_INSTALLED, SESSION_UNUSUAL] {
+            let chained = format!("{known}: Permission denied (os error 13)");
+            assert_eq!(friendly_problem(&chained), known);
+            for lang in [Lang::Es, Lang::Fr, Lang::De, Lang::Pt, Lang::It] {
+                assert_ne!(lang.t(known), known, "{lang:?}");
+            }
+        }
     }
 
     #[test]

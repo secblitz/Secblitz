@@ -399,11 +399,18 @@ impl App {
         };
         let worker = worker::Worker::spawn(
             || {
-                let engine = secblitz::engine::Engine::open(
-                    secblitz::platform::state_dir()?,
-                    secblitz::permissions::with_permissions(secblitz::platform::backend()?),
-                )?;
-                Ok(Box::new(engine) as Box<dyn worker::Session>)
+                #[cfg(windows)]
+                {
+                    let engine = secblitz::engine::Engine::open(
+                        secblitz::platform::state_dir()?,
+                        secblitz::permissions::with_permissions(secblitz::platform::backend()?),
+                    )?;
+                    Ok(Box::new(engine) as Box<dyn worker::Session>)
+                }
+                #[cfg(not(windows))]
+                {
+                    anyhow::bail!(crate::launcher::NOT_INSTALLED)
+                }
             },
             || {
                 secblitz::engine::recover::start_fresh(
