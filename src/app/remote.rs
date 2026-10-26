@@ -14,6 +14,7 @@ const MAX_ITEM_LEN: usize = 512;
 
 use crate::launcher::NOT_INSTALLED;
 const BAD_ANSWER: &str = NOT_INSTALLED;
+const NOT_DAMAGED: &str = "Nothing needs to be started fresh.";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, tag = "op", rename_all = "snake_case")]
@@ -27,6 +28,7 @@ pub enum Request {
     History,
     CanStart { undo: bool },
     ChooseItems { picked: ItemChoice },
+    StartFresh,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -178,6 +180,7 @@ pub fn serve(session: &mut dyn Session, request: Request, emit: &mut dyn FnMut(E
         },
         Request::CanStart { undo } => done(session.can_start(undo)),
         Request::ChooseItems { picked } => done(session.choose_items(picked)),
+        Request::StartFresh => Reply::Failed(NOT_DAMAGED.to_owned()),
     };
     emit(Event::Done(reply));
 }
@@ -309,6 +312,24 @@ impl<T: Transport> Session for RemoteSession<T> {
     }
     fn choose_items(&mut self, picked: ItemChoice) -> anyhow::Result<()> {
         self.unit(Request::ChooseItems { picked })
+    }
+}
+
+/// Asks the helper to set the damaged undo history aside and begin a new one. It needs no open session, because a damaged history is why none could open.
+pub fn start_fresh<T: Transport>(transport: &mut T) -> anyhow::Result<()> {
+    let bytes = encode_request(&Request::StartFresh)?;
+    let mut reply = None;
+    transport.call(&bytes, &mut |event| {
+        anyhow::ensure!(reply.is_none(), BAD_ANSWER);
+        if let Event::Done(done) = decode_event(event)? {
+            reply = Some(done);
+        }
+        Ok(())
+    })?;
+    match reply.ok_or_else(|| anyhow::anyhow!(NOT_INSTALLED))? {
+        Reply::Ok => Ok(()),
+        Reply::Failed(message) => anyhow::bail!(message),
+        _ => anyhow::bail!(BAD_ANSWER),
     }
 }
 
@@ -587,5 +608,17 @@ mod tests {
         let mut bytes = br#"{"done":"ok"}"#.to_vec();
         bytes.resize(MAX_MESSAGE + 1, b' ');
         assert!(decode_event(&bytes).is_err());
+    }
+
+    #[test]
+    fn start_fresh_is_a_request_of_its_own_and_needs_no_session_to_say_so() {
+        assert_eq!(
+            decode_request(&envelope(r#"{"op":"start_fresh"}"#)).unwrap(),
+            Request::StartFresh
+        );
+        let mut fake = Fake::default();
+        let error = start_fresh(&mut Loopback { session: &mut fake }).unwrap_err();
+        assert_eq!(format!("{error:#}"), NOT_DAMAGED);
+        assert!(fake.log.is_empty());
     }
 }

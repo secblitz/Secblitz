@@ -35,6 +35,8 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 [target.'cfg(target_os = "linux")'.dependencies]
 # Host builds/tests only; the Windows binary has no X11/Wayland code.
 iced = { version = "0.14", default-features = false, features = ["x11", "wayland"] }
+# The root helper's D-Bus service and the window's client. zbus 6 has no blocking API; calls run through zbus::block_on.
+zbus = { version = "6.1.0", default-features = false, features = ["default-rt", "service"] }
 
 [target.'cfg(unix)'.dependencies]
 # The effective user id and O_NOFOLLOW, for the state folder and the single-window lock.
