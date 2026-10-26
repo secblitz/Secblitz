@@ -389,7 +389,7 @@ impl Sim {
                 }
             },
             "/usr/bin/mintupdate-automation" => self.mint_automation(args),
-            "/usr/bin/apt-config" =>out(0, &self.apt_config()),
+            "/usr/bin/apt-config" => out(0, &self.apt_config()),
             "/usr/sbin/sshd" => match args {
                 ["-V"] => out(1, ""),
                 ["-T"] => out(0, &self.sshd_config()),
