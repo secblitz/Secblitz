@@ -258,7 +258,7 @@ const SPECS: &[LinuxSpec] = &[
         reboot: false,
         keys: &[flag("announcing", true)],
     },
-    // enabled: 1 when an old remote service (telnet, rsh, tftp, ftp servers, rpcbind, nfs, snmp) is on.
+    // enabled: 1 when an old remote service (telnet, rsh, rlogin, rexec, tftp, ftp servers, inetd, snmp) is on.
     LinuxSpec {
         id: "linux.old_network_services",
         scope: Scope::System,

@@ -695,8 +695,9 @@ pub fn write_announce_name(cx: &Cx, want: &Items) -> Result<()> {
     }
 }
 
-/// Old remote services, sockets before the services they start, so nothing starts the service again.
-pub(super) const OLD_SERVICES: [&str; 15] = [
+/// Old remote services that send everything unprotected, sockets before the services they start, so nothing starts the
+/// service again. Folder sharing is left out: people set it up on purpose, and another check covers it.
+pub(super) const OLD_SERVICES: [&str; 11] = [
     "telnet.socket",
     "rsh.socket",
     "rlogin.socket",
@@ -707,10 +708,6 @@ pub(super) const OLD_SERVICES: [&str; 15] = [
     "xinetd.service",
     "inetd.service",
     "snmpd.service",
-    "nfs-server.service",
-    "nfs-kernel-server.service",
-    "rpcbind.socket",
-    "rpcbind.service",
     "rexec.socket",
 ];
 

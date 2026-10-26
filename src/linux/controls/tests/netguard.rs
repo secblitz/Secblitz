@@ -1028,14 +1028,14 @@ fn announcing_that_is_already_off_is_left_alone() {
 fn old_services(sim: &Sim) {
     sim.unit("telnet.socket", "enabled", true)
         .unit("vsftpd.service", "enabled", true)
-        .unit("rpcbind.socket", "disabled", false)
-        .unit("rpcbind.service", "indirect", true)
+        .unit("xinetd.service", "indirect", true)
+        .unit("rpcbind.service", "enabled", true)
         .unit("snmpd.service", "disabled", false)
         .unit("sshd.service", "enabled", true);
 }
 
 #[test]
-fn old_services_that_are_not_installed_or_not_on_read_as_protected() {
+fn old_services_that_are_not_installed_or_not_on_and_folder_sharing_read_as_protected() {
     for sim in [ubuntu(), linuxmint()] {
         let mut b = backend(&sim);
         assert_eq!(
@@ -1048,9 +1048,9 @@ fn old_services_that_are_not_installed_or_not_on_read_as_protected() {
         );
     }
     let sim = fedora();
-    sim.unit("rpcbind.service", "disabled", false)
-        .unit("rpcbind.socket", "disabled", false)
-        .unit("nfs-server.service", "disabled", false);
+    sim.unit("rpcbind.service", "enabled", true)
+        .unit("rpcbind.socket", "enabled", true)
+        .unit("nfs-server.service", "enabled", true);
     assert_eq!(
         status(&mut backend(&sim), "linux.old_network_services"),
         CheckStatus::Compliant
@@ -1071,7 +1071,7 @@ fn old_services_are_stopped_and_switched_off_and_each_state_is_put_back() {
     for call in [
         "/usr/bin/systemctl disable --now telnet.socket",
         "/usr/bin/systemctl disable --now vsftpd.service",
-        "/usr/bin/systemctl stop rpcbind.service",
+        "/usr/bin/systemctl stop xinetd.service",
     ] {
         assert!(sim.ran(call), "{call}");
     }
@@ -1082,7 +1082,12 @@ fn units_that_are_not_on_the_list_or_not_on_are_never_touched() {
     let sim = fedora();
     old_services(&sim);
     cycle(&sim, "linux.old_network_services");
-    for untouched in ["sshd.service", "snmpd.service", "rpcbind.socket"] {
+    for untouched in [
+        "sshd.service",
+        "snmpd.service",
+        "rpcbind.service",
+        "rpcbind.socket",
+    ] {
         assert!(
             !sim.calls
                 .borrow()

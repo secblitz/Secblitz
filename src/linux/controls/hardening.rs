@@ -401,16 +401,7 @@ fn loadable(cx: &Cx, module: &str) -> Option<bool> {
     Some(out.success() && !path.is_empty() && !path.contains("(builtin)"))
 }
 
-fn in_use(cx: &Cx, module: &str) -> Result<bool> {
-    Ok(cx
-        .text("/proc/modules")?
-        .unwrap_or_default()
-        .lines()
-        .filter_map(|l| l.split_whitespace().next())
-        .any(|name| same_module(name, module)))
-}
-
-/// The modules that exist here, are not in use and that no file stops from loading on demand. `None` when the system's
+/// The modules that exist here and that no file stops from loading on demand, loaded now or not. `None` when the system's
 /// module tool is missing.
 fn open_modules(cx: &Cx, skip_ours: bool) -> Result<Option<Vec<&'static str>>> {
     let rules = modprobe_rules(cx, skip_ours)?;
@@ -420,7 +411,7 @@ fn open_modules(cx: &Cx, skip_ours: bool) -> Result<Option<Vec<&'static str>>> {
             None => return Ok(None),
             Some(false) => {}
             Some(true) => {
-                if !in_use(cx, module)? && !blocked(&rules, module, aliases) {
+                if !blocked(&rules, module, aliases) {
                     open.push(module);
                 }
             }
@@ -437,7 +428,7 @@ pub fn observe_rare_protocols(cx: &Cx) -> Result<Observation> {
     Ok(observation(vec![("open", item)], true, ""))
 }
 
-/// A module that is loaded now is left as it is. Only future loading is stopped, so nothing running is unloaded.
+/// A module that is loaded now stays loaded until the next start. Only future loading is stopped, so nothing is unloaded.
 pub fn write_rare_protocols(cx: &Cx, want: &Items) -> Result<()> {
     match num_of(want, "open")? {
         Some(0) => {

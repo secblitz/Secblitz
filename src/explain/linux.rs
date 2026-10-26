@@ -185,7 +185,7 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
         "linux.old_network_services" => e(
             "Some old programs let other computers connect to this one and send everything, even passwords, without protection. This looks for them.",
             "Anyone on the network can read what these programs send, and attackers keep searching for computers that run them.",
-            "Those programs are stopped and no longer start by themselves. A shared folder from another computer may stop working, and you can undo this.",
+            "Those programs are stopped and no longer start by themselves. Nothing else changes, and you can undo this.",
         ),
         "linux.bluetooth_autostart" => e(
             "Your computer switches Bluetooth on by itself every time it starts. People with a Bluetooth keyboard or mouse need that.",

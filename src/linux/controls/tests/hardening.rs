@@ -748,30 +748,22 @@ fn a_protocol_that_is_already_blocked_or_missing_is_left_out_of_the_file() {
 }
 
 #[test]
-fn a_protocol_that_is_in_use_is_never_touched() {
+fn a_protocol_that_is_loaded_now_is_still_counted_and_only_stopped_from_loading_again() {
     let sim = fedora_h();
-    sim.file(
-        "/proc/modules",
-        "sctp 1024000 3 - Live 0x0000000000000000\nlibcrc32c 12288 1 sctp, Live 0x0\n",
-    );
+    let modules = "sctp 1 3 - Live 0x0\ntipc 1 0 - Live 0x0\n";
+    sim.file("/proc/modules", modules);
     let mut b = backend(&sim);
+    assert_eq!(
+        value(&mut b, "linux.rare_protocols"),
+        json!({"items": {"open": 1}})
+    );
     let fixed = fixed_value(&mut b, "linux.rare_protocols");
     b.write("linux.rare_protocols", &fixed).unwrap();
     assert_eq!(
         sim.text(RARE_FILE).unwrap(),
-        format!("{NOTE}install tipc /bin/false\n")
+        format!("{NOTE}install sctp /bin/false\ninstall tipc /bin/false\n")
     );
-
-    let sim = fedora_h();
-    sim.file(
-        "/proc/modules",
-        "sctp 1 3 - Live 0x0\ntipc 1 0 - Live 0x0\n",
-    );
-    let mut b = backend(&sim);
-    assert_eq!(
-        value(&mut b, "linux.rare_protocols"),
-        json!({"items": {"open": 0}})
-    );
+    assert_eq!(sim.text("/proc/modules").unwrap(), modules);
     assert_eq!(
         status(&mut b, "linux.rare_protocols"),
         CheckStatus::Compliant
