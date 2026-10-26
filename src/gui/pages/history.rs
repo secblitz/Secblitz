@@ -199,6 +199,11 @@ fn date_fn(lang: Lang) -> &'static dyn Fn(u64) -> String {
     }
 }
 
+/// Only Windows can put removed apps back.
+fn shows_removed_apps(os: secblitz::os::Os) -> bool {
+    os == secblitz::os::Os::Windows
+}
+
 fn removed_text(ctx: &Ctx, removed: usize) -> String {
     match removed {
         0 => ctx.t("No apps are removed right now."),
@@ -440,7 +445,10 @@ pub fn view<'a>(state: &'a State, ctx: &'a Ctx) -> Element<'a, Message> {
         ),
         None,
     );
-    let quick = column![undo, choose, removed].spacing(theme::S1);
+    let mut quick = column![undo, choose].spacing(theme::S1);
+    if shows_removed_apps(secblitz::os::Os::CURRENT) {
+        quick = quick.push(removed);
+    }
 
     let mut page = column![].spacing(theme::S8);
     if let Some(info) = &ctx.damage {
@@ -468,6 +476,14 @@ pub fn preload(state: &mut State, ctx: &mut Ctx) -> Task<Message> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_windows_lists_removed_apps() {
+        use secblitz::os::Os;
+        assert!(shows_removed_apps(Os::Windows));
+        assert!(!shows_removed_apps(Os::Linux));
+        assert!(!shows_removed_apps(Os::Macos));
+    }
+
     use super::*;
 
     #[test]
