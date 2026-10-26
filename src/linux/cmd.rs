@@ -17,6 +17,11 @@ impl Output {
     }
 }
 
+/// The only session bus address a person-scope program is given.
+pub fn session_bus_address(uid: u32) -> String {
+    format!("unix:path=/run/user/{uid}/bus")
+}
+
 pub trait Sys {
     /// Runs `program` (an absolute path) with fixed arguments and no shell.
     fn run(&self, program: &'static str, args: &[&str]) -> Result<Output>;
@@ -29,7 +34,7 @@ pub trait Sys {
 }
 
 #[cfg(target_os = "linux")]
-pub use real::RealSys;
+pub use real::{RealSys, SessionSys};
 
 #[cfg(target_os = "linux")]
 mod real {
@@ -85,42 +90,55 @@ mod real {
         format!("Could not read {}", path.display())
     }
 
+    fn run_program(
+        program: &'static str,
+        args: &[&str],
+        session_bus: Option<&str>,
+    ) -> Result<Output> {
+        ensure!(
+            program.starts_with('/'),
+            "Programs are run by absolute path"
+        );
+        let mut command = Command::new(program);
+        command
+            .args(args)
+            .env_clear()
+            .env("PATH", PATH)
+            .env("LC_ALL", "C");
+        if let Some(bus) = session_bus {
+            command.env("DBUS_SESSION_BUS_ADDRESS", bus);
+        }
+        let mut child = command
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .with_context(|| format!("Could not start {program}"))?;
+        let out = capture(child.stdout.take().context("No output pipe")?);
+        let err = capture(child.stderr.take().context("No error pipe")?);
+        let started = Instant::now();
+        let status = loop {
+            if let Some(status) = child.try_wait()? {
+                break status;
+            }
+            if started.elapsed() > TIME_LIMIT {
+                let _ = child.kill();
+                let _ = child.wait();
+                bail!("{program} took too long and was stopped");
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        let until = Instant::now() + OUTPUT_GRACE;
+        Ok(Output {
+            status: status.code().unwrap_or(-1),
+            stdout: collected(out, until),
+            stderr: collected(err, until),
+        })
+    }
+
     impl Sys for RealSys {
         fn run(&self, program: &'static str, args: &[&str]) -> Result<Output> {
-            ensure!(
-                program.starts_with('/'),
-                "Programs are run by absolute path"
-            );
-            let mut child = Command::new(program)
-                .args(args)
-                .env_clear()
-                .env("PATH", PATH)
-                .env("LC_ALL", "C")
-                .stdin(Stdio::null())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-                .with_context(|| format!("Could not start {program}"))?;
-            let out = capture(child.stdout.take().context("No output pipe")?);
-            let err = capture(child.stderr.take().context("No error pipe")?);
-            let started = Instant::now();
-            let status = loop {
-                if let Some(status) = child.try_wait()? {
-                    break status;
-                }
-                if started.elapsed() > TIME_LIMIT {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    bail!("{program} took too long and was stopped");
-                }
-                std::thread::sleep(Duration::from_millis(10));
-            };
-            let until = Instant::now() + OUTPUT_GRACE;
-            Ok(Output {
-                status: status.code().unwrap_or(-1),
-                stdout: collected(out, until),
-                stderr: collected(err, until),
-            })
+            run_program(program, args, None)
         }
 
         fn read(&self, path: &Path) -> Result<Option<Vec<u8>>> {
@@ -229,6 +247,43 @@ mod real {
         }
     }
 
+    /// Runs programs as the signed-in person with their desktop's message bus, the one variable `gsettings` needs.
+    /// Files are handled exactly as [`RealSys`] does.
+    pub struct SessionSys {
+        bus: String,
+    }
+
+    impl SessionSys {
+        /// `address` must be exactly the person's own bus socket, `unix:path=/run/user/<uid>/bus`.
+        pub fn new(address: &str, uid: u32) -> Result<Self> {
+            ensure!(
+                address == super::session_bus_address(uid),
+                "The desktop session bus address is not the usual one"
+            );
+            Ok(Self {
+                bus: address.to_owned(),
+            })
+        }
+    }
+
+    impl Sys for SessionSys {
+        fn run(&self, program: &'static str, args: &[&str]) -> Result<Output> {
+            run_program(program, args, Some(&self.bus))
+        }
+
+        fn read(&self, path: &Path) -> Result<Option<Vec<u8>>> {
+            RealSys.read(path)
+        }
+
+        fn write_atomic(&self, path: &Path, bytes: &[u8], mode: u32) -> Result<()> {
+            RealSys.write_atomic(path, bytes, mode)
+        }
+
+        fn remove(&self, path: &Path) -> Result<()> {
+            RealSys.remove(path)
+        }
+    }
+
     #[cfg(test)]
     mod tests {
         use super::*;
@@ -242,6 +297,34 @@ mod real {
             assert!(out.stdout.contains("PATH=/usr/sbin:/usr/bin:/sbin:/bin"));
             assert!(out.stdout.contains("LC_ALL=C"));
             assert!(!out.stdout.contains("SECBLITZ_LEAK_PROBE"));
+        }
+
+        #[test]
+        fn a_session_program_gets_exactly_the_bus_variable() {
+            // SAFETY: geteuid has no preconditions and cannot fail.
+            let uid = unsafe { libc::geteuid() };
+            let address = super::super::session_bus_address(uid);
+            let sys = SessionSys::new(&address, uid).unwrap();
+            let out = sys.run("/usr/bin/env", &[]).unwrap();
+            assert!(out
+                .stdout
+                .contains(&format!("DBUS_SESSION_BUS_ADDRESS={address}")));
+            assert_eq!(out.stdout.lines().count(), 3);
+        }
+
+        #[test]
+        fn only_the_persons_own_bus_socket_is_accepted() {
+            for bad in [
+                "unix:path=/run/user/1001/bus",
+                "unix:path=/run/user/1000/bus,guid=1",
+                "unix:abstract=/tmp/dbus-x",
+                "tcp:host=localhost,port=1",
+                "unix:path=/run/user/1000/../bus",
+                "",
+            ] {
+                assert!(SessionSys::new(bad, 1000).is_err(), "{bad}");
+            }
+            SessionSys::new("unix:path=/run/user/1000/bus", 1000).unwrap();
         }
 
         #[test]
