@@ -59,8 +59,7 @@ mod real {
         let sink = Arc::clone(&kept);
         let handle = std::thread::spawn(move || {
             let mut chunk = [0u8; 8192];
-            loop {
-                let Ok(n) = pipe.read(&mut chunk) else { break };
+            while let Ok(n) = pipe.read(&mut chunk) {
                 if n == 0 {
                     break;
                 }
