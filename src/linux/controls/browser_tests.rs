@@ -79,6 +79,7 @@ fn a_fresh_install_of_each_distribution_shares_usage_data() {
 #[test]
 fn data_sharing_is_switched_off_with_a_new_file_and_undo_takes_everything_away() {
     for (name, sim) in computers() {
+        let had_folder = made(&sim, "/etc/firefox");
         let before = value(&sim, DATA);
         fix(&sim, DATA);
         let text = sim.text(POLICIES).unwrap();
@@ -97,7 +98,7 @@ fn data_sharing_is_switched_off_with_a_new_file_and_undo_takes_everything_away()
         assert!(made(&sim, "/etc/firefox/policies"), "{name}");
         undo(&sim, DATA, &before);
         assert!(!sim.has(POLICIES), "{name}");
-        assert!(!made(&sim, "/etc/firefox"), "{name}");
+        assert_eq!(made(&sim, "/etc/firefox"), had_folder, "{name}");
         assert!(!made(&sim, "/etc/firefox/policies"), "{name}");
         assert_eq!(value(&sim, DATA), before, "{name}");
     }
@@ -106,6 +107,7 @@ fn data_sharing_is_switched_off_with_a_new_file_and_undo_takes_everything_away()
 #[test]
 fn secure_connections_only_is_set_and_undone_on_each_distribution() {
     for (name, sim) in computers() {
+        let had_folder = made(&sim, "/etc/firefox");
         let before = value(&sim, HTTPS);
         fix(&sim, HTTPS);
         assert_eq!(
@@ -116,7 +118,7 @@ fn secure_connections_only_is_set_and_undone_on_each_distribution() {
         assert_eq!(status(&sim, HTTPS), CheckStatus::Compliant, "{name}");
         undo(&sim, HTTPS, &before);
         assert!(!sim.has(POLICIES), "{name}");
-        assert!(!made(&sim, "/etc/firefox"), "{name}");
+        assert_eq!(made(&sim, "/etc/firefox"), had_folder, "{name}");
         assert_eq!(value(&sim, HTTPS), before, "{name}");
     }
 }
@@ -256,9 +258,13 @@ fn chrome_data_sharing_is_switched_off_with_a_file_of_our_own_and_undone() {
 }
 
 #[test]
-fn the_chromium_family_is_found_by_its_folder_or_its_program() {
+fn the_chromium_family_is_found_by_its_policy_folder_or_its_program() {
     let sim = Sim::fixture("fedora-44");
-    sim.set("dir:/etc/chromium", "1");
+    assert_eq!(
+        value(&sim, DATA)["items"]["chromium"],
+        serde_json::Value::Null
+    );
+    sim.set("dir:/etc/chromium/policies", "1");
     sim.file("/usr/bin/brave-browser", "");
     sim.file("/usr/bin/chromium-browser", "");
     let before = value(&sim, DATA);
@@ -275,7 +281,8 @@ fn the_chromium_family_is_found_by_its_folder_or_its_program() {
     for folder in ["chromium", "brave", "chromium-browser"] {
         assert!(!sim.has(&format!("/etc/{folder}/policies/managed/secblitz.json")));
     }
-    assert!(made(&sim, "/etc/chromium"));
+    assert!(made(&sim, "/etc/chromium/policies"));
+    assert!(!made(&sim, "/etc/chromium/policies/managed"));
     assert!(!made(&sim, "/etc/brave"));
     assert!(!made(&sim, "/etc/brave/policies"));
 }

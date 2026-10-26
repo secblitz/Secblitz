@@ -213,10 +213,16 @@ const RESOLVED_DIRS: [&str; 3] = [
     "/run/systemd/resolved.conf.d",
     "/etc/systemd/resolved.conf.d",
 ];
+const LLMNR_FOLDER: &str = "/etc/systemd/resolved.conf.d";
 const LLMNR_DROPIN: &str = "/etc/systemd/resolved.conf.d/90-secblitz.conf";
+/// Written when Secblitz made the folder for its file, so the undo takes the folder away too.
+const LLMNR_FOLDER_MEMO: &str = "llmnr-folder";
 const RESOLVED_UNIT: &str = "systemd-resolved.service";
 const RESOLVECTL: &str = "/usr/bin/resolvectl";
 const SYSTEMCTL: &str = "/usr/bin/systemctl";
+const TEST: &str = "/usr/bin/test";
+const MKDIR: &str = "/usr/bin/mkdir";
+const RMDIR: &str = "/usr/bin/rmdir";
 
 /// The word systemd uses for the setting; `None` when the text is not one it knows.
 fn llmnr_word(value: &str) -> Option<&'static str> {
@@ -285,18 +291,45 @@ pub fn observe_llmnr(cx: &Cx) -> Result<Observation> {
     }
 }
 
+/// Takes away the drop-in folder when Secblitz made it and nothing else was put in it since.
+fn remove_llmnr_folder(cx: &Cx) -> Result<()> {
+    if cx.memo_read(LLMNR_FOLDER_MEMO)?.is_some() {
+        let _ = cx.run(RMDIR, &[LLMNR_FOLDER]);
+        cx.memo_clear(LLMNR_FOLDER_MEMO)?;
+    }
+    Ok(())
+}
+
+fn write_llmnr_file(cx: &Cx) -> Result<()> {
+    // Fedora has no drop-in folder until something makes one.
+    if !cx
+        .run(TEST, &["-d", LLMNR_FOLDER])
+        .is_ok_and(|o| o.success())
+    {
+        cx.memo_write(LLMNR_FOLDER_MEMO, &[LLMNR_FOLDER.to_string()])?;
+        cx.run_ok(MKDIR, &["-m", "0755", LLMNR_FOLDER])?;
+    }
+    cx.write_text(LLMNR_DROPIN, &format!("{NOTE}[Resolve]\nLLMNR=no\n"), 0o644)
+}
+
 pub fn write_llmnr(cx: &Cx, want: &Items) -> Result<()> {
     let Some(word) = text_of(want, "llmnr")? else {
         return Ok(());
     };
     cx.remove(LLMNR_DROPIN)?;
+    remove_llmnr_folder(cx)?;
     if effective_llmnr(cx)? != Some(llmnr_word(word).ok_or_else(|| plain(UNRECOGNISED))?) {
         if word != "no" {
             return Err(plain(CHANGE_FAILED));
         }
-        cx.write_text(LLMNR_DROPIN, &format!("{NOTE}[Resolve]\nLLMNR=no\n"), 0o644)?;
+        if let Err(e) = write_llmnr_file(cx) {
+            cx.remove(LLMNR_DROPIN)?;
+            remove_llmnr_folder(cx)?;
+            return Err(e);
+        }
         if effective_llmnr(cx)? != Some("no") {
             cx.remove(LLMNR_DROPIN)?;
+            remove_llmnr_folder(cx)?;
             return Err(plain(CHANGE_FAILED));
         }
     }

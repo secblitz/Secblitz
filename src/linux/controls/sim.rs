@@ -63,6 +63,14 @@ impl Sim {
             .join(name)
             .join("root");
         read_tree(&root, &root, &mut sim.files.borrow_mut());
+        // The folders that exist on the real computer, captured from it; a file can only be written into one of them.
+        if let Ok(dirs) = std::fs::read_to_string(root.with_file_name("dirs.txt")) {
+            sim.set("strict-dirs", "1");
+            for dir in dirs.lines().filter(|l| l.starts_with('/')) {
+                sim.set(&format!("dir:{dir}"), "1");
+            }
+            sim.set("dir:/var/lib/secblitz/Linux", "1");
+        }
         services::load_recordings(&sim, &root.with_file_name("cmd"));
         for tool in [
             "/usr/bin/ls",
@@ -402,7 +410,10 @@ impl Sim {
 
     fn mkdir(&self, path: &str) -> Result<Output> {
         let parent = path.rsplit_once('/').map_or("/", |(p, _)| p);
-        if self.dir_exists(path) || !self.dir_exists(if parent.is_empty() { "/" } else { parent }) {
+        let parent = if parent.is_empty() { "/" } else { parent };
+        if self.dir_exists(path)
+            || (!self.get("strict-dirs").is_empty() && !self.dir_exists(parent))
+        {
             return out(1, "");
         }
         self.set(&format!("dir:{path}"), "1");
@@ -592,6 +603,11 @@ impl Sys for Sim {
     }
 
     fn write_atomic(&self, path: &Path, bytes: &[u8], _mode: u32) -> Result<()> {
+        let parent = path.parent().and_then(Path::to_str).unwrap_or("/");
+        anyhow::ensure!(
+            self.get("strict-dirs").is_empty() || self.dir_exists(parent),
+            "Could not open {parent}"
+        );
         self.files.borrow_mut().insert(path.into(), bytes.to_vec());
         Ok(())
     }

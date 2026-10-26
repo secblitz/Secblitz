@@ -38,14 +38,12 @@ const CHROMIUM_DIRS_MEMO: &str = "browser_chromium_dirs";
 const CHROMIUM_FILE: &str = "secblitz.json";
 
 struct Chromium {
-    parent: &'static str,
     folders: [&'static str; 3],
     programs: &'static [&'static str],
 }
 
 const CHROMIUM: [Chromium; 4] = [
     Chromium {
-        parent: "/etc/opt/chrome",
         folders: [
             "/etc/opt/chrome",
             "/etc/opt/chrome/policies",
@@ -54,7 +52,6 @@ const CHROMIUM: [Chromium; 4] = [
         programs: &["/opt/google/chrome/chrome", "/usr/bin/google-chrome-stable"],
     },
     Chromium {
-        parent: "/etc/chromium",
         folders: [
             "/etc/chromium",
             "/etc/chromium/policies",
@@ -66,16 +63,14 @@ const CHROMIUM: [Chromium; 4] = [
         ],
     },
     Chromium {
-        parent: "/etc/chromium-browser",
         folders: [
             "/etc/chromium-browser",
             "/etc/chromium-browser/policies",
             "/etc/chromium-browser/policies/managed",
         ],
-        programs: &["/usr/bin/chromium-browser"],
+        programs: &["/usr/bin/chromium-browser", "/snap/bin/chromium"],
     },
     Chromium {
-        parent: "/etc/brave",
         folders: [
             "/etc/brave",
             "/etc/brave/policies",
@@ -149,8 +144,10 @@ fn firefox_installed(cx: &Cx) -> bool {
     FIREFOX_PRESENT.iter().any(|p| exists(cx, "-e", p)) || exists(cx, "-d", FIREFOX_DIRS[0])
 }
 
+/// The `policies` folder, not the folder above it, says a browser is here: other packages put their own files in
+/// `/etc/chromium` and `/etc/opt/chrome` (Fedora's GNOME browser connector does) without any browser installed.
 fn chromium_installed(cx: &Cx, browser: &Chromium) -> bool {
-    exists(cx, "-d", browser.parent) || browser.programs.iter().any(|p| exists(cx, "-e", p))
+    exists(cx, "-d", browser.folders[1]) || browser.programs.iter().any(|p| exists(cx, "-e", p))
 }
 
 fn parse_policies(bytes: &[u8]) -> Result<Value> {

@@ -418,6 +418,29 @@ fn name_lookups_are_closed_by_a_file_of_their_own_and_opened_again_by_removing_i
 }
 
 #[test]
+fn the_resolver_folder_is_made_when_missing_and_taken_away_again_only_then() {
+    const FOLDER: &str = "dir:/etc/systemd/resolved.conf.d";
+    let sim = resolved(fedora());
+    assert!(sim.get(FOLDER).is_empty());
+    let mut b = backend(&sim);
+    let before = value(&mut b, "linux.llmnr");
+    let fixed = spec("linux.llmnr").unwrap().derive_target(&before).unwrap();
+    b.write("linux.llmnr", &fixed).unwrap();
+    assert!(!sim.get(FOLDER).is_empty());
+    assert!(sim.has(LLMNR_FILE));
+    b.write("linux.llmnr", &before).unwrap();
+    assert!(sim.get(FOLDER).is_empty());
+    assert!(!sim.has(LLMNR_FILE));
+
+    let sim = resolved(fedora());
+    sim.set(FOLDER, "1");
+    let mut b = backend(&sim);
+    b.write("linux.llmnr", &fixed).unwrap();
+    b.write("linux.llmnr", &before).unwrap();
+    assert!(!sim.get(FOLDER).is_empty(), "a folder that was there stays");
+}
+
+#[test]
 fn the_value_is_read_the_way_the_resolver_reads_it() {
     let sim = resolved(ubuntu());
     let mut b = backend(&sim);
