@@ -1060,6 +1060,43 @@ fn fedora_findings_use_its_own_tools() {
 }
 
 #[test]
+fn fedora_never_downloads_package_lists_and_an_empty_cache_is_not_a_restart() {
+    let sim = fedora();
+    sim.tool("/usr/bin/dnf5");
+    let mut b = backend(&sim);
+    let status = |b: &mut LinuxBackend<Sim>, title: &str| {
+        let found = b.findings().unwrap();
+        found
+            .iter()
+            .find(|f| f.title == title)
+            .map(|f| f.status.clone())
+    };
+    assert_eq!(status(&mut b, "Restart needed"), None);
+    assert_eq!(
+        status(&mut b, "Updates waiting"),
+        Some(CheckStatus::Unknown)
+    );
+    sim.set("dnf.cache", "1");
+    assert_eq!(status(&mut b, "Restart needed"), Some(CheckStatus::Ok));
+    assert_eq!(status(&mut b, "Updates waiting"), Some(CheckStatus::Ok));
+    sim.set("dnf.restart", "1").set("dnf.waiting", "1");
+    assert_eq!(
+        status(&mut b, "Restart needed"),
+        Some(CheckStatus::Attention)
+    );
+    assert_eq!(
+        status(&mut b, "Updates waiting"),
+        Some(CheckStatus::Attention)
+    );
+    assert!(sim
+        .calls
+        .borrow()
+        .iter()
+        .filter(|c| c.starts_with("/usr/bin/dnf5"))
+        .all(|c| c.starts_with("/usr/bin/dnf5 -C ")));
+}
+
+#[test]
 fn the_notes_folder_is_not_mistaken_for_a_journal() {
     let sim = ubuntu();
     let dir = tempfile::tempdir().unwrap();

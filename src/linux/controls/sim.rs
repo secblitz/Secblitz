@@ -384,6 +384,25 @@ impl Sim {
                 );
                 out(0, "")
             }
+            "/usr/bin/dnf5" => match (args, self.get("dnf.cache").as_str()) {
+                (_, "") => Ok(Output {
+                    status: 1,
+                    stdout: "Updating and loading repositories:\n".into(),
+                    stderr: "Cache-only enabled but no cache for repository \"fedora\"\n".into(),
+                }),
+                (["-C", "check-upgrade"], _) => {
+                    out(if self.get("dnf.waiting") == "1" { 100 } else { 0 }, "")
+                }
+                (["-C", "needs-restarting", "-r"], _) if self.get("dnf.restart") == "1" => out(
+                    1,
+                    "Core libraries or services have been updated since boot-up:\n  * kernel\n\nReboot is required to fully utilize these updates.\n",
+                ),
+                (["-C", "needs-restarting", "-r"], _) => out(
+                    0,
+                    "No core libraries or services have been updated since boot-up.\nReboot should not be necessary.\n",
+                ),
+                (other, _) => bail!("dnf5 {other:?}"),
+            },
             "/usr/bin/findmnt" => out(0, &format!("{}\n", self.get("root.source"))),
             "/usr/bin/lsblk" => out(
                 0,
