@@ -3,6 +3,7 @@
 use super::cmd::Sys;
 use super::controls::plain;
 use super::distro::{Distro, Family};
+use super::web;
 use anyhow::Result;
 
 const SYSTEMD_RUN: &str = "/usr/bin/systemd-run";
@@ -21,11 +22,15 @@ fn package_command(family: Family) -> Option<(&'static str, [&'static str; 3])> 
     }
 }
 
-/// Starts the removal and returns at once; the removal finishes on its own.
+/// Starts the removal and returns at once; the removal finishes on its own. Web protection is switched off first, so
+/// lookups never point at a filter that is about to disappear.
 pub fn start(sys: &dyn Sys, distro: &Distro) -> Result<()> {
     let Some((tool, args)) = package_command(distro.family) else {
         return Err(plain(CANNOT_REMOVE));
     };
+    if let Err(error) = web::remove_everything(sys) {
+        eprintln!("Web protection was not switched off before the removal: {error:#}");
+    }
     let mut all = vec![
         "--quiet",
         "--no-block",
@@ -86,8 +91,21 @@ mod tests {
         .to_vec()
     }
 
+    const SHOW: &str =
+        "/usr/bin/systemctl show --property=LoadState,ActiveState secblitz-filter.service";
+
     fn told(tool: &str, status: i32) -> FakeSys {
         let sys = FakeSys::default();
+        sys.reply(
+            "/usr/bin/systemctl",
+            &[
+                "show",
+                "--property=LoadState,ActiveState",
+                "secblitz-filter.service",
+            ],
+            0,
+            "LoadState=not-found\nActiveState=inactive\n",
+        );
         let args = launch(tool);
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
         sys.reply(SYSTEMD_RUN, &args, status, "");
@@ -100,8 +118,57 @@ mod tests {
             let sys = told(tool, 0);
             start(&sys, &distro(family)).unwrap();
             let expected = format!("{SYSTEMD_RUN} {}", launch(tool).join(" "));
-            assert_eq!(*sys.calls.borrow(), [expected]);
+            assert_eq!(*sys.calls.borrow(), [SHOW.to_owned(), expected]);
         }
+    }
+
+    #[test]
+    fn web_protection_is_switched_off_before_the_package_goes() {
+        let sys = told(APT_GET, 0);
+        sys.reply(
+            "/usr/bin/systemctl",
+            &[
+                "show",
+                "--property=LoadState,ActiveState",
+                "secblitz-filter.service",
+            ],
+            0,
+            "LoadState=loaded\nActiveState=active\n",
+        );
+        sys.reply(
+            "/usr/bin/systemctl",
+            &["disable", "--now", "secblitz-filter.service"],
+            0,
+            "",
+        );
+        sys.reply(
+            "/usr/bin/systemctl",
+            &["is-active", "systemd-resolved.service"],
+            0,
+            "active\n",
+        );
+        sys.reply("/usr/bin/systemctl", &["is-system-running"], 1, "running\n");
+        sys.reply(
+            "/usr/bin/systemctl",
+            &["try-restart", "systemd-resolved.service"],
+            0,
+            "",
+        );
+        sys.reply("/usr/bin/resolvectl", &["flush-caches"], 0, "");
+        sys.file(web::DROPIN, web::dropin_text().as_bytes());
+        start(&sys, &distro(Family::Debian)).unwrap();
+        let calls = sys.calls.borrow();
+        let at = |what: &str| calls.iter().position(|c| c.contains(what)).unwrap();
+        assert!(at("try-restart") < at("disable --now"));
+        assert!(at("disable --now") < at("systemd-run"));
+        assert!(sys.files.borrow().is_empty());
+    }
+
+    #[test]
+    fn a_system_that_cannot_be_removed_keeps_web_protection() {
+        let sys = FakeSys::default();
+        assert!(start(&sys, &distro(Family::Other)).is_err());
+        assert!(sys.calls.borrow().is_empty());
     }
 
     #[test]

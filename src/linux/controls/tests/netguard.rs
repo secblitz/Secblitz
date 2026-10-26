@@ -733,6 +733,83 @@ fn website_lookups_are_scrambled_by_a_file_of_their_own_and_the_resolver_is_rest
     );
 }
 
+const WEB_CONFIG: &str = "/var/lib/secblitz-filter/config.json";
+const WEB_ON: &str = r#"{"ads":true,"tracking":false,"dangerous":false}"#;
+const WEB_DROPIN: &str = "/run/systemd/resolved.conf.d/95-secblitz-web-protection.conf";
+
+fn web_protection(sim: &Sim, config: &str, enabled: bool) {
+    sim.file(WEB_CONFIG, config);
+    sim.unit(
+        "secblitz-filter.service",
+        if enabled { "enabled" } else { "disabled" },
+        enabled,
+    );
+}
+
+#[test]
+fn private_website_lookups_step_aside_while_web_protection_answers() {
+    let sim = resolved(ubuntu());
+    web_protection(&sim, WEB_ON, true);
+    let before = snapshot(&sim);
+    let mut b = backend(&sim);
+    let o = b.observe("linux.encrypted_dns").unwrap();
+    assert!(!o.eligible);
+    assert_eq!(o.reason, crate::linux::web::ENCRYPTED_DNS_LEFT_TO_WEB);
+    let fixed = json!({"items": {"dns_over_tls": "opportunistic"}});
+    let error = b.write("linux.encrypted_dns", &fixed).unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        crate::linux::web::ENCRYPTED_DNS_LEFT_TO_WEB
+    );
+    assert_same(&sim, &before);
+    assert!(!sim.ran(RESTART_RESOLVED));
+}
+
+#[test]
+fn private_website_lookups_work_as_before_when_web_protection_is_off_or_only_set_up() {
+    for (config, enabled) in [
+        (WEB_ON, false),
+        (r#"{"ads":false,"tracking":false,"dangerous":false}"#, true),
+        ("not json", true),
+    ] {
+        let sim = resolved(ubuntu());
+        web_protection(&sim, config, enabled);
+        let (was, fixed) = cycle(&sim, "linux.encrypted_dns");
+        assert_eq!(was, json!({"items": {"dns_over_tls": "no"}}));
+        assert_eq!(fixed, json!({"items": {"dns_over_tls": "opportunistic"}}));
+    }
+    let sim = resolved(ubuntu());
+    web_protection(&sim, WEB_ON, false);
+    sim.unit("secblitz-filter.service", "enabled", false);
+    sim.files.borrow_mut().remove(&PathBuf::from(WEB_CONFIG));
+    let o = backend(&sim).observe("linux.encrypted_dns").unwrap();
+    assert!(o.eligible);
+}
+
+#[test]
+fn private_website_lookups_switched_on_earlier_can_still_be_undone_while_web_protection_answers() {
+    let sim = resolved(ubuntu());
+    let mut b = backend(&sim);
+    let was = value(&mut b, "linux.encrypted_dns");
+    b.write(
+        "linux.encrypted_dns",
+        &json!({"items": {"dns_over_tls": "opportunistic"}}),
+    )
+    .unwrap();
+    assert!(sim.has(DOT_FILE));
+    web_protection(&sim, WEB_ON, true);
+    sim.file(
+        WEB_DROPIN,
+        "[Resolve]\nDNS=\nDNS=127.0.0.153\nDomains=~.\nDNSOverTLS=no\n",
+    );
+    b.write("linux.encrypted_dns", &was).unwrap();
+    assert!(!sim.has(DOT_FILE), "the file Secblitz wrote is gone");
+    assert!(
+        sim.has(WEB_DROPIN),
+        "web protection's own setting is not touched"
+    );
+}
+
 #[test]
 fn the_running_value_is_read_back_after_the_resolver_restarts() {
     let sim = resolved(fedora());
