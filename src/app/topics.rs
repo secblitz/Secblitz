@@ -67,7 +67,14 @@ impl Topic {
                 | "linux.file_sharing"
                 | "linux.remote_desktop",
             ) => Topic::Network,
-            ("linux", "linux.autologin" | "linux.guest" | "linux.screen_lock") => Topic::SignIn,
+            (
+                "linux",
+                "linux.autologin"
+                | "linux.guest"
+                | "linux.screen_lock"
+                | "linux.media_autorun"
+                | "linux.home_private",
+            ) => Topic::SignIn,
             (
                 "linux",
                 "linux.crash_reports"
@@ -76,7 +83,11 @@ impl Topic {
                 | "linux.wifi_mac"
                 | "linux.recent_files"
                 | "linux.lock_previews"
-                | "linux.ubuntu_insights",
+                | "linux.ubuntu_insights"
+                | "linux.location"
+                | "linux.problem_reports"
+                | "linux.app_usage"
+                | "linux.old_files",
             ) => Topic::Privacy,
             _ => Topic::Windows,
         }
@@ -310,6 +321,12 @@ mod tests {
             ("linux.recent_files", Privacy),
             ("linux.lock_previews", Privacy),
             ("linux.ubuntu_insights", Privacy),
+            ("linux.media_autorun", SignIn),
+            ("linux.location", Privacy),
+            ("linux.problem_reports", Privacy),
+            ("linux.app_usage", Privacy),
+            ("linux.old_files", Privacy),
+            ("linux.home_private", SignIn),
         ];
         for (id, topic) in expected {
             assert_eq!(Topic::of(id), *topic, "{id}");

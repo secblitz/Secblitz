@@ -97,6 +97,36 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             "The reports hold no files, but they describe your computer and software in detail.",
             "No more reports are sent. Ubuntu works exactly as before, and you can turn this back on.",
         ),
+        "linux.media_autorun" => e(
+            "When you plug in a drive or put in a disc, your computer can start programs from it by itself. This checks whether that is allowed.",
+            "A drive that was found or lent by a stranger could start harmful software the moment it is plugged in.",
+            "Plugged-in drives and discs no longer start anything by themselves. You can still open them yourself, and you can undo this.",
+        ),
+        "linux.location" => e(
+            "Your computer can tell apps and websites where you are, using the networks around you. This checks whether that is on.",
+            "Apps could learn where you live, where you work and where you travel.",
+            "Apps are no longer told where you are. Maps and weather may ask you to type a place instead, and you can undo this.",
+        ),
+        "linux.problem_reports" => e(
+            "Your desktop can send reports about crashes and about how you use your software to the people who make it.",
+            "Reports describe your computer and what you run on it, and can say more about you than you would expect.",
+            "No more reports are sent. Everything works as before, and you can undo this.",
+        ),
+        "linux.app_usage" => e(
+            "Your desktop remembers which apps you open the most and shows them first.",
+            "Anyone using your account can see which apps you use and how often.",
+            "Your computer stops keeping track of which apps you use most. Search may list apps in a different order. You can undo this.",
+        ),
+        "linux.old_files" => e(
+            "Your Trash and your temporary files can be emptied by themselves once they are old. By default nothing is ever deleted.",
+            "Files you deleted long ago, and leftovers from programs, stay on your computer where anyone using your account can find them.",
+            "Files in the Trash for over 30 days, and old temporary files, are deleted for good. Turning this off again cannot bring them back.",
+        ),
+        "linux.home_private" => e(
+            "Your home folder holds your documents and settings. This checks whether other accounts on this computer are able to open it.",
+            "Anyone else with an account here could read your files without needing your password.",
+            "Only you can open your home folder. Your files are not touched, and you can undo this.",
+        ),
         "Linux disk encryption" => e(
             "Disk encryption scrambles everything on your drive so it can only be read after you sign in. It is off on this computer.",
             "Anyone who finds or steals your computer can take out the drive and read your files without a password.",

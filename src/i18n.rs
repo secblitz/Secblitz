@@ -11,6 +11,7 @@ mod interface;
 mod italian;
 mod linux;
 mod linux_cleanup;
+mod linux_person;
 mod linux_updates;
 mod maintenance;
 mod results;
@@ -145,6 +146,7 @@ const MAINTENANCE_PARTS: &[&[[&str; 6]]] = &[
     linux::ROWS,
     linux_updates::ROWS,
     linux_cleanup::ROWS,
+    linux_person::ROWS,
 ];
 
 const TEXT_PARTS: &[&[[&str; 5]]] = &[
