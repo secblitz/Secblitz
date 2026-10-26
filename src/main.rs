@@ -6,6 +6,7 @@ mod gui;
 mod guide;
 mod i18n;
 mod launcher;
+mod linux_bus;
 mod tray;
 mod uninstall;
 
@@ -84,6 +85,7 @@ fn command(lang: Lang) -> Command {
                 .hide(true)
                 .arg(Arg::new("user").long("user").action(ArgAction::SetTrue)),
         )
+        .subcommand(Command::new("helper").hide(true))
         .subcommand(
             Command::new("uninstall-cleanup").hide(true).arg(
                 Arg::new("user")
@@ -213,6 +215,15 @@ fn elevated_args(matches: &ArgMatches, lang: Lang) -> Vec<String> {
 }
 
 fn execute(matches: &ArgMatches, lang: Lang) -> Result<i32> {
+    if matches.subcommand_matches("helper").is_some() {
+        #[cfg(target_os = "linux")]
+        {
+            linux_bus::helper::run_installed()?;
+            return Ok(0);
+        }
+        #[cfg(not(target_os = "linux"))]
+        bail!(launcher::NOT_INSTALLED);
+    }
     if update_command(matches) == Some(UpdateCommand::Health) {
         anyhow::ensure!(matches.get_flag("json"), "update-health-requires-json");
         return write_health(updater::health()?, &mut io::stdout().lock());
