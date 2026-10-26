@@ -408,6 +408,12 @@ fn own_file(cx: &Cx, browser: &Chromium) -> Result<(String, Map<String, Value>, 
 
 fn chromium_apply(cx: &Cx, ctl: Ctl) -> Result<()> {
     let mut made = Vec::new();
+    let done = chromium_write(cx, ctl, &mut made);
+    keep_made(cx, CHROMIUM_DIRS_MEMO, made)?;
+    done
+}
+
+fn chromium_write(cx: &Cx, ctl: Ctl, made: &mut Vec<String>) -> Result<()> {
     for browser in CHROMIUM.iter().filter(|b| b.supports(ctl)) {
         if !chromium_installed(cx, browser) {
             continue;
@@ -420,14 +426,14 @@ fn chromium_apply(cx: &Cx, ctl: Ctl) -> Result<()> {
         if chromium_safe(cx, browser, ctl)? && !(present && ours) {
             continue;
         }
-        make_folders(cx, &browser.folders, &mut made)?;
+        make_folders(cx, &browser.folders, made)?;
         for (key, value) in ctl.chromium_policies() {
             map.insert(key.to_string(), value);
         }
         let text = serde_json::to_string_pretty(&Value::Object(map))? + "\n";
         cx.write_text(&path, &text, 0o644)?;
     }
-    keep_made(cx, CHROMIUM_DIRS_MEMO, made)
+    Ok(())
 }
 
 fn chromium_revert(cx: &Cx, ctl: Ctl) -> Result<()> {
