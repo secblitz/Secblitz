@@ -303,7 +303,11 @@ mod tests {
             assert_ne!(a.step, NextStep::Repair);
             assert_plain_words(a.next);
         }
-        let other = for_control("linux.firewall", &CheckStatus::Skipped, "Not offered: another program manages the firewall");
+        let other = for_control(
+            "linux.firewall",
+            &CheckStatus::Skipped,
+            "Not offered: another program manages the firewall",
+        );
         assert_ne!(other.status, "Not offered");
     }
 }

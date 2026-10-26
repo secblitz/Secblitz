@@ -48,14 +48,22 @@ impl Topic {
             ("debloat", _) => Topic::Clutter,
             (
                 "linux",
-                "linux.firewall" | "linux.fedora_open_ports" | "linux.ssh_server"
-                | "linux.ssh_password" | "linux.file_sharing" | "linux.remote_desktop",
+                "linux.firewall"
+                | "linux.fedora_open_ports"
+                | "linux.ssh_server"
+                | "linux.ssh_password"
+                | "linux.file_sharing"
+                | "linux.remote_desktop",
             ) => Topic::Network,
             ("linux", "linux.autologin" | "linux.guest" | "linux.screen_lock") => Topic::SignIn,
             (
                 "linux",
-                "linux.crash_reports" | "linux.countme" | "linux.connectivity_check"
-                | "linux.wifi_mac" | "linux.recent_files" | "linux.lock_previews"
+                "linux.crash_reports"
+                | "linux.countme"
+                | "linux.connectivity_check"
+                | "linux.wifi_mac"
+                | "linux.recent_files"
+                | "linux.lock_previews"
                 | "linux.ubuntu_insights",
             ) => Topic::Privacy,
             _ => Topic::Windows,

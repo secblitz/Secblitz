@@ -302,6 +302,11 @@ fn undo_ready(detail: &str) -> bool {
     detail.starts_with(crate::vbs::UNDO_READY)
 }
 
+/// Whether a finding comes from a Linux check, so the window never points it at a Windows settings page.
+pub fn is_linux_finding(title: &str) -> bool {
+    linux::finding(title).is_some()
+}
+
 pub fn for_finding(title: &str, status: &CheckStatus, detail: &str) -> Advice {
     use NextStep::*;
     let (label, next, step) = match title {

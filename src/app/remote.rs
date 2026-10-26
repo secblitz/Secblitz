@@ -69,7 +69,10 @@ pub enum Reply {
     Ok,
     Failed(String),
     /// The saved undo history cannot be trusted. Typed, so the window can offer a fresh start.
-    Damaged { kind: DamageKind, files: usize },
+    Damaged {
+        kind: DamageKind,
+        files: usize,
+    },
 }
 
 /// The reply for an error. A damaged undo history keeps its type across the cut.

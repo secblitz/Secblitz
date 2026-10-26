@@ -686,14 +686,19 @@ fn other_page(
     guide: Option<&guide::Guide>,
     step: NextStep,
 ) -> Option<Page> {
+    let step_page = |step| {
+        if explain.1 && advice::is_linux_finding(explain.0) {
+            None
+        } else {
+            Page::for_step(step)
+        }
+    };
     match bucket {
         Bucket::Look => guide
             .map(|g| g.page)
             .or_else(|| Page::for_finding(explain.0))
-            .or_else(|| Page::for_step(step)),
-        Bucket::GoodToKnow if explain.1 => {
-            Page::for_finding(explain.0).or_else(|| Page::for_step(step))
-        }
+            .or_else(|| step_page(step)),
+        Bucket::GoodToKnow if explain.1 => Page::for_finding(explain.0).or_else(|| step_page(step)),
         Bucket::GoodToKnow => guide.map(|g| g.page),
         _ => None,
     }
@@ -2584,6 +2589,31 @@ mod tests {
             other_page(Bucket::Managed, ("Windows updates", true), None, a.step),
             None
         );
+    }
+
+    #[test]
+    fn a_linux_finding_never_opens_a_windows_settings_page_or_speaks_of_windows() {
+        for title in [
+            advice::DISK_ENCRYPTION,
+            advice::LINUX_SECURE_BOOT,
+            advice::UPDATES_WAITING,
+            advice::RESTART_NEEDED,
+            advice::PROGRAM_LIMITS,
+        ] {
+            let a = advice::for_finding(title, &CheckStatus::Attention, "");
+            for bucket in [Bucket::Look, Bucket::GoodToKnow] {
+                assert_eq!(
+                    other_page(bucket, (title, true), None, a.step),
+                    None,
+                    "{title}"
+                );
+            }
+            for line in [a.label, a.next, a.impact] {
+                for word in ["Windows", "BIOS", "Microsoft", "administrator"] {
+                    assert!(!line.contains(word), "{title}: {line}");
+                }
+            }
+        }
     }
 
     #[test]
