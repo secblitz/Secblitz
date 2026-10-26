@@ -596,11 +596,14 @@ fn run_gui(args: &[std::ffi::OsString], lang: Lang) -> i32 {
         let start = flag_value(args, "--self-test")
             .and_then(gui::Page::parse)
             .or_else(|| open.map(gui::Page::open_target));
-        if !platform::is_elevated_or_false() {
-            return launcher::run(lang, open);
-        }
-        if broker.is_none() && launcher::reopen_normally(lang, open) {
-            return Ok(0);
+        #[cfg(windows)]
+        {
+            if !platform::is_elevated_or_false() {
+                return launcher::run(lang, open);
+            }
+            if broker.is_none() && launcher::reopen_normally(lang, open) {
+                return Ok(0);
+            }
         }
         let _guard = match launcher::single_instance(open)? {
             launcher::Instance::First(guard) => guard,
