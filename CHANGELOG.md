@@ -9,6 +9,9 @@ dated version section when a release is prepared (see `docs/RELEASING.md`).
 
 ## [Unreleased]
 
+### Added
+- On Linux, Secblitz can look once a day for a newer version of itself and install it when you say yes.
+
 ### Changed
 - Secblitz now says computer instead of PC.
 
