@@ -486,25 +486,54 @@ impl Sim {
                 );
                 out(0, "")
             }
-            "/usr/bin/dnf5" => match (args, self.get("dnf.cache").as_str()) {
-                (_, "") => Ok(Output {
-                    status: 1,
-                    stdout: "Updating and loading repositories:\n".into(),
-                    stderr: "Cache-only enabled but no cache for repository \"fedora\"\n".into(),
-                }),
-                (["-C", "check-upgrade"], _) => {
-                    out(if self.get("dnf.waiting") == "1" { 100 } else { 0 }, "")
+            "/usr/bin/dnf5" => {
+                let (cache_only, args) = match args {
+                    ["-C", rest @ ..] => (true, rest),
+                    _ => (false, args),
+                };
+                if cache_only && self.get("dnf.cache").is_empty() {
+                    return Ok(Output {
+                        status: 1,
+                        stdout: "Updating and loading repositories:\n".into(),
+                        stderr: "Cache-only enabled but no cache for repository \"fedora\"\n"
+                            .into(),
+                    });
                 }
-                (["-C", "needs-restarting", "-r"], _) if self.get("dnf.restart") == "1" => out(
-                    1,
-                    "Core libraries or services have been updated since boot-up:\n  * kernel\n\nReboot is required to fully utilize these updates.\n",
-                ),
-                (["-C", "needs-restarting", "-r"], _) => out(
-                    0,
-                    "No core libraries or services have been updated since boot-up.\nReboot should not be necessary.\n",
-                ),
-                (other, _) => bail!("dnf5 {other:?}"),
-            },
+                if !cache_only {
+                    if self.get("dnf.offline") == "1" {
+                        return Ok(Output {
+                            status: 1,
+                            stdout: String::new(),
+                            stderr: "Failed to download metadata for repository \"fedora\"\n"
+                                .into(),
+                        });
+                    }
+                    self.set("dnf.cache", "1");
+                }
+                match args {
+                    ["check-upgrade"] => {
+                        out(if self.get("dnf.waiting") == "1" { 100 } else { 0 }, "")
+                    }
+                    ["needs-restarting", "-r"] if self.get("dnf.restart") == "1" => out(
+                        1,
+                        "Core libraries or services have been updated since boot-up:\n  * kernel\n\nReboot is required to fully utilize these updates.\n",
+                    ),
+                    ["needs-restarting", "-r"] => out(
+                        0,
+                        "No core libraries or services have been updated since boot-up.\nReboot should not be necessary.\n",
+                    ),
+                    other => bail!("dnf5 {other:?}"),
+                }
+            }
+            "/usr/bin/date" => out(0, &format!("{}\n", self.get("date"))),
+            "/usr/bin/fwupdmgr" => out(
+                0,
+                if self.get("fwupd.waiting") == "1" {
+                    "{\n  \"Devices\": [\n    {\"Name\": \"System Firmware\", \"Releases\": [{\"Version\": \"2.0\"}]}\n  ]\n}\n"
+                } else {
+                    "{\n  \"Devices\": [\n  ]\n}\n"
+                },
+            ),
             "/usr/bin/mokutil" => match self.get("sb.support").as_str() {
                 "none" => out(255, "This system doesn't support Secure Boot\n"),
                 _ => out(1, "EFI variables are not supported on this system\n"),

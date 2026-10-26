@@ -14,8 +14,9 @@ pub use labels::control_label;
 #[cfg(test)]
 pub(crate) use linux::assert_plain_words as assert_plain_linux_words;
 pub use linux::{
-    DISK_ENCRYPTION, PROGRAM_LIMITS, RESTART_NEEDED, SECURE_BOOT as LINUX_SECURE_BOOT,
-    UPDATES_WAITING,
+    ACCOUNTS_WITHOUT_PASSWORD, ADMIN_WITHOUT_PASSWORD, DISK_ENCRYPTION, HARDWARE_UPDATES,
+    PROGRAM_LIMITS, RESTART_NEEDED, SECURE_BOOT as LINUX_SECURE_BOOT, SECURITY_SUPPORT,
+    UNCHECKED_SOURCES, UPDATES_WAITING,
 };
 use reasons::{managed, not_offered, repair_help};
 

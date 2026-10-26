@@ -107,6 +107,8 @@ impl Topic {
         match title {
             "Security providers" | "Defender" | "SmartScreen" => Topic::Threats,
             "Windows Firewall" => Topic::Network,
+            secblitz::advice::ACCOUNTS_WITHOUT_PASSWORD
+            | secblitz::advice::ADMIN_WITHOUT_PASSWORD => Topic::SignIn,
             _ if title.starts_with("asr.") || title.starts_with("cfa.") => Topic::Threats,
             _ if title.starts_with("dns.") => Topic::Network,
             _ => Topic::of(title),
@@ -362,8 +364,17 @@ mod tests {
             secblitz::advice::UPDATES_WAITING,
             secblitz::advice::RESTART_NEEDED,
             secblitz::advice::PROGRAM_LIMITS,
+            secblitz::advice::UNCHECKED_SOURCES,
+            secblitz::advice::SECURITY_SUPPORT,
+            secblitz::advice::HARDWARE_UPDATES,
         ] {
             assert_eq!(Topic::of_finding(title), Windows, "{title}");
+        }
+        for title in [
+            secblitz::advice::ACCOUNTS_WITHOUT_PASSWORD,
+            secblitz::advice::ADMIN_WITHOUT_PASSWORD,
+        ] {
+            assert_eq!(Topic::of_finding(title), SignIn, "{title}");
         }
     }
 

@@ -7,6 +7,11 @@ pub const SECURE_BOOT: &str = "Linux Secure Boot";
 pub const UPDATES_WAITING: &str = "Linux updates waiting";
 pub const RESTART_NEEDED: &str = "Linux restart needed";
 pub const PROGRAM_LIMITS: &str = "Linux program limits";
+pub const ACCOUNTS_WITHOUT_PASSWORD: &str = "Linux accounts without a password";
+pub const ADMIN_WITHOUT_PASSWORD: &str = "Linux admin rights without a password";
+pub const UNCHECKED_SOURCES: &str = "Linux software sources without checks";
+pub const SECURITY_SUPPORT: &str = "Linux security support";
+pub const HARDWARE_UPDATES: &str = "Linux hardware updates";
 
 pub(super) fn label(id: &str) -> Option<&'static str> {
     Some(match id {
@@ -221,6 +226,31 @@ pub(super) fn finding(title: &str) -> Option<(&'static str, &'static str, NextSt
             "The built-in guard that keeps programs inside their limits is not fully on. We cannot change this one safely for you.",
             NextStep::ReviewWithAdministrator,
         ),
+        ACCOUNTS_WITHOUT_PASSWORD => (
+            "Accounts without a password",
+            "Give each account a password in your system settings, or ask whoever set up this computer to do it.",
+            NextStep::ReviewWithAdministrator,
+        ),
+        ADMIN_WITHOUT_PASSWORD => (
+            "Admin rights without a password",
+            "Ask whoever set up this computer if the rule that skips the password is needed. If not, it should be removed.",
+            NextStep::ReviewWithAdministrator,
+        ),
+        UNCHECKED_SOURCES => (
+            "Software sources without checks",
+            "Remove that source in your software settings, or ask whoever added it. We cannot tell if it is safe to remove.",
+            NextStep::ReviewWithAdministrator,
+        ),
+        SECURITY_SUPPORT => (
+            "Security updates for your Linux",
+            "Move to a newer version of Linux, and back up your files first.",
+            NextStep::ReviewWithAdministrator,
+        ),
+        HARDWARE_UPDATES => (
+            "Updates for your computer's parts",
+            "Open your software app and install the updates for your computer's parts.",
+            NextStep::None,
+        ),
         _ => return None,
     })
 }
@@ -236,6 +266,13 @@ pub(super) fn finding_impact(title: &str) -> Option<&'static str> {
         "Linux program limits" => {
             "A harmful program reaching files and settings it should not touch"
         }
+        ACCOUNTS_WITHOUT_PASSWORD => "Anyone using your computer getting into an account freely",
+        ADMIN_WITHOUT_PASSWORD => {
+            "A harmful program taking over your computer without being asked for a password"
+        }
+        UNCHECKED_SOURCES => "Tampered software being installed on your computer",
+        SECURITY_SUPPORT => "New security holes never being fixed on your computer",
+        HARDWARE_UPDATES => "Known weak spots staying open in your computer's parts",
         _ => return None,
     })
 }
@@ -363,6 +400,11 @@ mod tests {
             UPDATES_WAITING,
             RESTART_NEEDED,
             PROGRAM_LIMITS,
+            ACCOUNTS_WITHOUT_PASSWORD,
+            ADMIN_WITHOUT_PASSWORD,
+            UNCHECKED_SOURCES,
+            SECURITY_SUPPORT,
+            HARDWARE_UPDATES,
         ] {
             let a = for_finding(title, &CheckStatus::Attention, "");
             assert_ne!(a.label, "Protection check", "{title}");

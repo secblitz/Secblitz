@@ -4,9 +4,12 @@
 
 use super::Cx;
 use crate::advice::{
-    DISK_ENCRYPTION, LINUX_SECURE_BOOT, PROGRAM_LIMITS, RESTART_NEEDED, UPDATES_WAITING,
+    ACCOUNTS_WITHOUT_PASSWORD, ADMIN_WITHOUT_PASSWORD, DISK_ENCRYPTION, HARDWARE_UPDATES,
+    LINUX_SECURE_BOOT, PROGRAM_LIMITS, RESTART_NEEDED, SECURITY_SUPPORT, UNCHECKED_SOURCES,
+    UPDATES_WAITING,
 };
-use crate::linux::distro::Family;
+use crate::linux::cmd::Output;
+use crate::linux::distro::{field, Family};
 use crate::model::{CheckStatus, Finding};
 use std::path::Path;
 
@@ -28,7 +31,21 @@ pub const APPARMOR_OFF: &str = "AppArmor is not running.";
 pub const SELINUX_ON: &str = "SELinux is on and enforcing its rules.";
 pub const SELINUX_OFF: &str = "SELinux is not enforcing its rules.";
 
-pub const SENTENCES: [&str; 16] = [
+pub const PASSWORDS_SET: &str = "Every account needs a password to sign in.";
+pub const PASSWORD_MISSING: &str = "At least one account can be used without a password.";
+pub const ADMIN_ASKS: &str = "No account can use admin rights without typing a password.";
+pub const ADMIN_NEVER_ASKS: &str =
+    "At least one account can use admin rights without typing a password.";
+pub const SOURCES_CHECKED: &str = "All software sources are checked for safety.";
+pub const SOURCES_UNCHECKED: &str = "At least one software source is not checked for safety.";
+pub const SUPPORT_LONG: &str =
+    "Your version of Linux still gets security updates for a good while.";
+pub const SUPPORT_SOON: &str = "Security updates for your version of Linux end soon.";
+pub const SUPPORT_ENDED: &str = "Security updates for your version of Linux have ended.";
+pub const NO_HARDWARE_UPDATES: &str = "No updates are waiting for the parts inside your computer.";
+pub const HARDWARE_WAITING: &str = "Updates are waiting for the parts inside your computer.";
+
+pub const SENTENCES: [&str; 27] = [
     ENCRYPTED,
     NOT_ENCRYPTED,
     ENCRYPTION_UNKNOWN,
@@ -45,14 +62,30 @@ pub const SENTENCES: [&str; 16] = [
     APPARMOR_OFF,
     SELINUX_ON,
     SELINUX_OFF,
+    PASSWORDS_SET,
+    PASSWORD_MISSING,
+    ADMIN_ASKS,
+    ADMIN_NEVER_ASKS,
+    SOURCES_CHECKED,
+    SOURCES_UNCHECKED,
+    SUPPORT_LONG,
+    SUPPORT_SOON,
+    SUPPORT_ENDED,
+    NO_HARDWARE_UPDATES,
+    HARDWARE_WAITING,
 ];
 
-pub const TITLES: [&str; 5] = [
+pub const TITLES: [&str; 10] = [
     DISK_ENCRYPTION,
     LINUX_SECURE_BOOT,
     UPDATES_WAITING,
     RESTART_NEEDED,
     PROGRAM_LIMITS,
+    ACCOUNTS_WITHOUT_PASSWORD,
+    ADMIN_WITHOUT_PASSWORD,
+    UNCHECKED_SOURCES,
+    SECURITY_SUPPORT,
+    HARDWARE_UPDATES,
 ];
 
 const SECURE_BOOT_VARIABLE: &str =
@@ -110,6 +143,17 @@ fn secure_boot(cx: &Cx) -> Option<SecureBoot> {
     }
 }
 
+/// A fresh install has no package lists yet, and the cache-only call says so. Then the same question is asked once
+/// again with downloading allowed, which also fills the cache for the next time.
+fn dnf(cx: &Cx, args: &[&str]) -> Option<Output> {
+    let cached: Vec<&str> = std::iter::once("-C").chain(args.iter().copied()).collect();
+    let out = cx.run("/usr/bin/dnf5", &cached).ok()?;
+    if !out.success() && format!("{}{}", out.stdout, out.stderr).contains("no cache") {
+        return cx.sys.run_long("/usr/bin/dnf5", args).ok();
+    }
+    Some(out)
+}
+
 fn updates_waiting(cx: &Cx) -> Option<bool> {
     if let Ok(out) = cx.run("/usr/lib/update-notifier/apt-check", &[]) {
         if out.success() {
@@ -125,7 +169,7 @@ fn updates_waiting(cx: &Cx) -> Option<bool> {
         }
     }
     if cx.distro.family == Family::Fedora {
-        let out = cx.run("/usr/bin/dnf5", &["-C", "check-upgrade"]).ok()?;
+        let out = dnf(cx, &["check-upgrade"])?;
         return match out.status {
             0 => Some(false),
             100 => Some(true),
@@ -139,11 +183,8 @@ fn updates_waiting(cx: &Cx) -> Option<bool> {
 
 fn restart_needed(cx: &Cx) -> Option<bool> {
     if cx.distro.family == Family::Fedora {
-        // Without -C it downloads the package lists. Exit 1 then also means "nothing
-        // cached yet", so the answer comes from its sentence (the locale is C).
-        let out = cx
-            .run("/usr/bin/dnf5", &["-C", "needs-restarting", "-r"])
-            .ok()?;
+        // Exit 1 also means "nothing cached yet", so the answer comes from its sentence (the locale is C).
+        let out = dnf(cx, &["needs-restarting", "-r"])?;
         return if out.stdout.contains("Reboot should not be necessary") {
             Some(false)
         } else if out.stdout.contains("Reboot is required") {
@@ -158,6 +199,233 @@ fn restart_needed(cx: &Cx) -> Option<bool> {
             .ok()?
             .is_some(),
     )
+}
+
+fn without_password(cx: &Cx) -> Option<bool> {
+    let shadow = cx.text("/etc/shadow").ok()??;
+    Some(
+        shadow
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .any(|l| l.split(':').nth(1) == Some("")),
+    )
+}
+
+/// Whether a sudoers line gives some account every command without asking for a password.
+fn rule_never_asks(line: &str) -> bool {
+    let line = line.trim();
+    if line.starts_with('#') || line.starts_with("Defaults") {
+        return false;
+    }
+    let Some((_, rest)) = line.split_once('=') else {
+        return false;
+    };
+    let rest = rest.trim_start();
+    let rest = match rest.strip_prefix('(') {
+        Some(after) => after.split_once(')').map_or("", |(_, r)| r),
+        None => rest,
+    };
+    let mut no_password = false;
+    for part in rest.split(',') {
+        let mut part = part.trim();
+        while let Some((tag, after)) = part.split_once(':') {
+            if tag.is_empty() || !tag.chars().all(|c| c.is_ascii_alphabetic()) {
+                break;
+            }
+            match tag {
+                "NOPASSWD" => no_password = true,
+                "PASSWD" => no_password = false,
+                _ => {}
+            }
+            part = after.trim_start();
+        }
+        if no_password && part == "ALL" {
+            return true;
+        }
+    }
+    false
+}
+
+fn admin_never_asks(cx: &Cx) -> Option<bool> {
+    let main = cx.text("/etc/sudoers").ok()??;
+    let mut texts = vec![main.clone()];
+    let includes_folder = main.lines().any(|l| {
+        let l = l.trim();
+        ["@includedir", "#includedir"]
+            .iter()
+            .any(|key| l.strip_prefix(key).map(str::trim) == Some("/etc/sudoers.d"))
+    });
+    if includes_folder {
+        for name in cx.list("/etc/sudoers.d") {
+            if name.contains('.') || name.ends_with('~') {
+                continue;
+            }
+            if let Ok(Some(text)) = cx.text(&format!("/etc/sudoers.d/{name}")) {
+                texts.push(text);
+            }
+        }
+    }
+    Some(texts.iter().any(|t| t.lines().any(rule_never_asks)))
+}
+
+fn is_yes(value: &str) -> bool {
+    value.trim().eq_ignore_ascii_case("yes")
+}
+
+fn apt_list_unchecked(text: &str) -> bool {
+    text.lines().map(str::trim).any(|l| {
+        let l = l.to_ascii_lowercase();
+        !l.starts_with('#') && (l.contains("trusted=yes") || l.contains("allow-insecure=yes"))
+    })
+}
+
+fn apt_sources_unchecked(text: &str) -> bool {
+    text.split("\n\n").any(|stanza| {
+        let mut unchecked = false;
+        let mut enabled = true;
+        for line in stanza.lines() {
+            let Some((key, value)) = line.split_once(':') else {
+                continue;
+            };
+            match key.trim().to_ascii_lowercase().as_str() {
+                "trusted" | "allow-insecure" => unchecked |= is_yes(value),
+                "enabled" => enabled = is_yes(value),
+                _ => {}
+            }
+        }
+        unchecked && enabled
+    })
+}
+
+fn repo_unchecked(text: &str) -> bool {
+    let mut checks_off = false;
+    let mut enabled = true;
+    let mut found = false;
+    for line in text.lines().map(str::trim) {
+        if line.starts_with('[') {
+            found |= checks_off && enabled;
+            checks_off = false;
+            enabled = true;
+        } else if let Some((key, value)) = line.split_once('=') {
+            match (key.trim(), value.trim()) {
+                ("gpgcheck", "0") => checks_off = true,
+                ("enabled", "0") => enabled = false,
+                _ => {}
+            }
+        }
+    }
+    found || (checks_off && enabled)
+}
+
+fn unchecked_sources(cx: &Cx) -> Option<bool> {
+    let mut seen = false;
+    let mut bad = false;
+    let mut look = |path: &str, test: fn(&str) -> bool| {
+        if let Ok(Some(text)) = cx.text(path) {
+            seen = true;
+            bad |= test(&text);
+        }
+    };
+    look("/etc/apt/sources.list", apt_list_unchecked);
+    for name in cx.list("/etc/apt/sources.list.d") {
+        let path = format!("/etc/apt/sources.list.d/{name}");
+        if name.ends_with(".list") {
+            look(&path, apt_list_unchecked);
+        } else if name.ends_with(".sources") {
+            look(&path, apt_sources_unchecked);
+        }
+    }
+    look("/etc/dnf/dnf.conf", repo_unchecked);
+    for name in cx.list("/etc/yum.repos.d") {
+        if name.ends_with(".repo") {
+            look(&format!("/etc/yum.repos.d/{name}"), repo_unchecked);
+        }
+    }
+    seen.then_some(bad)
+}
+
+/// Days since 1970-01-01 of a `YYYY-MM-DD` date.
+fn day_number(date: &str) -> Option<i64> {
+    let mut parts = date.trim().splitn(3, '-');
+    let y: i64 = parts.next()?.parse().ok()?;
+    let m: i64 = parts.next()?.parse().ok()?;
+    let d: i64 = parts.next()?.parse().ok()?;
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+        return None;
+    }
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    Some(era * 146_097 + doe - 719_468)
+}
+
+fn csv_end(csv: &str, codename: &str) -> Option<i64> {
+    let mut lines = csv.lines();
+    let header: Vec<&str> = lines.next()?.split(',').collect();
+    let series = header.iter().position(|h| *h == "series")?;
+    let eol = header.iter().position(|h| *h == "eol")?;
+    lines.find_map(|l| {
+        let cells: Vec<&str> = l.split(',').collect();
+        (cells.get(series) == Some(&codename))
+            .then(|| cells.get(eol).and_then(|c| day_number(c)))
+            .flatten()
+    })
+}
+
+fn support_end(cx: &Cx) -> Option<i64> {
+    let release = ["/etc/os-release", "/usr/lib/os-release"]
+        .iter()
+        .find_map(|p| cx.text(p).ok().flatten())?;
+    if let Some(end) = field(&release, "SUPPORT_END").and_then(day_number) {
+        return Some(end);
+    }
+    let named = |key| field(&release, key).filter(|n| !n.is_empty());
+    let (file, codename) = if let Some(name) = named("UBUNTU_CODENAME") {
+        ("ubuntu.csv", name)
+    } else if field(&release, "ID") == Some("debian") {
+        ("debian.csv", named("VERSION_CODENAME")?)
+    } else {
+        return None;
+    };
+    let csv = cx.text(&format!("/usr/share/distro-info/{file}")).ok()??;
+    csv_end(&csv, codename)
+}
+
+fn today(cx: &Cx) -> Option<i64> {
+    let out = cx.run("/usr/bin/date", &["-u", "+%F"]).ok()?;
+    out.success().then(|| day_number(&out.stdout)).flatten()
+}
+
+fn security_support(cx: &Cx) -> Option<Finding> {
+    let left = support_end(cx)? - today(cx)?;
+    let (status, detail) = match left {
+        l if l > 90 => (CheckStatus::Ok, SUPPORT_LONG),
+        l if l >= 0 => (CheckStatus::Attention, SUPPORT_SOON),
+        _ => (CheckStatus::Attention, SUPPORT_ENDED),
+    };
+    Some(Finding {
+        title: SECURITY_SUPPORT.into(),
+        status,
+        detail: detail.into(),
+    })
+}
+
+fn hardware_updates(cx: &Cx) -> Option<bool> {
+    let out = cx
+        .run(
+            "/usr/bin/fwupdmgr",
+            &[
+                "get-updates",
+                "--json",
+                "--no-unreported-check",
+                "--no-metadata-check",
+            ],
+        )
+        .ok()?;
+    let answer: serde_json::Value = serde_json::from_str(&out.stdout).ok()?;
+    Some(!answer.get("Devices")?.as_array()?.is_empty())
 }
 
 pub fn collect(cx: &Cx) -> Vec<Finding> {
@@ -215,6 +483,46 @@ pub fn collect(cx: &Cx) -> Vec<Finding> {
         if on.is_some() {
             found.push(finding(TITLES[4], on, APPARMOR_ON, APPARMOR_OFF, ""));
         }
+    }
+    if let Some(none) = without_password(cx).map(|any| !any) {
+        found.push(finding(
+            TITLES[5],
+            Some(none),
+            PASSWORDS_SET,
+            PASSWORD_MISSING,
+            "",
+        ));
+    }
+    if let Some(asks) = admin_never_asks(cx).map(|any| !any) {
+        found.push(finding(
+            TITLES[6],
+            Some(asks),
+            ADMIN_ASKS,
+            ADMIN_NEVER_ASKS,
+            "",
+        ));
+    }
+    if let Some(checked) = unchecked_sources(cx).map(|any| !any) {
+        found.push(finding(
+            TITLES[7],
+            Some(checked),
+            SOURCES_CHECKED,
+            SOURCES_UNCHECKED,
+            "",
+        ));
+    }
+    found.extend(security_support(cx));
+    if let Some(waiting) = hardware_updates(cx) {
+        let (status, detail) = if waiting {
+            (CheckStatus::Info, HARDWARE_WAITING)
+        } else {
+            (CheckStatus::Ok, NO_HARDWARE_UPDATES)
+        };
+        found.push(Finding {
+            title: TITLES[9].into(),
+            status,
+            detail: detail.into(),
+        });
     }
     found
 }

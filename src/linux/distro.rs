@@ -26,7 +26,7 @@ pub struct Distro {
 }
 
 /// The value of `key` in `KEY=value` lines; the last assignment wins, as when the shell reads the file. Values may be quoted with `"` or `'`; comments and blank lines are skipped.
-fn field<'a>(os_release: &'a str, key: &str) -> Option<&'a str> {
+pub(crate) fn field<'a>(os_release: &'a str, key: &str) -> Option<&'a str> {
     os_release.lines().rev().find_map(|line| {
         let (name, value) = line.trim().split_once('=')?;
         if name != key {
