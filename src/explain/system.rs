@@ -166,7 +166,7 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
         "browser.shopping_ai" => e(
             "Edge and Chrome can show shopping helpers, such as price tracking and coupons, and AI side panels you never asked for.",
             "Shopping helpers send the pages you visit to online services, and AI side panels can read what you view when you use them.",
-            "The helpers and side panels turn off. Browsers will then say they are managed by your organization, which only means a setting was made for this whole computer.",
+            "Shopping helpers and side panels turn off. Browsers then say they are managed by your organization, which only means a setting was made for this whole computer.",
         ),
         "browser.data_collection" => e(
             "Your browsers can send Microsoft, Google and Mozilla details about how you use them and what interests you.",
