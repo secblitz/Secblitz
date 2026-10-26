@@ -1,6 +1,7 @@
 //! How Free up space and Clean up apps reach the computer on Linux: through the root helper for anything that needs rights, and in this window, as the signed-in person, for their own folders. Windows keeps its own paths in the pages, so everything here answers "not available" there.
 #![cfg_attr(not(target_os = "linux"), allow(dead_code, unused_imports))]
 use iced::futures::Stream;
+use secblitz::debloat::linux::Removed;
 use secblitz::debloat::{Batch, Installed, Progress};
 use secblitz::space::{Item, Tally, UserArea};
 
@@ -105,10 +106,18 @@ mod real {
     pub fn remove(indices: &[u16], emit: &dyn Fn(Progress)) -> anyhow::Result<Batch> {
         cleanup::remove(&mut DbusTransport::system(), indices, emit)
     }
+
+    pub fn removed() -> anyhow::Result<Vec<Removed>> {
+        cleanup::removed(&mut DbusTransport::system())
+    }
+
+    pub fn reinstall(package: &str) -> Result<(), String> {
+        cleanup::reinstall(&mut DbusTransport::system(), package)
+    }
 }
 
 #[cfg(target_os = "linux")]
-pub use real::{inventory, machine, person, remove};
+pub use real::{inventory, machine, person, reinstall, remove, removed};
 
 #[cfg(not(target_os = "linux"))]
 mod other {
@@ -133,7 +142,15 @@ mod other {
     pub fn remove(_: &[u16], _: &dyn Fn(Progress)) -> anyhow::Result<Batch> {
         anyhow::bail!("unavailable")
     }
+
+    pub fn removed() -> anyhow::Result<Vec<Removed>> {
+        anyhow::bail!("unavailable")
+    }
+
+    pub fn reinstall(_: &str) -> Result<(), String> {
+        Err("unavailable".into())
+    }
 }
 
 #[cfg(not(target_os = "linux"))]
-pub use other::{inventory, machine, person, remove};
+pub use other::{inventory, machine, person, reinstall, remove, removed};

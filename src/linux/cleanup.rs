@@ -68,15 +68,46 @@ pub fn inventory<T: Transport>(transport: &mut T) -> anyhow::Result<Vec<Installe
     }
 }
 
-/// A sentence the page can show: Secblitz's own pass through, anything else becomes a plain one.
-fn sentence(error: &anyhow::Error) -> String {
+/// The apps Secblitz removed that are not on this computer now.
+pub fn removed<T: Transport>(transport: &mut T) -> anyhow::Result<Vec<apps::Removed>> {
+    match stream(transport, &Request::RemovedApps, &mut |_| {})? {
+        Reply::RemovedApps(found) => Ok(found
+            .into_iter()
+            .map(|r| apps::Removed {
+                index: r.index,
+                package: r.package,
+                t: r.t,
+            })
+            .collect()),
+        _ => anyhow::bail!(apps::LIST_FAILED),
+    }
+}
+
+/// Installs one removed app again. The error is a sentence the page can show as it is.
+pub fn reinstall<T: Transport>(transport: &mut T, package: &str) -> Result<(), String> {
+    let request = Request::ReinstallApp {
+        package: package.to_owned(),
+    };
+    match stream(transport, &request, &mut |_| {}) {
+        Ok(Reply::Ok) => Ok(()),
+        Ok(_) => Err(apps::INSTALL_FAILED.to_owned()),
+        Err(error) => Err(sentence_or(&error, apps::INSTALL_FAILED)),
+    }
+}
+
+/// A sentence the page can show: Secblitz's own pass through, anything else becomes the plain `fallback`.
+fn sentence_or(error: &anyhow::Error, fallback: &str) -> String {
     let text = error.to_string();
     if apps::plain(&text).is_some() || text == crate::linux_bus::polkit::NOT_ALLOWED {
         text
     } else {
-        eprintln!("The helper could not remove the apps: {error:#}");
-        apps::RUN_FAILED.to_owned()
+        eprintln!("The helper could not finish the request: {error:#}");
+        fallback.to_owned()
     }
+}
+
+fn sentence(error: &anyhow::Error) -> String {
+    sentence_or(error, apps::RUN_FAILED)
 }
 
 /// Removes the chosen apps in one request, so the password is asked for once, and reports each app as the helper finishes it.
@@ -232,6 +263,46 @@ mod tests {
         assert_eq!(
             sentence(&anyhow::anyhow!("D-Bus error: weird")),
             apps::RUN_FAILED
+        );
+    }
+
+    #[test]
+    fn a_removed_app_is_listed_and_reinstall_failures_are_plain() {
+        use crate::linux_bus::ops::tests_support::Machine;
+        let mut machine = Machine::ubuntu();
+        machine.files.insert(
+            "/var/lib/secblitz/Linux/removed-apps.txt".into(),
+            b"xrdp\t9\n".to_vec(),
+        );
+        machine.reply(
+            "/usr/bin/dpkg-query",
+            &["-W", "-f=${db:Status-Abbrev}", "xrdp"],
+            1,
+            "",
+        );
+        machine.reply("/usr/bin/apt-get", &["-s", "install", "xrdp"], 100, "");
+        let mut transport = Direct {
+            sys: &machine,
+            asked: Vec::new(),
+        };
+        let found = removed(&mut transport).unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].package, "xrdp");
+        assert_eq!(
+            reinstall(&mut transport, "xrdp"),
+            Err(apps::INSTALL_FAILED.to_owned())
+        );
+        assert_eq!(
+            reinstall(&mut transport, "anydesk"),
+            Err(apps::NOT_RECORDED.to_owned())
+        );
+        assert_eq!(
+            reinstall(&mut Down, "xrdp"),
+            Err(crate::linux_bus::polkit::NOT_ALLOWED.to_owned())
+        );
+        assert_eq!(
+            reinstall(&mut Down, "bash"),
+            Err(apps::INSTALL_FAILED.to_owned())
         );
     }
 
