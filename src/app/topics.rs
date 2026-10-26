@@ -46,6 +46,18 @@ impl Topic {
             (_, "privacy.recall") | ("ai", _) => Topic::Ai,
             ("privacy", _) => Topic::Privacy,
             ("debloat", _) => Topic::Clutter,
+            (
+                "linux",
+                "linux.firewall" | "linux.fedora_open_ports" | "linux.ssh_server"
+                | "linux.ssh_password" | "linux.file_sharing" | "linux.remote_desktop",
+            ) => Topic::Network,
+            ("linux", "linux.autologin" | "linux.guest" | "linux.screen_lock") => Topic::SignIn,
+            (
+                "linux",
+                "linux.crash_reports" | "linux.countme" | "linux.connectivity_check"
+                | "linux.wifi_mac" | "linux.recent_files" | "linux.lock_previews"
+                | "linux.ubuntu_insights",
+            ) => Topic::Privacy,
             _ => Topic::Windows,
         }
     }
@@ -232,6 +244,50 @@ mod tests {
                 secblitz::hardening::spec(id).is_some(),
                 "{id} is not a setting"
             );
+        }
+    }
+
+    #[test]
+    fn every_linux_setting_goes_where_the_design_says() {
+        let expected: &[(&str, Topic)] = &[
+            ("linux.firewall", Network),
+            ("linux.fedora_open_ports", Network),
+            ("linux.ssh_server", Network),
+            ("linux.ssh_password", Network),
+            ("linux.file_sharing", Network),
+            ("linux.remote_desktop", Network),
+            ("linux.autologin", SignIn),
+            ("linux.guest", SignIn),
+            ("linux.screen_lock", SignIn),
+            ("linux.auto_updates", Windows),
+            ("linux.kernel_protections", Windows),
+            ("linux.crash_reports", Privacy),
+            ("linux.countme", Privacy),
+            ("linux.connectivity_check", Privacy),
+            ("linux.wifi_mac", Privacy),
+            ("linux.recent_files", Privacy),
+            ("linux.lock_previews", Privacy),
+            ("linux.ubuntu_insights", Privacy),
+        ];
+        for (id, topic) in expected {
+            assert_eq!(Topic::of(id), *topic, "{id}");
+        }
+        for spec in secblitz::linux::catalog::specs() {
+            assert!(
+                expected.iter().any(|(id, _)| *id == spec.id),
+                "{} is missing from the expected list",
+                spec.id
+            );
+        }
+        assert_eq!(expected.len(), secblitz::linux::catalog::specs().len());
+        for title in [
+            secblitz::advice::DISK_ENCRYPTION,
+            secblitz::advice::LINUX_SECURE_BOOT,
+            secblitz::advice::UPDATES_WAITING,
+            secblitz::advice::RESTART_NEEDED,
+            secblitz::advice::PROGRAM_LIMITS,
+        ] {
+            assert_eq!(Topic::of_finding(title), Windows, "{title}");
         }
     }
 
