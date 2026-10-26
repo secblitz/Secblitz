@@ -34,6 +34,8 @@ pub fn extra_section(id: &str) -> Option<&'static str> {
             | "linux.computer_name_sent"
             | "linux.encrypted_dns"
             | "linux.announce_name"
+            | "linux.browser_search_suggestions"
+            | "linux.browser_encrypted_dns"
     ) {
         return Some("Privacy extras");
     }

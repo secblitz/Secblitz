@@ -207,6 +207,51 @@ pub(super) fn get(id: &str) -> Option<Explainer> {
             "Apps that stay out of date keep known security holes open, even when the fixes are already out.",
             "The Software app downloads updates by itself again, and you can undo this.",
         ),
+        "linux.browser_tracking" => e(
+            "Websites hide small trackers in their pages that follow you from site to site. Your browsers can block them.",
+            "Advertisers and data sellers can build a long record of the sites you visit and what you look at.",
+            "Trackers are blocked. A few sites may ask you to sign in again, and browsers say your organization manages them. You can undo this.",
+        ),
+        "linux.browser_ad_topics" => e(
+            "Chrome and browsers like it can note your interests from the sites you visit and share that list with sites for ads.",
+            "Sites you visit can see which topics your browser thinks you like and use them to pick ads for you.",
+            "Your browser stops building an interest list. You still see ads, but they follow your interests less. You can undo this.",
+        ),
+        "linux.browser_sponsored" => e(
+            "Firefox can fill the new tab page and the address bar with shortcuts, stories and suggestions that companies paid for.",
+            "Paid items sit next to your own favorites, and Firefox shares what you click with the companies behind them.",
+            "Paid shortcuts, stories and suggestions disappear. Your own shortcuts stay where they are. You can undo this.",
+        ),
+        "linux.browser_pocket" => e(
+            "Pocket is a service owned by Mozilla that Firefox uses to suggest stories and to save pages for later.",
+            "Firefox sends details about what you read and click to that service so it can pick stories for you.",
+            "Pocket is switched off in Firefox. Pages you saved there stay in your Pocket account. You can undo this.",
+        ),
+        "linux.browser_safe_browsing" => e(
+            "Browsers can warn you before they open a site known to steal passwords or to spread harmful programs.",
+            "With the warning off, a fake bank page or a harmful download opens as if it were fine.",
+            "The warning is turned back on in your browsers. Nothing else changes, and you can undo this.",
+        ),
+        "linux.browser_password_leaks" => e(
+            "Chrome and browsers like it can tell you when a password you saved has turned up in a known data leak.",
+            "A leaked password lets criminals sign in as you, and you would not know to change it.",
+            "Your browser warns you about leaked passwords. To check, it compares passwords in a private way. You can undo this.",
+        ),
+        "linux.browser_background" => e(
+            "Chrome and browsers like it can keep running after you close their windows, so apps and extensions stay active.",
+            "A browser you thought was closed can still be online, using your connection and your computer's power.",
+            "The browser stops when you close its last window. Some extensions may stop sending alerts then. You can undo this.",
+        ),
+        "linux.browser_search_suggestions" => e(
+            "While you type in the address bar, your browser can send each word to a search company to suggest what you might want.",
+            "The search company sees everything you type, even words you never searched for.",
+            "Suggestions while you type will stop. You can still search as before, and you can undo this.",
+        ),
+        "linux.browser_encrypted_dns" => e(
+            "Before opening a website, your browser asks a service for its address. Normally anyone on the network can see that request.",
+            "The network you are on, such as a cafe or hotel, can see every website you look up.",
+            "Your browsers ask in private when they can. A work or school network may block it, so a few sites may not load. You can undo this.",
+        ),
         "linux.screen_lock" => e(
             "Your screen should lock when you walk away. This checks that locking is on and that it does not wait forever.",
             "Anyone who walks past can read your screen and use your accounts while you are gone.",

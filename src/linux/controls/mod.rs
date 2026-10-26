@@ -2,6 +2,7 @@
 //! controls from `linux::catalog` and works through [`Cx`], so tests can stand in for the computer.
 
 pub mod accounts;
+pub mod browser_policies;
 pub mod browsers;
 pub mod devices;
 pub mod findings;
@@ -17,6 +18,8 @@ pub mod services;
 pub mod units;
 pub mod updates;
 
+#[cfg(test)]
+mod browser_policy_tests;
 #[cfg(test)]
 mod browser_tests;
 #[cfg(test)]

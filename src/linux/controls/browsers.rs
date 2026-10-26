@@ -4,6 +4,7 @@
 //! Firefox reads one policy file, so Secblitz adds its keys to the file that is there and keeps the original bytes to put
 //! back. The Chromium family reads every file in the folder, so Secblitz owns one file, `secblitz.json`, in each.
 
+use super::browser_policies::{merge, Ctl};
 use super::{flag, num_of, observation, plain, unavailable, Cx, Items, NO_RECORD, UNRECOGNISED};
 use crate::hardening::Item;
 use crate::model::Observation;
@@ -16,7 +17,10 @@ pub const NO_BROWSER: &str =
 pub const NO_FIREFOX: &str =
     "Firefox is not installed on this computer, so Secblitz leaves this alone.";
 
-pub const SENTENCES: [&str; 2] = [NO_BROWSER, NO_FIREFOX];
+pub const NO_CHROMIUM: &str =
+    "Chrome, Chromium, Brave and Edge are not installed on this computer, so Secblitz leaves this alone.";
+
+pub const SENTENCES: [&str; 3] = [NO_BROWSER, NO_FIREFOX, NO_CHROMIUM];
 
 const TEST: &str = "/usr/bin/test";
 const MKDIR: &str = "/usr/bin/mkdir";
@@ -42,7 +46,13 @@ struct Chromium {
     programs: &'static [&'static str],
 }
 
-const CHROMIUM: [Chromium; 4] = [
+impl Chromium {
+    fn supports(&self, ctl: Ctl) -> bool {
+        ctl.chromium() && (ctl.edge() || self.folders[0] != "/etc/opt/edge")
+    }
+}
+
+const CHROMIUM: [Chromium; 5] = [
     Chromium {
         folders: [
             "/etc/opt/chrome",
@@ -78,63 +88,18 @@ const CHROMIUM: [Chromium; 4] = [
         ],
         programs: &["/usr/bin/brave-browser", "/opt/brave.com/brave/brave"],
     },
+    Chromium {
+        folders: [
+            "/etc/opt/edge",
+            "/etc/opt/edge/policies",
+            "/etc/opt/edge/policies/managed",
+        ],
+        programs: &[
+            "/opt/microsoft/msedge/msedge",
+            "/usr/bin/microsoft-edge-stable",
+        ],
+    },
 ];
-
-const CHROMIUM_DATA: [(&str, bool); 2] = [
-    ("MetricsReportingEnabled", false),
-    ("UrlKeyedAnonymizedDataCollectionEnabled", false),
-];
-
-#[derive(Clone, Copy, PartialEq)]
-enum Ctl {
-    Data,
-    Https,
-}
-
-impl Ctl {
-    fn id(self) -> &'static str {
-        match self {
-            Ctl::Data => "linux.browser_data_collection",
-            Ctl::Https => "linux.browser_https_only",
-        }
-    }
-
-    fn memo(self) -> &'static str {
-        match self {
-            Ctl::Data => "browser_firefox_data",
-            Ctl::Https => "browser_firefox_https",
-        }
-    }
-
-    fn other(self) -> Ctl {
-        match self {
-            Ctl::Data => Ctl::Https,
-            Ctl::Https => Ctl::Data,
-        }
-    }
-
-    fn firefox_policies(self) -> Vec<(&'static str, Value)> {
-        match self {
-            Ctl::Data => vec![
-                ("DisableTelemetry", json!(true)),
-                ("DisableFirefoxStudies", json!(true)),
-            ],
-            Ctl::Https => vec![("HttpsOnlyMode", json!("enabled"))],
-        }
-    }
-
-    fn firefox_safe(self, policies: &Map<String, Value>) -> bool {
-        match self {
-            Ctl::Data => ["DisableTelemetry", "DisableFirefoxStudies"]
-                .iter()
-                .all(|k| policies.get(*k) == Some(&json!(true))),
-            Ctl::Https => matches!(
-                policies.get("HttpsOnlyMode").and_then(Value::as_str),
-                Some("enabled" | "force_enabled")
-            ),
-        }
-    }
-}
 
 fn exists(cx: &Cx, flag: &str, path: &str) -> bool {
     cx.run(TEST, &[flag, path]).is_ok_and(|o| o.success())
@@ -191,7 +156,7 @@ fn firefox_item(cx: &Cx, ctl: Ctl) -> Result<Item> {
     }
     let safe = match read_policies(cx)? {
         Some((_, doc)) => ctl.firefox_safe(&policies_of(&doc)),
-        None => false,
+        None => ctl.firefox_safe(&Map::new()),
     };
     Ok(flag(!safe))
 }
@@ -208,7 +173,7 @@ fn json_files(cx: &Cx, folder: &str) -> Vec<String> {
 }
 
 /// The value each setting ends up with, the way the browser reads the folder: files by name, the last one wins.
-fn chromium_safe(cx: &Cx, browser: &Chromium) -> Result<bool> {
+fn chromium_safe(cx: &Cx, browser: &Chromium, ctl: Ctl) -> Result<bool> {
     let folder = browser.folders[2];
     let mut seen: Map<String, Value> = Map::new();
     for name in json_files(cx, folder) {
@@ -219,18 +184,16 @@ fn chromium_safe(cx: &Cx, browser: &Chromium) -> Result<bool> {
             seen.extend(map);
         }
     }
-    Ok(CHROMIUM_DATA
-        .iter()
-        .all(|(k, v)| seen.get(*k) == Some(&json!(*v))))
+    Ok(ctl.chromium_safe(&seen))
 }
 
-fn chromium_item(cx: &Cx) -> Result<Item> {
+fn chromium_item(cx: &Cx, ctl: Ctl) -> Result<Item> {
     let mut any = false;
     let mut unsafe_ = false;
-    for browser in &CHROMIUM {
+    for browser in CHROMIUM.iter().filter(|b| b.supports(ctl)) {
         if chromium_installed(cx, browser) {
             any = true;
-            unsafe_ |= !chromium_safe(cx, browser)?;
+            unsafe_ |= !chromium_safe(cx, browser, ctl)?;
         }
     }
     Ok(if any { flag(unsafe_) } else { Item::Absent })
@@ -243,31 +206,27 @@ fn unreadable_policy(id: &str, e: anyhow::Error) -> Result<Observation> {
     Err(e)
 }
 
-pub fn observe_data_collection(cx: &Cx) -> Result<Observation> {
-    data_collection(cx).or_else(|e| unreadable_policy(Ctl::Data.id(), e))
+pub fn observe(cx: &Cx, ctl: Ctl) -> Result<Observation> {
+    observe_items(cx, ctl).or_else(|e| unreadable_policy(ctl.id(), e))
 }
 
-pub fn observe_https_only(cx: &Cx) -> Result<Observation> {
-    https_only(cx).or_else(|e| unreadable_policy(Ctl::Https.id(), e))
-}
-
-fn data_collection(cx: &Cx) -> Result<Observation> {
-    let (firefox, chromium) = (firefox_item(cx, Ctl::Data)?, chromium_item(cx)?);
-    if firefox == Item::Absent && chromium == Item::Absent {
-        return Ok(unavailable(Ctl::Data.id(), NO_BROWSER));
+fn observe_items(cx: &Cx, ctl: Ctl) -> Result<Observation> {
+    let mut pairs = Vec::new();
+    if ctl.firefox() {
+        pairs.push(("firefox", firefox_item(cx, ctl)?));
     }
-    Ok(observation(
-        vec![("firefox", firefox), ("chromium", chromium)],
-        true,
-        "",
-    ))
-}
-
-fn https_only(cx: &Cx) -> Result<Observation> {
-    match firefox_item(cx, Ctl::Https)? {
-        Item::Absent => Ok(unavailable(Ctl::Https.id(), NO_FIREFOX)),
-        item => Ok(observation(vec![("firefox", item)], true, "")),
+    if ctl.chromium() {
+        pairs.push(("chromium", chromium_item(cx, ctl)?));
     }
+    if pairs.iter().all(|(_, item)| *item == Item::Absent) {
+        let reason = match (ctl.firefox(), ctl.chromium()) {
+            (true, false) => NO_FIREFOX,
+            (false, true) => NO_CHROMIUM,
+            _ => NO_BROWSER,
+        };
+        return Ok(unavailable(ctl.id(), reason));
+    }
+    Ok(observation(pairs, true, ""))
 }
 
 /// Only folders Secblitz could have made may be taken away again.
@@ -305,19 +264,29 @@ fn keep_made(cx: &Cx, name: &str, made: Vec<String>) -> Result<()> {
     cx.memo_write(name, &all)
 }
 
+/// Whether a Firefox change of Secblitz is on record, leaving out `except`.
+fn any_firefox_record(cx: &Cx, except: Option<Ctl>) -> Result<bool> {
+    for other in Ctl::ALL
+        .iter()
+        .filter(|c| Some(**c) != except && c.firefox())
+    {
+        if cx.memo_read(other.memo())?.is_some() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 fn firefox_apply(cx: &Cx, ctl: Ctl) -> Result<()> {
     let current = read_policies(cx)?;
     let mut doc = match &current {
         Some((_, doc)) => doc.clone(),
         None => json!({}),
     };
-    if current
-        .as_ref()
-        .is_some_and(|(_, doc)| ctl.firefox_safe(&policies_of(doc)))
-    {
+    if ctl.firefox_safe(&policies_of(&doc)) {
         return Ok(());
     }
-    let active = cx.memo_read(ctl.memo())?.is_some() || cx.memo_read(ctl.other().memo())?.is_some();
+    let active = any_firefox_record(cx, None)?;
     if !active {
         let mut origin = Vec::new();
         match &current {
@@ -355,7 +324,12 @@ fn firefox_apply(cx: &Cx, ctl: Ctl) -> Result<()> {
         cx.memo_write(ctl.memo(), &[prior.to_string()])?;
     }
     for (key, value) in ctl.firefox_policies() {
-        policies.insert(key.to_string(), value);
+        match policies.get_mut(key) {
+            Some(old) => merge(old, &value),
+            None => {
+                policies.insert(key.to_string(), value);
+            }
+        }
     }
     cx.write_text(POLICIES, &pretty(&doc)?, 0o644)
 }
@@ -365,7 +339,7 @@ fn firefox_revert(cx: &Cx, ctl: Ctl) -> Result<()> {
         .memo_read(ctl.memo())?
         .and_then(|lines| lines.first().and_then(|l| serde_json::from_str(l).ok()))
         .ok_or_else(|| plain(NO_RECORD))?;
-    let others = cx.memo_read(ctl.other().memo())?.is_some();
+    let others = any_firefox_record(cx, Some(ctl))?;
     let finish = |cx: &Cx| -> Result<()> {
         cx.memo_clear(ctl.memo())?;
         if !others {
@@ -421,59 +395,93 @@ fn firefox_revert(cx: &Cx, ctl: Ctl) -> Result<()> {
     finish(cx)
 }
 
-fn chromium_text() -> String {
-    let mut map = Map::new();
-    for (key, value) in CHROMIUM_DATA {
-        map.insert(key.to_string(), json!(value));
+fn own_file(cx: &Cx, browser: &Chromium) -> Result<(String, Map<String, Value>, bool)> {
+    let path = format!("{}/{CHROMIUM_FILE}", browser.folders[2]);
+    match cx.text(&path)? {
+        None => Ok((path, Map::new(), false)),
+        Some(text) => match serde_json::from_str::<Value>(&text) {
+            Ok(Value::Object(map)) => Ok((path, map, true)),
+            _ => Err(plain(UNRECOGNISED)),
+        },
     }
-    serde_json::to_string_pretty(&Value::Object(map)).unwrap_or_default() + "\n"
 }
 
-fn chromium_apply(cx: &Cx) -> Result<()> {
+fn chromium_apply(cx: &Cx, ctl: Ctl) -> Result<()> {
     let mut made = Vec::new();
-    for browser in &CHROMIUM {
+    let done = chromium_write(cx, ctl, &mut made);
+    keep_made(cx, CHROMIUM_DIRS_MEMO, made)?;
+    done
+}
+
+fn chromium_write(cx: &Cx, ctl: Ctl, made: &mut Vec<String>) -> Result<()> {
+    for browser in CHROMIUM.iter().filter(|b| b.supports(ctl)) {
         if !chromium_installed(cx, browser) {
             continue;
         }
-        let path = format!("{}/{CHROMIUM_FILE}", browser.folders[2]);
-        if chromium_safe(cx, browser)? && cx.text(&path)?.is_none() {
+        let (path, mut map, present) = own_file(cx, browser)?;
+        let ours = ctl
+            .chromium_policies()
+            .iter()
+            .any(|(k, _)| map.contains_key(*k));
+        if chromium_safe(cx, browser, ctl)? && !(present && ours) {
             continue;
         }
-        make_folders(cx, &browser.folders, &mut made)?;
-        cx.write_text(&path, &chromium_text(), 0o644)?;
+        make_folders(cx, &browser.folders, made)?;
+        for (key, value) in ctl.chromium_policies() {
+            map.insert(key.to_string(), value);
+        }
+        let text = serde_json::to_string_pretty(&Value::Object(map))? + "\n";
+        cx.write_text(&path, &text, 0o644)?;
     }
-    keep_made(cx, CHROMIUM_DIRS_MEMO, made)
+    Ok(())
 }
 
-fn chromium_revert(cx: &Cx) -> Result<()> {
+fn chromium_revert(cx: &Cx, ctl: Ctl) -> Result<()> {
+    let mut left = false;
     for browser in &CHROMIUM {
-        cx.remove(&format!("{}/{CHROMIUM_FILE}", browser.folders[2]))?;
+        let (path, mut map, present) = match own_file(cx, browser) {
+            Ok(file) => file,
+            Err(_) => {
+                left = true;
+                continue;
+            }
+        };
+        if !present {
+            continue;
+        }
+        for (key, _) in ctl.chromium_policies() {
+            map.remove(key);
+        }
+        if map.is_empty() {
+            cx.remove(&path)?;
+        } else {
+            left = true;
+            let text = serde_json::to_string_pretty(&Value::Object(map))? + "\n";
+            cx.write_text(&path, &text, 0o644)?;
+        }
+    }
+    if left {
+        return Ok(());
     }
     remove_made(cx, CHROMIUM_DIRS_MEMO)
 }
 
-fn write(cx: &Cx, ctl: Ctl, want: &Items) -> Result<()> {
-    match num_of(want, "firefox")? {
-        Some(0) => firefox_apply(cx, ctl)?,
-        Some(1) => firefox_revert(cx, ctl)?,
-        Some(_) => return Err(plain(UNRECOGNISED)),
-        None => {}
+pub fn write(cx: &Cx, ctl: Ctl, want: &Items) -> Result<()> {
+    if ctl.firefox() {
+        match num_of(want, "firefox")? {
+            Some(0) => firefox_apply(cx, ctl)?,
+            Some(1) => firefox_revert(cx, ctl)?,
+            Some(_) => return Err(plain(UNRECOGNISED)),
+            None => {}
+        }
     }
-    if ctl == Ctl::Data {
+    if ctl.chromium() {
         match num_of(want, "chromium")? {
-            Some(0) => chromium_apply(cx)?,
-            Some(1) => chromium_revert(cx)?,
+            Some(0) => chromium_apply(cx, ctl)?,
+            Some(1) => chromium_revert(cx, ctl)?,
             Some(_) => return Err(plain(UNRECOGNISED)),
             None => {}
         }
     }
     Ok(())
-}
-
-pub fn write_data_collection(cx: &Cx, want: &Items) -> Result<()> {
-    write(cx, Ctl::Data, want)
-}
-
-pub fn write_https_only(cx: &Cx, want: &Items) -> Result<()> {
-    write(cx, Ctl::Https, want)
 }

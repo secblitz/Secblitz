@@ -19,6 +19,7 @@ dated version section when a release is prepared (see `docs/RELEASING.md`).
 - On Linux, new checks and fixes cover faked sender addresses, connection floods, messages that choose their own route, calls to the whole network, private network addresses, the computer name networks see, private website lookups, announcing this computer and old network services.
 - On Linux, new checks cover Bluetooth at start, the weekly list of installed programs and automatic app updates, and tell you who can make changes, which programs are open to the network and whether memory saved to the drive is protected.
 - On Linux, Secblitz checks how soon the screen goes dark and locks, locks on sleep, and stops software usage statistics, on Ubuntu, Fedora and Linux Mint.
+- On Linux, new browser checks block trackers, ad interests, paid shortcuts, Pocket, background running, search suggestions and plain website lookups, and keep warnings about dangerous sites and leaked passwords on.
 
 ### Changed
 - Secblitz now says computer instead of PC.

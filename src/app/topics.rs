@@ -89,9 +89,20 @@ impl Topic {
                 | "linux.lock_delay"
                 | "linux.lock_on_suspend",
             ) => Topic::SignIn,
-            ("linux", "linux.browser_data_collection" | "linux.browser_https_only") => {
-                Topic::Browsers
-            }
+            (
+                "linux",
+                "linux.browser_data_collection"
+                | "linux.browser_https_only"
+                | "linux.browser_tracking"
+                | "linux.browser_ad_topics"
+                | "linux.browser_sponsored"
+                | "linux.browser_pocket"
+                | "linux.browser_safe_browsing"
+                | "linux.browser_password_leaks"
+                | "linux.browser_background"
+                | "linux.browser_search_suggestions"
+                | "linux.browser_encrypted_dns",
+            ) => Topic::Browsers,
             (
                 "linux",
                 "linux.crash_reports"
@@ -401,6 +412,15 @@ mod tests {
             ("linux.usage_survey", Privacy),
             ("linux.mint_app_updates", Windows),
             ("linux.app_store_updates", Windows),
+            ("linux.browser_tracking", Browsers),
+            ("linux.browser_ad_topics", Browsers),
+            ("linux.browser_sponsored", Browsers),
+            ("linux.browser_pocket", Browsers),
+            ("linux.browser_safe_browsing", Browsers),
+            ("linux.browser_password_leaks", Browsers),
+            ("linux.browser_background", Browsers),
+            ("linux.browser_search_suggestions", Browsers),
+            ("linux.browser_encrypted_dns", Browsers),
         ];
         for (id, topic) in expected {
             assert_eq!(Topic::of(id), *topic, "{id}");
