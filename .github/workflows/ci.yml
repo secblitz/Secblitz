@@ -75,7 +75,7 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           rustc --version --verbose
       - name: Cache cargo downloads and build output
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Tests
         env:
           TARGET: ${{ matrix.target }}
@@ -105,7 +105,7 @@ jobs:
           rustup toolchain install "$channel" --profile minimal --component clippy --component rustfmt
           rustc --version --verbose
       - name: Cache cargo downloads and build output
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Format
         run: cargo fmt --check
       - name: Tests
